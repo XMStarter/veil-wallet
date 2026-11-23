@@ -55,6 +55,22 @@ const EXPECTED_CONSTANTS: &[(&[u8], c_int)] = &[
     ),
 ];
 
+/// An error's message followed by the messages of what caused it.
+///
+/// The loader's own message on Windows is only the name of the call that
+/// failed. The reason, such as "access is denied" from an antivirus or "a
+/// DLL initialization routine failed", is in the cause.
+fn with_causes(error: &dyn std::error::Error) -> String {
+    let mut text = error.to_string();
+    let mut cause = error.source();
+    while let Some(error) = cause {
+        text.push_str(": ");
+        text.push_str(&error.to_string());
+        cause = error.source();
+    }
+    text
+}
+
 /// Loads the shared library at `path`.
 ///
 /// # Safety
@@ -112,7 +128,7 @@ impl WalletLibrary {
 
         // SAFETY: loading a shared library runs its initialisers. The path is
         // chosen by the app and points at the library it ships.
-        let library = unsafe { open_library(path) }.map_err(|e| fail(e.to_string()))?;
+        let library = unsafe { open_library(path) }.map_err(|e| fail(with_causes(&e)))?;
 
         for (symbol, expected) in EXPECTED_CONSTANTS {
             // SAFETY: each symbol is declared in the library's header as
