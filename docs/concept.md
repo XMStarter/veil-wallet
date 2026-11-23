@@ -103,8 +103,9 @@ if, at build time, Arti cannot run bridges on Android.
 - **Encryption.** The wallet file is encrypted with the user's password. On
   Android, biometric unlock is available through the hardware-backed key
   store.
-- **On-device protection.** Auto-lock, clipboard clearing, and Android cloud
-  backup disabled.
+- **On-device protection.** A way to lock the wallet at any time, auto-lock,
+  clipboard clearing, and Android cloud backup disabled. A locked wallet
+  is closed: Tor is stopped, and only the password opens it again.
 
 ## Screens
 

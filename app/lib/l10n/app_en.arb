@@ -50,6 +50,8 @@
   "homeTitle": "Wallet",
   "homeNotBuilt": "The wallet is open. Its screens are not built yet.",
   "homeRebuilt": "The wallet's data file could not be read. The wallet was opened from its keys, which are intact; its funds will show again after a synchronisation.",
+  "lockAction": "Lock wallet",
+  "lockWorking": "Closing the wallet…",
   "torConnecting": "Tor is connecting: {percent}%",
   "@torConnecting": {
     "placeholders": {

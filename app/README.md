@@ -6,8 +6,9 @@ colours and typefaces named there, English and Russian.
 
 So far it has the way to an open wallet: create one, write down and check
 its recovery phrase, restore one from a phrase, and open the one on the
-device with its password. An open wallet lands on a screen that says so
-and shows what Tor is doing; the balance, receiving, sending and the
+device with its password. An open wallet lands on a screen that says so,
+shows what Tor is doing, and can lock the wallet again: it is saved and
+closed, Tor is stopped, and the app asks for the password. The balance, receiving, sending and the
 settings come with build steps 3.5 to 3.7 of
 [docs/concept.md](../docs/concept.md). The network is stagenet.
 

@@ -288,6 +288,45 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a wallet can be locked, and opens again with its password', (
+    tester,
+  ) async {
+    final backend = FakeBackend(hasWallet: true, confirmed: true);
+    await pumpApp(tester, 'en', backend: backend);
+    await type(tester, 'Password', testPassword);
+    await press(tester, 'Open wallet');
+    expect(find.text('WALLET'), findsOneWidget);
+    expect(backend.state.value, isNotNull);
+
+    // Locking saves and closes the wallet; the app stays, at the password.
+    await press(tester, 'Lock wallet');
+    expect(backend.calls.last, 'close');
+    expect(backend.state.value, isNull);
+    expect(find.text('OPEN WALLET'), findsOneWidget);
+    expect(find.text('WALLET'), findsNothing);
+    // The field is empty: the password typed before is not kept.
+    expect(enabled(tester, 'Open wallet'), isFalse);
+    // There is no way back to the open wallet but the password.
+    expect(find.text('BACK'), findsNothing);
+
+    await type(tester, 'Password', 'not the password');
+    await press(tester, 'Open wallet');
+    expect(find.text('Wrong password.'), findsOneWidget);
+    await type(tester, 'Password', testPassword);
+    await press(tester, 'Open wallet');
+    expect(find.text('WALLET'), findsOneWidget);
+    expect(backend.state.value, isNotNull);
+  });
+
+  testWidgets('locking works in Russian too', (tester) async {
+    final backend = FakeBackend(hasWallet: true, confirmed: true);
+    await pumpApp(tester, 'ru', backend: backend);
+    await type(tester, 'Пароль', testPassword);
+    await press(tester, 'Открыть кошелёк');
+    await press(tester, 'Заблокировать кошелёк');
+    expect(find.text('ОТКРЫТЬ КОШЕЛЁК'), findsOneWidget);
+  });
+
   testWidgets('closing the window closes the wallet first', (tester) async {
     final backend = FakeBackend(hasWallet: true, confirmed: true);
     await pumpApp(tester, 'en', backend: backend);
