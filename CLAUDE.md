@@ -95,13 +95,14 @@ synchronising with a public onion node over Tor. Step 1.3 is done: `veil`,
 the command-line tool on stagenet (`veil_cli`), passed the owner's
 acceptance run at all four levels, and a send tried by hand on stagenet
 went through a separate node and confirmed. A new wallet's first sync on
-stagenet took about two minutes over Tor. Step 1.4, bridges, is written
-(`veil_tor::Bridges`, `veil sync --bridges`) and passes its offline tests;
-it is waiting for the owner's acceptance run of the `bridges` level, which
-is the first time a transport program is started at all. WebTunnel is
-configured like obfs4 and Snowflake but cannot be tried yet. Not done: the
-wallet library for Windows, the app. See the build plan in
-`docs/concept.md`.
+stagenet took about two minutes over Tor. Step 1.4, bridges, is done
+(`veil_tor::Bridges`, `veil sync --bridges`): the owner's acceptance run
+passed at all five levels. Tor connected through obfs4 and through
+Snowflake, did not connect when its only bridge did not exist, and the
+tool synchronised a wallet through obfs4 bridges, about three and a half
+times slower than directly. WebTunnel is configured like the other two but
+cannot be tried yet. Not done: the wallet library for Windows (step 1.5,
+next), the app. See the build plan in `docs/concept.md`.
 
 ## Environment notes
 
