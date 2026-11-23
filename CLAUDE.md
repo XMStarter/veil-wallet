@@ -171,9 +171,15 @@ the start flow, is written and not yet accepted: creating a wallet with
 its password, showing and checking the recovery phrase, restoring from a
 phrase, and opening the wallet on the device, on stagenet. Its tests walk
 that way on a wallet that only pretends. On the owner's machine the
-`offline` and `regtest` levels passed with it; the walk through the app
-itself, which opens a real wallet and starts Tor for the first time, has
-not been reported yet. Not done: the app. See the build plan in
+`offline` and `regtest` levels passed with it on commit `72d51cb`, and
+the app has created a wallet there. How the walk through the app went
+(the phrase check, Tor connecting, opening again with the password) was
+never reported, and the two changes after that commit, the warning about
+25 words and the lock, have not been run there. The owner had the step
+merged on that footing; treat the app with a real wallet as not yet
+confirmed until a later step's run says otherwise. Next is step 3.5,
+home and receive, which also has to make a synchronisation stoppable and
+save its progress along the way. Not done: the app. See the build plan in
 `docs/concept.md`.
 
 ## Environment notes
