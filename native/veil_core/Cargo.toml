@@ -21,6 +21,8 @@ veil_wallet = { path = "../veil_wallet" }
 thiserror = "2"
 # Wipes the password a session holds until its wallet is open.
 zeroize = "1"
+# Puts the public nodes in an order nobody can predict.
+getrandom = "0.3"
 # Commands and state cross the C interface as JSON.
 serde_json = "1"
 

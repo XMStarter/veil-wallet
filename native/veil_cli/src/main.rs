@@ -8,7 +8,6 @@
 
 mod args;
 mod commands;
-mod nodes;
 mod prompt;
 mod transports;
 

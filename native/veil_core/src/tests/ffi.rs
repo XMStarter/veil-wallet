@@ -68,6 +68,20 @@ fn a_start_request_is_read_or_refused_with_a_reason() {
         Some(Duration::from_secs(90))
     );
 
+    // Without nodes of the user's own, the public ones are used, all of
+    // them, in whatever order.
+    for nodes in [Value::Null, serde_json::json!([])] {
+        let (config, _) = parse_start(&change("nodes", nodes), None).unwrap();
+        assert_eq!(config.nodes.len(), 4);
+        assert!(config.nodes.iter().all(|node| node.port() == 38089));
+    }
+    let own = serde_json::json!([format!("{SYNC_HOST}:38081")]);
+    let (config, _) = parse_start(&change("nodes", own), None).unwrap();
+    assert_eq!(
+        config.nodes,
+        vec![OnionNode::new(SYNC_HOST, 38081).unwrap()]
+    );
+
     // Only stagenet, for now.
     let mainnet = change("network", "mainnet".into());
     assert_eq!(
@@ -86,7 +100,10 @@ fn a_start_request_is_read_or_refused_with_a_reason() {
         kind_of(parse_start(&restore, None)),
         Some(ProblemKind::BadRequest)
     );
-    assert!(parse_start(&restore, Some("three words only")).is_err());
+    assert_eq!(
+        kind_of(parse_start(&restore, Some("three words only"))),
+        Some(ProblemKind::InvalidPhrase)
+    );
     for broken in [
         "",
         "[]",

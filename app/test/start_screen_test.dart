@@ -59,12 +59,8 @@ void main() {
         // One main action per screen.
         expect(find.byType(FilledButton), findsOneWidget);
         expect(find.byType(OutlinedButton), findsOneWidget);
-        final filled = tester.widget<FilledButton>(find.byType(FilledButton));
-        final style =
-            filled.style ??
-            Theme.of(tester.element(find.byType(FilledButton)))
-                .filledButtonTheme
-                .style!;
+        final context = tester.element(find.byType(FilledButton));
+        final style = Theme.of(context).filledButtonTheme.style!;
         expect(style.backgroundColor!.resolve({}), VeilColors.ink);
         final shape = style.shape!.resolve({})! as RoundedRectangleBorder;
         expect(shape.borderRadius, const BorderRadius.all(Radius.circular(2)));
@@ -77,27 +73,22 @@ void main() {
   testWidgets(
     'in a wide desktop window the column stays as narrow as a phone',
     (tester) async {
-      tester.view.physicalSize = const Size(1600, 900);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
-      await pumpAppWide(tester);
+      await pumpApp(tester, 'en', size: const Size(1600, 900));
       final button = tester.getSize(find.byType(VeilButton).first);
       expect(button.width, VeilSizes.columnWidth - 2 * VeilSizes.screenPadding);
     },
   );
 
-  testWidgets('each way leads to its screen and back', (tester) async {
-    await pumpApp(tester, 'en');
-    await tester.tap(find.text('CREATE WALLET'));
-    await tester.pumpAndSettle();
-    expect(find.text('NEW WALLET'), findsOneWidget);
-    expect(find.text('This screen is not built yet.'), findsOneWidget);
-    await tester.tap(find.text('BACK'));
-    await tester.pumpAndSettle();
-    expect(find.text('CREATE WALLET'), findsOneWidget);
-
-    await tester.tap(find.text('RESTORE FROM RECOVERY PHRASE'));
-    await tester.pumpAndSettle();
-    expect(find.text('RESTORE'), findsOneWidget);
+  testWidgets('a device that has a wallet asks for its password instead', (
+    tester,
+  ) async {
+    await pumpApp(
+      tester,
+      'en',
+      backend: FakeBackend(hasWallet: true, confirmed: true),
+    );
+    expect(find.text('CREATE WALLET'), findsNothing);
+    expect(find.text('OPEN WALLET'), findsOneWidget);
+    expect(find.text('Password'), findsOneWidget);
   });
 }

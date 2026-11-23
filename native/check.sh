@@ -335,7 +335,21 @@ app_side() {
       step "$flutter" --no-version-check analyze --no-pub --fatal-infos &&
       step "$flutter" --no-version-check test --no-pub &&
       step "$flutter" --no-version-check build "$system" --release --no-pub
-  )
+  ) || return 1
+  bundle_native_parts
+}
+
+# Puts the core and the wallet library next to the app that was just built
+# for Linux, so that it can be started and open a wallet. Only where the
+# wallet library has been built: not in hosted CI.
+bundle_native_parts() {
+  if on_windows || [ -z "${VEIL_WALLET_LIB:-}" ]; then
+    return 0
+  fi
+  local bundle="$here/../app/build/linux/x64/release/bundle"
+  step cargo build -p veil_core --release --locked &&
+    step cp "$here/target/release/libveil_core.so" "$VEIL_WALLET_LIB" "$bundle/lib/" &&
+    echo "the app with its native parts: $bundle/veil"
 }
 
 level_flutter() {

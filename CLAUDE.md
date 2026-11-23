@@ -86,7 +86,10 @@ that cannot lose the user's funds.
   in `veil_core/src/ffi.rs`; the state crosses as JSON, pinned by
   `native/veil_core/tests/fixtures`, which both sides test against.
 - `app/`: the app, written with Flutter, for Linux and Windows first. So
-  far a shell: theme, texts in two languages, the start screen. Read
+  far the way to an open wallet: create, recovery phrase, restore, unlock.
+  Screens talk to `WalletBackend` (`app/lib/core`), never to the core
+  directly; tests use a backend that only pretends, and no test opens a
+  real wallet, because that starts Tor. Read
   `app/README.md` and `docs/design.md` before changing it. Colours,
   typefaces and sizes come from `app/lib/theme`; texts from the `.arb`
   files, always in both languages.
@@ -157,15 +160,26 @@ Dart side (`dart/veil_bridge`). The owner's acceptance run passed at the
 Flutter installed by `./check.sh setup` and the Dart tests calling the
 real library on Linux. The Dart side has not been run against the Windows
 build of the library: there is no Dart for Windows in that setup. Next is
-step 3.3, the app shell, which also brings Flutter to hosted CI. On the
-owner's machine it is accepted: the Flutter project in `app/` with the
-visual language of the design document, English and Russian, the start
-screen, and tests that draw it. The `offline` level passed there with the
-app's checks and its Linux build, and the built app opened its window
-under WSL, in English, which is the language of that WSL. It has not run
-in hosted CI yet, where the Windows build and the Dart side against the
-Windows library will run for the first time; that happens with its pull
-request. Next is step 3.4, the start flow. Not done: the app. See the build plan in
+step 3.3, the app shell, which also brought Flutter to hosted CI. It is
+done: the Flutter project in `app/` with the visual language of the
+design document, English and Russian, and the start screen. On the
+owner's machine the `offline` level passed with the app's checks and its
+Linux build, and the built app opened its window under WSL. In hosted CI
+the app was built for Windows and the Dart side was tested against the
+Windows build of the core, both for the first time, and passed. Step 3.4,
+the start flow, is written and not yet accepted: creating a wallet with
+its password, showing and checking the recovery phrase, restoring from a
+phrase, and opening the wallet on the device, on stagenet. Its tests walk
+that way on a wallet that only pretends. On the owner's machine the
+`offline` and `regtest` levels passed with it on commit `72d51cb`, and
+the app has created a wallet there. How the walk through the app went
+(the phrase check, Tor connecting, opening again with the password) was
+never reported, and the two changes after that commit, the warning about
+25 words and the lock, have not been run there. The owner had the step
+merged on that footing; treat the app with a real wallet as not yet
+confirmed until a later step's run says otherwise. Next is step 3.5,
+home and receive, which also has to make a synchronisation stoppable and
+save its progress along the way. Not done: the app. See the build plan in
 `docs/concept.md`.
 
 ## Environment notes

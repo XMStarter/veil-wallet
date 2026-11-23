@@ -18,8 +18,8 @@ class SessionConfig {
     required this.walletPath,
     required this.torStateDir,
     required this.torCacheDir,
-    required this.nodes,
     required this.source,
+    this.nodes = const [],
     this.restoreHeight,
     this.syncEvery,
   });
@@ -34,7 +34,8 @@ class SessionConfig {
   final String torStateDir;
   final String torCacheDir;
 
-  /// The nodes to use, as `host.onion:port`, in the order to try them.
+  /// The user's own nodes, as `host.onion:port`, in the order to try them.
+  /// Empty: the public stagenet nodes, in an order nobody can predict.
   final List<String> nodes;
   final WalletSource source;
 

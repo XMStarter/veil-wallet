@@ -95,15 +95,17 @@ if, at build time, Arti cannot run bridges on Android.
   few of the words. Screenshots are blocked on that screen.
 - **Restoring.** Both Polyseed (16 words) and the classic Monero phrase
   (25 words) are accepted. For the classic phrase the app asks for an
-  approximate creation date.
+  approximate creation date. (For now it asks for a block number instead:
+  the core cannot turn a date into a block yet.)
 - **Damaged files.** The keys are in a file of their own that is written
   once. If the file that holds the wallet's view of the chain is damaged,
   the wallet opens from the keys and scans the chain again.
 - **Encryption.** The wallet file is encrypted with the user's password. On
   Android, biometric unlock is available through the hardware-backed key
   store.
-- **On-device protection.** Auto-lock, clipboard clearing, and Android cloud
-  backup disabled.
+- **On-device protection.** A way to lock the wallet at any time, auto-lock,
+  clipboard clearing, and Android cloud backup disabled. A locked wallet
+  is closed: Tor is stopped, and only the password opens it again.
 
 ## Screens
 

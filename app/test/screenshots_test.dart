@@ -23,18 +23,67 @@ Future<void> capture(WidgetTester tester, String name) async {
   });
 }
 
+/// The texts the walk below presses and types by, per language.
+const labels = {
+  'en': (
+    create: 'Create wallet',
+    password: 'Password',
+    repeat: 'Repeat the password',
+    written: 'I wrote them down',
+    restore: 'Restore from recovery phrase',
+    phrase: 'Recovery phrase',
+  ),
+  'ru': (
+    create: 'Создать кошелёк',
+    password: 'Пароль',
+    repeat: 'Пароль ещё раз',
+    written: 'Слова записаны',
+    restore: 'Восстановить по фразе',
+    phrase: 'Фраза восстановления',
+  ),
+};
+
 void main() {
   setUpAll(loadFonts);
 
   for (final language in ['en', 'ru']) {
-    testWidgets('the start screen, drawn ($language)', (tester) async {
+    final label = labels[language]!;
+
+    testWidgets('the way to a new wallet, drawn ($language)', (tester) async {
       await pumpApp(tester, language);
       // The logo is decoded off the test's fake clock.
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 200)),
       );
       await tester.pumpAndSettle();
-      await capture(tester, 'start-$language');
+      await capture(tester, '1-start-$language');
+
+      await press(tester, label.create);
+      await type(tester, label.password, testPassword);
+      await type(tester, label.repeat, testPassword);
+      await capture(tester, '2-create-$language');
+
+      await press(tester, label.create);
+      await capture(tester, '3-phrase-$language');
+
+      await press(tester, label.written);
+      await capture(tester, '4-check-$language');
+    });
+
+    testWidgets('restoring, drawn ($language)', (tester) async {
+      await pumpApp(tester, language);
+      await press(tester, label.restore);
+      await type(tester, label.phrase, testPhrase);
+      await capture(tester, '5-restore-$language');
+    });
+
+    testWidgets('unlocking, drawn ($language)', (tester) async {
+      await pumpApp(
+        tester,
+        language,
+        backend: FakeBackend(hasWallet: true, confirmed: true),
+      );
+      await capture(tester, '6-unlock-$language');
     });
   }
 }

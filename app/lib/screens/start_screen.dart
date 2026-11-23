@@ -1,26 +1,21 @@
 import 'package:flutter/material.dart';
 
+import '../core/backend.dart';
 import '../l10n/app_localizations.dart';
-import '../theme/colors.dart';
 import '../theme/theme.dart';
+import '../widgets/notice.dart';
 import '../widgets/veil_button.dart';
 import '../widgets/veil_column.dart';
-import 'placeholder_screen.dart';
+import 'create_screen.dart';
+import 'navigation.dart';
+import 'restore_screen.dart';
 
-/// The first screen: the logo, and the two ways to a wallet.
+/// The first screen on a device without a wallet: the logo, and the two
+/// ways to a wallet.
 class StartScreen extends StatelessWidget {
-  const StartScreen({super.key});
+  const StartScreen({super.key, required this.backend});
 
-  void _open(BuildContext context, String title) {
-    Navigator.of(context).push(
-      PageRouteBuilder<void>(
-        // No animation except progress.
-        pageBuilder: (_, _, _) => PlaceholderScreen(title: title),
-        transitionDuration: Duration.zero,
-        reverseTransitionDuration: Duration.zero,
-      ),
-    );
-  }
+  final WalletBackend backend;
 
   @override
   Widget build(BuildContext context) {
@@ -43,21 +38,17 @@ class StartScreen extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const Spacer(),
-            Container(
-              color: VeilColors.surface,
-              padding: const EdgeInsets.all(12),
-              child: Text(text.startStagenetNotice, style: theme.bodySmall),
-            ),
+            Notice(text.startStagenetNotice),
             const SizedBox(height: VeilSizes.screenPadding),
             VeilButton(
               label: text.startCreate,
-              onPressed: () => _open(context, text.createTitle),
+              onPressed: () => open(context, CreateScreen(backend: backend)),
             ),
             const SizedBox(height: 12),
             VeilButton(
               label: text.startRestore,
               primary: false,
-              onPressed: () => _open(context, text.restoreTitle),
+              onPressed: () => open(context, RestoreScreen(backend: backend)),
             ),
           ],
         ),

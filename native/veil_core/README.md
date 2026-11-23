@@ -74,6 +74,9 @@ problem of the kind `bad_request`; a comma in an amount is a decimal
 separator, as people type it.
 
 Only `stagenet` is accepted as a network, and bridges cannot be given yet.
+Nodes are the user's own, tried in the order given; without any, the
+public stagenet nodes in `src/public_nodes.rs` are used, in an order nobody
+can predict.
 
 The state as it crosses the interface is pinned by `tests/fixtures/*.json`.
 The core's tests compare what they produce with those files, and the Dart

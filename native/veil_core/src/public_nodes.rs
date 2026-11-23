@@ -1,11 +1,12 @@
 //! Which stagenet nodes to try, and in what order.
 
-use veil_core::OnionNode;
+use crate::OnionNode;
 
 /// Public stagenet nodes that are onion services, from the public list at
-/// monero.fail. They are here so that the tool works without setting
-/// anything up. Nobody vetted them, three of the four appear to belong to
-/// one operator, and the app's own node list is a separate decision.
+/// monero.fail. They are here so that the command-line tool and the app
+/// work on stagenet without setting anything up. Nobody vetted them, three
+/// of the four appear to belong to one operator, and the list the app ships
+/// with for real funds is a separate decision.
 const PUBLIC_STAGENET_NODES: &[&str] = &[
     "plowsof3t5hogddwabaeiyrno25efmzfxyro2vligremt7sxpsclfaid.onion:38089",
     "plowsofe6cleftfmk2raiw5h2x66atrik3nja4bfd3zrfa2hdlgworad.onion:38089",
@@ -15,7 +16,7 @@ const PUBLIC_STAGENET_NODES: &[&str] = &[
 
 /// The nodes to try, in the order to try them: the ones the user named, as
 /// named, or else the public ones in an order nobody can predict.
-pub fn candidates(named: Vec<OnionNode>) -> Vec<OnionNode> {
+pub fn stagenet_candidates(named: Vec<OnionNode>) -> Vec<OnionNode> {
     if !named.is_empty() {
         return named;
     }
@@ -50,12 +51,12 @@ mod tests {
             PUBLIC_STAGENET_NODES[3].parse().unwrap(),
             PUBLIC_STAGENET_NODES[0].parse().unwrap(),
         ];
-        assert_eq!(candidates(named.clone()), named);
+        assert_eq!(stagenet_candidates(named.clone()), named);
     }
 
     #[test]
     fn the_public_list_is_complete_whatever_the_order() {
-        let mut got: Vec<String> = candidates(Vec::new())
+        let mut got: Vec<String> = stagenet_candidates(Vec::new())
             .iter()
             .map(|node| node.to_string())
             .collect();

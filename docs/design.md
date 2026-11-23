@@ -70,7 +70,8 @@ runtime.
 2. **Recovery phrase.** Sixteen numbered words, a warning, and a
    confirmation button. Followed by a check of three words.
 3. **Home.** Balance (tap to hide), available and pending amounts, Tor and
-   sync status, Receive and Send, recent activity.
+   sync status, Receive and Send, recent activity, and a quiet way to lock
+   the wallet.
 4. **Receive.** QR code, the number of the address, the address itself, Copy
    and Share.
 5. **Send.** Form, then a review screen, then a confirmation.
