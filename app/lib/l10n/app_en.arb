@@ -5,8 +5,73 @@
   "startCreate": "Create wallet",
   "startRestore": "Restore from recovery phrase",
   "startStagenetNotice": "Test network. This version does not work with real funds.",
+  "back": "Back",
+  "continueLabel": "Continue",
   "createTitle": "New wallet",
+  "createAction": "Create wallet",
+  "createWorking": "Creating the wallet…",
+  "passwordLabel": "Password",
+  "passwordRepeatLabel": "Repeat the password",
+  "passwordNotice": "The password protects the wallet on this device. It cannot be recovered: without it, only the recovery phrase brings the wallet back.",
+  "passwordTooShort": "At least 8 characters.",
+  "passwordsDiffer": "The two passwords differ.",
+  "phraseTitle": "Recovery phrase",
+  "phraseNotice": "Write these words down on paper, in this order. Whoever has them has the funds. They are the only way to restore the wallet, and nobody can restore them for you.",
+  "phraseWritten": "I wrote them down",
+  "checkTitle": "Check",
+  "checkIntro": "Type three of the words you wrote down.",
+  "checkWordLabel": "Word {number}",
+  "@checkWordLabel": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "checkMismatch": "That is not the word. Look at what you wrote down, or go back to see the phrase again.",
   "restoreTitle": "Restore",
-  "notBuiltYet": "This screen is not built yet.",
-  "back": "Back"
+  "restorePhraseLabel": "Recovery phrase",
+  "restorePhraseHint": "16 or 25 words, separated by spaces.",
+  "restoreWordCount": "{count, plural, =0{No words yet} =1{1 word} other{{count} words}}",
+  "@restoreWordCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "restoreHeightLabel": "Block to scan from (optional)",
+  "restoreHeightNotice": "A 25-word phrase does not say when the wallet was made. Without a block number the whole chain is scanned, which takes long.",
+  "restoreAction": "Restore wallet",
+  "restoreWorking": "Restoring the wallet…",
+  "unlockTitle": "Veil",
+  "unlockAction": "Open wallet",
+  "unlockWorking": "Opening the wallet…",
+  "homeTitle": "Wallet",
+  "homeNotBuilt": "The wallet is open. Its screens are not built yet.",
+  "homeRebuilt": "The wallet's data file could not be read. The wallet was opened from its keys, which are intact; its funds will show again after a synchronisation.",
+  "torConnecting": "Tor is connecting: {percent}%",
+  "@torConnecting": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "torReady": "Tor is connected",
+  "torFailed": "Tor could not start",
+  "problemWrongPassword": "Wrong password.",
+  "problemWalletExists": "There is already a wallet on this device. Nothing was changed.",
+  "problemInvalidPhrase": "This is not a recovery phrase: a word is wrong, or the words are in another order.",
+  "problemTorFailed": "Tor could not start.",
+  "problemLibraryMissing": "The app is incomplete: a part of it was not found.",
+  "problemOther": "Something went wrong.",
+  "problemDetail": "Details: {detail}",
+  "@problemDetail": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  }
 }

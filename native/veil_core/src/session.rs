@@ -76,6 +76,9 @@ pub enum ProblemKind {
     WrongPassword,
     /// A wallet is already there; nothing was overwritten.
     WalletExists,
+    /// The recovery phrase is not one: a wrong number of words, or words
+    /// that do not belong together.
+    InvalidPhrase,
     /// Tor is still connecting. Nothing was sent anywhere.
     TorNotReady,
     /// Tor could not start.
@@ -119,6 +122,7 @@ impl From<veil_wallet::Error> for Problem {
         let kind = match &error {
             Error::WrongPassword => ProblemKind::WrongPassword,
             Error::WalletExists(_) => ProblemKind::WalletExists,
+            Error::SeedWordCount { .. } => ProblemKind::InvalidPhrase,
             Error::NodeUnreachable | Error::NodeIncompatible | Error::NodeSyncing { .. } => {
                 ProblemKind::NoNode
             }
@@ -555,7 +559,13 @@ fn open(
             config.network,
             &phrase,
             restore_height,
-        )?,
+        )
+        .map_err(|error| match error {
+            // The library's own refusal of a phrase. Nothing else it can
+            // object to is left: the place was checked to be free.
+            veil_wallet::Error::Wallet(detail) => Problem::new(ProblemKind::InvalidPhrase, detail),
+            other => other.into(),
+        })?,
         WalletSource::Open => Wallet::open(&lib, path, password, config.network)?,
     };
     (hooks.wallet)(&mut wallet);

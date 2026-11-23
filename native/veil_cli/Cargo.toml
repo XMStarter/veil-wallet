@@ -14,8 +14,6 @@ path = "src/main.rs"
 veil_core = { path = "../veil_core" }
 veil_tor = { path = "../veil_tor" }
 veil_wallet = { path = "../veil_wallet" }
-# Operating-system randomness, to pick nodes in no predictable order.
-getrandom = "0.3"
 # Reads a password from the terminal without showing it.
 rpassword = "7"
 zeroize = "1"

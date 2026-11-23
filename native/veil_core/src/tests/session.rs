@@ -156,6 +156,26 @@ fn a_wallet_restored_from_its_phrase_has_the_same_address() {
     let phrase = session.recovery_phrase().unwrap();
     drop(session);
 
+    // A phrase with a word changed is refused, as the phrase's fault, and
+    // leaves nothing behind where the wallet would have been.
+    let mut words: Vec<&str> = phrase.words().collect();
+    words[3] = if words[3] == "abandon" {
+        "ability"
+    } else {
+        "abandon"
+    };
+    let damaged = veil_wallet::SeedPhrase::parse(&words.join(" ")).unwrap();
+    let refused = config(&dir, "refused").unwrap();
+    let source = WalletSource::Restore {
+        phrase: damaged,
+        restore_height: 0,
+    };
+    let session = start(refused.clone(), &stand_in, source);
+    let state = opened(&session);
+    assert_eq!(failed_with(&state.phase), Some(ProblemKind::InvalidPhrase));
+    drop(session);
+    assert!(!refused.wallet_path.exists());
+
     let restored = config(&dir, "restored").unwrap();
     let source = WalletSource::Restore {
         phrase,

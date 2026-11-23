@@ -33,6 +33,7 @@ class Problem {
 abstract final class ProblemKind {
   static const wrongPassword = 'wrong_password';
   static const walletExists = 'wallet_exists';
+  static const invalidPhrase = 'invalid_phrase';
   static const torNotReady = 'tor_not_ready';
   static const torFailed = 'tor_failed';
   static const noNode = 'no_node';
@@ -49,6 +50,7 @@ abstract final class ProblemKind {
   static const all = {
     wrongPassword,
     walletExists,
+    invalidPhrase,
     torNotReady,
     torFailed,
     noNode,

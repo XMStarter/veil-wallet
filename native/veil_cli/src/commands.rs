@@ -12,7 +12,7 @@ use veil_wallet::{
 use zeroize::Zeroizing;
 
 use crate::args::{Command, Options, USAGE};
-use crate::{nodes, prompt, transports};
+use crate::{prompt, transports};
 
 /// The only network this tool works on. Stagenet coins have no value.
 const NETWORK: Network = Network::Stagenet;
@@ -293,7 +293,7 @@ impl Session {
     /// first, so that a synchronisation can move on when that one drops.
     fn go_online(&self, named: Vec<OnionNode>) -> Result<(Core, Vec<OnionNode>), Fail> {
         let wallet = self.open()?;
-        let mut candidates = nodes::candidates(named);
+        let mut candidates = veil_core::stagenet_candidates(named);
         let first = candidates.first().ok_or("there is no node to try")?.clone();
 
         let tor_dir = self.data_dir.join("tor");

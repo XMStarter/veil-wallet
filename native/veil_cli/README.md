@@ -39,7 +39,7 @@ cargo run -p veil_cli -- create
 ## Nodes
 
 Without `--node`, the tool tries the public stagenet onion nodes listed in
-[`src/nodes.rs`](src/nodes.rs) in random order, synchronises with the first
+[`veil_core`](../veil_core/src/public_nodes.rs) in random order, synchronises with the first
 one that answers, and sends through the next. If that node stops answering
 in the middle of a synchronisation, the next one continues it. That list comes from a public
 directory; nobody vetted it, and most of it belongs to one operator. It is

@@ -84,10 +84,15 @@ pub(crate) fn parse_start(
         .get("tor")
         .and_then(Value::as_object)
         .ok_or_else(|| bad_request("`tor` is missing or is not an object"))?;
-    let nodes = config
-        .get("nodes")
-        .and_then(Value::as_array)
-        .ok_or_else(|| bad_request("`nodes` is missing or is not a list"))?
+    // The user's own nodes, in their order. Without any, the public ones.
+    let no_nodes = Vec::new();
+    let nodes = match config.get("nodes") {
+        None | Some(Value::Null) => &no_nodes,
+        Some(nodes) => nodes
+            .as_array()
+            .ok_or_else(|| bad_request("`nodes` is not a list"))?,
+    };
+    let nodes = nodes
         .iter()
         .map(|node| {
             node.as_str()
@@ -98,6 +103,7 @@ pub(crate) fn parse_start(
                 })
         })
         .collect::<Result<Vec<_>, _>>()?;
+    let nodes = crate::stagenet_candidates(nodes);
     let sync_every = match config.get("sync_every_seconds") {
         None | Some(Value::Null) => None,
         Some(seconds) => Some(Duration::from_secs(
@@ -171,6 +177,7 @@ fn kind_name(kind: ProblemKind) -> &'static str {
     match kind {
         ProblemKind::WrongPassword => "wrong_password",
         ProblemKind::WalletExists => "wallet_exists",
+        ProblemKind::InvalidPhrase => "invalid_phrase",
         ProblemKind::TorNotReady => "tor_not_ready",
         ProblemKind::TorFailed => "tor_failed",
         ProblemKind::NoNode => "no_node",
@@ -357,6 +364,10 @@ pub(crate) fn start_with(
 ///  "tor": {"state_dir": "...", "cache_dir": "..."},
 ///  "nodes": ["host.onion:38089"], "sync_every_seconds": 120}
 /// ```
+///
+/// `nodes` are the user's own, tried in the order given. Left out or
+/// empty, the public stagenet nodes are used, in an order nobody can
+/// predict. `sync_every_seconds` may be left out too.
 ///
 /// `source` is `create`, `open`, or `restore`; a restore takes the recovery
 /// phrase in `phrase` and may give `restore_height`. `phrase` is null
