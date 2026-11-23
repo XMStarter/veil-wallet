@@ -107,36 +107,55 @@ fn a_new_wallet_synchronises_with_a_public_node_over_tor() {
 
     wait_until_ready(&core);
 
-    // Find a node that answers. The next candidate serves as the broadcast
-    // node; the test sends nothing, so that one is never contacted.
-    let mut height = None;
+    // Go through the nodes until one carries a whole synchronisation. The
+    // next candidate serves as the broadcast node; the test sends nothing,
+    // so that one is never contacted.
+    //
+    // A public node can stop answering between one request and the next.
+    // That is the node's failure and not the wallet's, as long as the wallet
+    // reports it and gets on with another node, which is what this loop
+    // lets it show.
+    let mut outcome = None;
     for (position, node) in nodes.iter().enumerate() {
         let other = nodes[(position + 1) % nodes.len()].clone();
         core.set_nodes(Nodes::separate(node.clone(), other).unwrap())
             .unwrap();
         let asked = Instant::now();
-        match core.node_height() {
-            Ok(found) => {
-                println!("node {node} is at height {found} ({:.0?})", asked.elapsed());
-                height = Some(found);
+        let height = match core.node_height() {
+            Ok(height) => height,
+            Err(error) => {
+                println!("node {node}: {error} ({:.0?})", asked.elapsed());
+                continue;
+            }
+        };
+        println!(
+            "node {node} is at height {height} ({:.0?})",
+            asked.elapsed()
+        );
+        assert!(height > 3_000_000, "a mainnet node is far along: {height}");
+
+        // A new wallet starts a month back, which takes hours over Tor. The
+        // last few blocks are enough to show that blocks arrive and are
+        // scanned.
+        core.set_restore_height(height.saturating_sub(BLOCKS_TO_SCAN));
+        let started = Instant::now();
+        match core.sync() {
+            Ok(progress) => {
+                println!(
+                    "synchronised to height {} in {:.0?}",
+                    progress.wallet_height,
+                    started.elapsed()
+                );
+                outcome = Some((height, progress));
                 break;
             }
-            Err(error) => println!("node {node}: {error} ({:.0?})", asked.elapsed()),
+            Err(error) => println!(
+                "node {node}: synchronising failed: {error} ({:.0?})",
+                started.elapsed()
+            ),
         }
     }
-    let height = height.expect("no public node answered over Tor");
-    assert!(height > 3_000_000, "a mainnet node is far along: {height}");
-
-    // A new wallet starts a month back, which takes hours over Tor. The
-    // last few blocks are enough to show that blocks arrive and are scanned.
-    core.set_restore_height(height.saturating_sub(BLOCKS_TO_SCAN));
-    let started = Instant::now();
-    let progress = core.sync().expect("the wallet synchronises over Tor");
-    println!(
-        "synchronised to height {} in {:.0?}",
-        progress.wallet_height,
-        started.elapsed()
-    );
+    let (height, progress) = outcome.expect("no public node carried a synchronisation over Tor");
     assert_eq!(progress.blocks_left(), 0);
     assert!(progress.wallet_height >= height);
     assert_eq!(core.balance().total, Amount::ZERO);
