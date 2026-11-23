@@ -1,0 +1,73 @@
+diff --git a/src/wallet/api/wallet.cpp b/src/wallet/api/wallet.cpp
+index 6f242b6..cf67ae6 100644
+--- a/src/wallet/api/wallet.cpp
++++ b/src/wallet/api/wallet.cpp
+@@ -473,6 +473,7 @@ WalletImpl::WalletImpl(NetworkType nettype, uint64_t kdf_rounds)
+     m_wallet2Callback.reset(new Wallet2CallbackImpl(this));
+     m_wallet->callback(m_wallet2Callback.get());
+     m_refreshThreadDone = false;
++    m_backgroundRefresh = true;
+     m_wallet->set_refresh_enabled(false);
+     m_addressBook.reset(new AddressBookImpl(this));
+     m_subaddress.reset(new SubaddressImpl(this));
+@@ -2967,6 +2968,11 @@ void WalletImpl::setAllowMismatchedDaemonVersion(bool allow_mismatch)
+     m_wallet->allow_mismatched_daemon_version(allow_mismatch);
+ }
+ 
++void WalletImpl::setBackgroundRefresh(bool enabled)
++{
++    m_backgroundRefresh = enabled;
++}
++
+ bool WalletImpl::setProxy(const std::string &address)
+ {
+     return m_wallet->set_proxy(address);
+@@ -3039,7 +3045,10 @@ void WalletImpl::refreshThreadFunc()
+         LOG_PRINT_L3(__FUNCTION__ << ": m_refreshEnabled: " << m_wallet->get_refresh_enabled());
+         LOG_PRINT_L3(__FUNCTION__ << ": m_status: " << status());
+         LOG_PRINT_L3(__FUNCTION__ << ": m_refreshShouldRescan: " << m_refreshShouldRescan);
+-        if (m_wallet->get_refresh_enabled()) {
++        // createTransaction() and PendingTransaction::commit() enable
++        // refreshing when they return. A caller that drives the wallet
++        // itself turns the thread's part in that off here.
++        if (m_backgroundRefresh && m_wallet->get_refresh_enabled()) {
+             LOG_PRINT_L3(__FUNCTION__ << ": refreshing...");
+             doRefresh();
+         }
+diff --git a/src/wallet/api/wallet.h b/src/wallet/api/wallet.h
+index 913a744..dcc5123 100644
+--- a/src/wallet/api/wallet.h
++++ b/src/wallet/api/wallet.h
+@@ -125,6 +125,7 @@ public:
+     void setTrustedDaemon(bool arg) override;
+     bool trustedDaemon() const override;
+     void setAllowMismatchedDaemonVersion(bool allow_mismatch) override;
++    void setBackgroundRefresh(bool enabled) override;
+     bool setProxy(const std::string &address) override;
+     uint64_t balance(uint32_t accountIndex = 0) const override;
+     uint64_t unlockedBalance(uint32_t accountIndex = 0) const override;
+@@ -307,6 +308,8 @@ private:
+     std::atomic<bool> m_refreshThreadDone;
+     std::atomic<int>  m_refreshIntervalMillis;
+     std::atomic<bool> m_refreshShouldRescan;
++    // When false the refresh thread stays idle whatever enables refreshing.
++    std::atomic<bool> m_backgroundRefresh;
+     // synchronizing  refresh loop;
+     boost::mutex        m_refreshMutex;
+ 
+diff --git a/src/wallet/api/wallet2_api.h b/src/wallet/api/wallet2_api.h
+index f662c9d..18e07c6 100644
+--- a/src/wallet/api/wallet2_api.h
++++ b/src/wallet/api/wallet2_api.h
+@@ -675,6 +675,11 @@ struct Wallet
+     virtual void setTrustedDaemon(bool arg) = 0;
+     virtual bool trustedDaemon() const = 0;
+     virtual void setAllowMismatchedDaemonVersion(bool allow_mismatch) = 0;
++    /**
++     * @brief setBackgroundRefresh - when disabled, the wallet's refresh thread never
++     *        contacts the daemon; only a direct call to refresh() does. Enabled by default.
++     */
++    virtual void setBackgroundRefresh(bool enabled) = 0;
+     virtual bool setProxy(const std::string &address) = 0;
+     virtual uint64_t balance(uint32_t accountIndex = 0) const = 0;
+     uint64_t balanceAll() const {

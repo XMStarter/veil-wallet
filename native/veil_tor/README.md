@@ -42,6 +42,17 @@ while tor.status().state != State::Ready {
 bootstrapping, a `message` in the status usually means the network blocks
 Tor and bridges are needed.
 
+## For the rest of Veil
+
+`Transport` is what other crates hold: the two ports and the status. It
+cannot be implemented outside this crate, and in an app build `TorService`
+is its only implementation.
+
+The `stand-in` feature adds `StandIn`: the same listeners with the same
+rules, leading to ports on this machine instead of into Tor. Tests use it to
+run code that needs Tor without a network, and to read which onion names
+were asked for and through which listener. No app build enables it.
+
 ## Use through the C interface
 
 The crate also builds as a shared and a static library. See

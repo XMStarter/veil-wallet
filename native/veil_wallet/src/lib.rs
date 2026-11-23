@@ -28,6 +28,6 @@ pub use error::Error;
 pub use seed::{SeedKind, SeedPhrase};
 pub use sys::WalletLibrary;
 pub use wallet::{
-    Balance, Direction, Network, Node, PendingSend, ReceiveAddress, SendAmount, SyncProgress,
-    Transfer, Wallet, MAX_UNUSED_ADDRESSES,
+    is_onion_host, Balance, Direction, Network, Node, PendingSend, ReceiveAddress, SendAmount,
+    SyncProgress, Transfer, Wallet, MAX_UNUSED_ADDRESSES,
 };

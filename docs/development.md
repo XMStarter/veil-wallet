@@ -48,13 +48,15 @@ machine. The log of that run is the evidence that the step is done.
 | Level | What it runs | Where |
 |---|---|---|
 | `offline` | Format, lint, and every test that needs no network. Uses the wallet library when it has been built. | Anywhere, hosted CI included |
-| `regtest` | The wallet on a private chain. Starts a Monero daemon. | The owner's machine |
-| `tor` | The tests that start the real Tor client, and a connection to an onion service. | The owner's machine |
+| `regtest` | The wallet on a private chain, alone and behind a stand-in for Tor. Starts a Monero daemon. | The owner's machine |
+| `tor` | The tests that start the real Tor client, a connection to an onion service, and a new wallet synchronising with a public node. | The owner's machine |
 | `stagenet` | Nothing yet; arrives with the command-line tool. | The owner's machine |
 
 `./check.sh setup` prepares a Debian or Ubuntu machine once: system
 packages, Rust, and the wallet library with the daemon, built from source
-into `~/veil-wallet-lib` (about half an hour).
+into `~/veil-wallet-lib` (about half an hour). Run it again when the
+patches in `native/wallet_lib/patches` change; it rebuilds only what
+changed, and the other levels say so when the library is out of date.
 
 Every level but `offline` refuses to start on a CI runner. The tests behind
 those levels refuse as well, through `native/veil_test_guard`, so that
@@ -162,6 +164,7 @@ Run every command from `native/`.
 |---|---|---|
 | `native/veil_tor` | Embedded Tor client and loopback SOCKS listeners (Rust) | `cargo test -p veil_tor --lib -- --include-ignored` |
 | `native/veil_wallet` | Wallet operations on top of the Monero wallet library (Rust) | `cargo test -p veil_wallet --features regtest` with the library built |
+| `native/veil_core` | The wallet joined to Tor: the only way the app reaches a wallet (Rust) | `cargo test -p veil_core`, and `--features regtest` with the library built |
 | `native/wallet_lib` | Pinned build of the Monero wallet library, Veil's patches to it, and the bindings generator | `native/wallet_lib/build.sh <dir> --with-daemon` |
 | `native/veil_test_guard` | Makes the tests that start Tor or a daemon fail at once on a CI runner | `cargo test -p veil_test_guard` |
 

@@ -9,6 +9,9 @@ See [`../wallet_lib`](../wallet_lib) for the library itself.
 - **Onion nodes only.** `Wallet::connect` accepts a `.onion` host reached
   through a local SOCKS proxy and nothing else. The direct connection used
   by tests exists only behind the `regtest` feature.
+- **A separate node for sending.** With `set_broadcast_node`, a
+  transaction is handed to that node and the wallet is pointed back at its
+  sync node afterwards, whatever the outcome.
 - **A fresh address per payment.** `receive_address` returns the latest
   issued subaddress until something arrives on it, even unconfirmed, and
   then issues the next. The primary address is never handed out.
@@ -36,6 +39,7 @@ Found while testing against the real library. Each has a test.
 | An amount of zero means "send everything" | Zero is rejected; `SendAmount::Everything` is the only way to sweep |
 | Transaction ids are gone once a transaction is broadcast | They are read before broadcasting |
 | An empty list is returned as a static string that must not be freed | Empty strings are never freed |
+| Building or sending a transaction switches on a thread that synchronises the wallet every ten seconds through whichever node is set | Every wallet is opened with that thread switched off (a Veil patch to the library); the regtest scenario in `veil_core` checks that nothing is contacted |
 
 A consequence of keeping the stored start height: a new wallet's first sync
 scans about a month of blocks, because the library starts a month before

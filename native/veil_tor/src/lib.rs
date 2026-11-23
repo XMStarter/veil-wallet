@@ -19,5 +19,53 @@ pub mod ffi;
 mod onion;
 mod service;
 mod socks;
+#[cfg(feature = "stand-in")]
+mod stand_in;
 
 pub use service::{Purpose, State, Status, TorConfig, TorError, TorService};
+#[cfg(feature = "stand-in")]
+pub use stand_in::{Request, StandIn};
+
+/// What the rest of Veil uses to reach the network: loopback SOCKS listeners
+/// and their state.
+///
+/// The trait cannot be implemented outside this crate. In an app build its
+/// only implementation is [`TorService`], so code written against it has no
+/// way to reach the network except through Tor. Tests add [`StandIn`] with
+/// the `stand-in` feature.
+pub trait Transport: sealed::Sealed + Send {
+    /// The loopback port of the SOCKS listener for `purpose`.
+    fn socks_port(&self, purpose: Purpose) -> u16;
+    /// Current state, progress, and any message for the user.
+    fn status(&self) -> Status;
+}
+
+mod sealed {
+    pub trait Sealed {}
+}
+
+impl sealed::Sealed for TorService {}
+
+impl Transport for TorService {
+    fn socks_port(&self, purpose: Purpose) -> u16 {
+        TorService::socks_port(self, purpose)
+    }
+
+    fn status(&self) -> Status {
+        TorService::status(self)
+    }
+}
+
+#[cfg(feature = "stand-in")]
+impl sealed::Sealed for StandIn {}
+
+#[cfg(feature = "stand-in")]
+impl Transport for StandIn {
+    fn socks_port(&self, purpose: Purpose) -> u16 {
+        StandIn::socks_port(self, purpose)
+    }
+
+    fn status(&self) -> Status {
+        StandIn::status(self)
+    }
+}

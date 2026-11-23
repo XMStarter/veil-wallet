@@ -102,6 +102,8 @@ pub struct MoneroC {
         unsafe extern "C" fn(wallet_ptr: *mut ::std::os::raw::c_void, arg: bool),
     pub MONERO_Wallet_setAllowMismatchedDaemonVersion:
         unsafe extern "C" fn(wallet_ptr: *mut ::std::os::raw::c_void, allow_mismatch: bool),
+    pub MONERO_Wallet_setBackgroundRefresh:
+        unsafe extern "C" fn(wallet_ptr: *mut ::std::os::raw::c_void, enabled: bool),
     pub MONERO_Wallet_balance:
         unsafe extern "C" fn(wallet_ptr: *mut ::std::os::raw::c_void, accountIndex: u32) -> u64,
     pub MONERO_Wallet_unlockedBalance:
@@ -292,6 +294,9 @@ impl MoneroC {
         let MONERO_Wallet_setAllowMismatchedDaemonVersion = __library
             .get(b"MONERO_Wallet_setAllowMismatchedDaemonVersion\0")
             .map(|sym| *sym)?;
+        let MONERO_Wallet_setBackgroundRefresh = __library
+            .get(b"MONERO_Wallet_setBackgroundRefresh\0")
+            .map(|sym| *sym)?;
         let MONERO_Wallet_balance = __library.get(b"MONERO_Wallet_balance\0").map(|sym| *sym)?;
         let MONERO_Wallet_unlockedBalance = __library
             .get(b"MONERO_Wallet_unlockedBalance\0")
@@ -385,6 +390,7 @@ impl MoneroC {
             MONERO_Wallet_connected,
             MONERO_Wallet_setTrustedDaemon,
             MONERO_Wallet_setAllowMismatchedDaemonVersion,
+            MONERO_Wallet_setBackgroundRefresh,
             MONERO_Wallet_balance,
             MONERO_Wallet_unlockedBalance,
             MONERO_Wallet_blockChainHeight,
@@ -635,6 +641,13 @@ impl MoneroC {
         allow_mismatch: bool,
     ) {
         (self.MONERO_Wallet_setAllowMismatchedDaemonVersion)(wallet_ptr, allow_mismatch)
+    }
+    pub unsafe fn MONERO_Wallet_setBackgroundRefresh(
+        &self,
+        wallet_ptr: *mut ::std::os::raw::c_void,
+        enabled: bool,
+    ) {
+        (self.MONERO_Wallet_setBackgroundRefresh)(wallet_ptr, enabled)
     }
     pub unsafe fn MONERO_Wallet_balance(
         &self,

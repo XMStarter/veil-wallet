@@ -6,10 +6,17 @@
 //! defence: such a test calls [`refuse_in_hosted_ci`] first, and fails
 //! before anything is started if it finds itself on a CI runner anyway.
 //!
+//! The crate also holds [`RegtestDaemon`], the one launcher of a test
+//! daemon in the workspace, so that no test can start one around the check.
+//!
 //! The reason is in `docs/development.md`, "Hosted CI and the hosting
 //! account".
 
 use std::ffi::OsString;
+
+mod regtest;
+
+pub use regtest::RegtestDaemon;
 
 /// Environment variables that CI services set on their runners.
 /// `GITHUB_ACTIONS` is set on every GitHub Actions runner, self-hosted ones

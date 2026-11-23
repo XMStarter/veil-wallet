@@ -31,6 +31,13 @@ are computed.
 |---|---|---|
 | `monero/0001` and `monero_c/0001` | Expose the wallet's existing "allow mismatched daemon version" switch through the API | A private test chain activates every protocol version from its first block, which a wallet otherwise rejects. Tests need this to send and receive without real funds. The app never turns it on: the call exists only behind the `regtest` feature of `veil_wallet`. |
 | `monero/0002` | A direct call to refresh downloads blocks even when the library's background refresh thread was never started | Without it a direct refresh reports success and downloads nothing. Veil drives the wallet from one thread and does not use the background thread. |
+| `monero/0003` and `monero_c/0002` | A switch that keeps the library's background refresh thread idle | Building or sending a transaction switches that thread on, and it then synchronises on a timer through whichever node the wallet points at. While Veil sends through its broadcast node, that would be the broadcast node. `veil_wallet` turns the thread off for every wallet it opens. |
+
+`build.sh` notices when the patches here have changed since a work
+directory was built: it puts the library's sources back, applies the current
+set, and rebuilds only what changed. A library that lacks a function added
+by these patches does not load, because the bindings require every function
+Veil calls.
 
 ## Bindings
 
