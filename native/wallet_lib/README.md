@@ -22,6 +22,28 @@ native/wallet_lib/build.sh ~/veil-wallet-lib --with-daemon
 This is the development and test build. It links against the system's
 libraries. Release builds will use monero_c's reproducible toolchain.
 
+### For Windows
+
+```bash
+native/wallet_lib/build.sh ~/veil-wallet-lib --windows --with-daemon
+```
+
+builds `libmonero_wallet2_api_c.dll` and `monerod.exe` on Linux, into
+`out/windows`. The cross compiler is the distribution's
+(`g++-mingw-w64-x86-64`). There are no system libraries to link against for
+Windows, so Monero's own dependency build compiles Boost, OpenSSL, ZeroMQ,
+Unbound, libsodium and the others from source, about ten minutes, and they
+are linked into the DLL. The result needs nothing but Windows itself: no
+other DLL has to be shipped beside it.
+
+monero_c's own Windows build was not used. It downloads a prebuilt compiler
+from its author's file server and builds some seventy tools before it gets
+to the library; the route above uses a compiler from the distribution and
+sources fetched over HTTPS and checked by hash.
+
+Because the Windows DLL contains those libraries, a build that ships it has
+to carry their licence texts as well as monero_c's and Monero's.
+
 ## Veil's patches
 
 Each one is a few lines. None changes how keys, addresses, or transactions
@@ -32,6 +54,8 @@ are computed.
 | `monero/0001` and `monero_c/0001` | Expose the wallet's existing "allow mismatched daemon version" switch through the API | A private test chain activates every protocol version from its first block, which a wallet otherwise rejects. Tests need this to send and receive without real funds. The app never turns it on: the call exists only behind the `regtest` feature of `veil_wallet`. |
 | `monero/0002` | A direct call to refresh downloads blocks even when the library's background refresh thread was never started | Without it a direct refresh reports success and downloads nothing. Veil drives the wallet from one thread and does not use the background thread. |
 | `monero/0003` and `monero_c/0002` | A switch that keeps the library's background refresh thread idle | Building or sending a transaction switches that thread on, and it then synchronises on a timer through whichever node the wallet points at. While Veil sends through its broadcast node, that would be the broadcast node. `veil_wallet` turns the thread off for every wallet it opens. |
+
+| `monero/0004` | On Windows, the library reads the paths it is given as UTF-8 | Without it, Boost.Filesystem reads them in the system's legacy code page. A wallet in a folder whose name is not ASCII was then not recognised as existing, so a second one could have been created over it. Programs that call the library's `Wallet::init` get the same setting from there, together with a log file, which Veil does not want. |
 
 `build.sh` notices when the patches here have changed since a work
 directory was built: it puts the library's sources back, applies the current

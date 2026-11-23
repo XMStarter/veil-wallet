@@ -55,8 +55,60 @@ const EXPECTED_CONSTANTS: &[(&[u8], c_int)] = &[
     ),
 ];
 
-/// The loaded wallet library. Cheap to clone; the library stays loaded for
-/// as long as any clone or any wallet created from it is alive.
+/// An error's message followed by the messages of what caused it.
+///
+/// The loader's own message on Windows is only the name of the call that
+/// failed. The reason, such as "access is denied" from an antivirus or "a
+/// DLL initialization routine failed", is in the cause.
+fn with_causes(error: &dyn std::error::Error) -> String {
+    let mut text = error.to_string();
+    let mut cause = error.source();
+    while let Some(error) = cause {
+        text.push_str(": ");
+        text.push_str(&error.to_string());
+        cause = error.source();
+    }
+    text
+}
+
+/// Loads the shared library at `path`.
+///
+/// # Safety
+///
+/// Loading a library runs its initialisers.
+#[cfg(not(windows))]
+unsafe fn open_library(path: &Path) -> Result<libloading::Library, libloading::Error> {
+    libloading::Library::new(path)
+}
+
+/// Loads the shared library at `path`.
+///
+/// Windows looks for the other libraries a library needs in a list of
+/// places that by default includes the current folder and everything on
+/// `PATH`. A file with the right name dropped into any of them would be
+/// loaded into the wallet. Here only the wallet library's own folder and
+/// the system folder are searched.
+///
+/// # Safety
+///
+/// Loading a library runs its initialisers.
+#[cfg(windows)]
+unsafe fn open_library(path: &Path) -> Result<libloading::Library, libloading::Error> {
+    use libloading::os::windows::{
+        Library, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR, LOAD_LIBRARY_SEARCH_SYSTEM32,
+    };
+    // The restricted search needs a full path. If the path cannot be made
+    // absolute, the load below fails on it and reports that.
+    let full = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+    Library::load_with_flags(
+        full,
+        LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32,
+    )
+    .map(Into::into)
+}
+
+/// The loaded wallet library. Cheap to clone. Once loaded, the library stays
+/// loaded until the process ends.
 #[derive(Clone)]
 pub struct WalletLibrary {
     pub(crate) api: Arc<MoneroC>,
@@ -76,7 +128,7 @@ impl WalletLibrary {
 
         // SAFETY: loading a shared library runs its initialisers. The path is
         // chosen by the app and points at the library it ships.
-        let library = unsafe { libloading::Library::new(path) }.map_err(|e| fail(e.to_string()))?;
+        let library = unsafe { open_library(path) }.map_err(|e| fail(with_causes(&e)))?;
 
         for (symbol, expected) in EXPECTED_CONSTANTS {
             // SAFETY: each symbol is declared in the library's header as
@@ -102,7 +154,15 @@ impl WalletLibrary {
         // and amounts, so they are turned off.
         // SAFETY: plain call with a valid level.
         unsafe { api.MONERO_WalletManagerFactory_setLogLevel(-1) };
-        Ok(WalletLibrary { api: Arc::new(api) })
+        let api = Arc::new(api);
+        // The library is never unloaded. Once a wallet has been opened it
+        // owns threads that outlive the wallet, and its clean-up joins them.
+        // Unloading runs that clean-up while the system holds the lock a
+        // thread needs in order to finish, so on Windows the two wait for
+        // each other. Keeping one reference for ever leaves the clean-up to
+        // the end of the process, where the threads are gone already.
+        std::mem::forget(Arc::clone(&api));
+        Ok(WalletLibrary { api })
     }
 
     /// Takes ownership of a string returned by the library and frees it.

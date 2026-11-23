@@ -30,8 +30,9 @@ How Veil is written, reviewed, tested, and released.
 | Tor and stagenet | The owner's machine | Connecting through Tor and bridges, syncing and sending on a real test network |
 | Real devices | By hand, before a release | Installing and using the app on a phone and a desktop |
 
-The owner's machine runs Windows. Until the wallet library builds for
-Windows, the levels that need it run there inside WSL2.
+The owner's machine runs Windows. The levels that need the wallet library
+run there twice: inside WSL2 as Linux programs, and with `--windows` as
+Windows programs.
 
 Code that talks to Tor or to a node is written so that its logic can be
 tested against a stand-in on the loopback interface. The run on the real
@@ -84,6 +85,32 @@ For each acceptance run, on the branch being accepted:
 ```
 
 The last line of the output names the log file to send.
+
+### On Windows itself
+
+WSL runs the Linux build. The same checks also run as Windows programs,
+still started from the Ubuntu shell: everything is compiled for Windows on
+Linux, and WSL starts the resulting programs on the Windows side. Nothing
+is installed on Windows.
+
+```bash
+./check.sh --windows setup
+```
+
+installs the cross compiler and builds the wallet library and the daemon
+for Windows (see `native/wallet_lib/README.md`). Then:
+
+```bash
+./check.sh --windows offline regtest tor stagenet
+```
+
+The `bridges` level has no Windows form yet: there are no transport
+programs for Windows to test with.
+
+Two builds of the Rust code exist for Windows. Hosted CI compiles it with
+Microsoft's toolchain; this run compiles it with the GNU one, because that
+is the one that can be used from Linux. The wallet library is the same DLL
+for both.
 
 Reliability tests cover the failures that lose money or confuse users: Tor
 dropping mid-sync, the node changing, the process being killed during a

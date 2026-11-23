@@ -164,6 +164,13 @@ run where is set out in [development.md](development.md).
   set up the same way but has not been tried. A transport is a separate
   program that Tor starts, and whether an app can ship and start one on
   Android is still to be verified, as is the Android build.
+- **Antivirus on Windows.** An antivirus on the test machine reported the
+  wallet library as a potentially unwanted application, a "coin miner", the
+  first time a program opened it, and it has to be allowed by hand. The
+  library does not mine; the detection is of Monero code as such, and the
+  official Monero wallet meets the same. A Windows release needs an answer:
+  signed files, reporting the false positive to the vendors, and a page
+  that tells the user what they are looking at.
 - **Monero protocol upgrade.** Veil builds on Monero 0.18.5, the current
   release line. The FCMP++ and Carrot upgrade, which changes key derivation
   and transaction structure, has not been released; the wallet library will

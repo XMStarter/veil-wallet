@@ -105,6 +105,47 @@ fn wallet_survives_close_and_reopen() {
     assert_ne!(first, second);
 }
 
+/// A user's folders are named in the user's language. On Windows the
+/// wallet library takes a path as bytes while the system wants UTF-16, so
+/// this is where a path with anything but English letters could go wrong.
+#[test]
+fn a_wallet_can_live_in_a_folder_with_any_name() {
+    let Some(lib) = wallet_library() else { return };
+    let dir = TempDir::new("names");
+    let folder = dir.file("Мой кошелёk 钱包 é");
+    std::fs::create_dir_all(&folder).unwrap();
+    let path = folder.join("w");
+
+    let (mut wallet, phrase) = Wallet::create(&lib, &path, PASSWORD, Network::Mainnet).unwrap();
+    let address = wallet.receive_address().unwrap();
+    wallet.close().unwrap();
+    assert!(
+        folder.join("w.keys").exists(),
+        "the wallet's files are where they were asked to be: {:?}",
+        std::fs::read_dir(&folder)
+            .map(|entries| entries
+                .filter_map(|entry| entry.ok().map(|e| e.file_name()))
+                .collect::<Vec<_>>())
+            .unwrap_or_default()
+    );
+
+    // A second wallet may not overwrite it.
+    match Wallet::create(&lib, &path, PASSWORD, Network::Mainnet) {
+        Err(Error::WalletExists(_)) => {}
+        Err(other) => panic!("refused, but not as an existing wallet: {other}"),
+        Ok(_) => panic!("a second wallet was created over the first"),
+    }
+
+    let mut reopened = Wallet::open(&lib, &path, PASSWORD, Network::Mainnet).unwrap();
+    assert_eq!(reopened.seed_phrase().unwrap().as_str(), phrase.as_str());
+    assert_eq!(reopened.receive_address().unwrap(), address);
+    reopened.close().unwrap();
+
+    // Restoring over it is refused as well.
+    let restored = Wallet::restore(&lib, &path, PASSWORD, Network::Mainnet, &phrase, 0);
+    assert!(matches!(restored, Err(Error::WalletExists(_))));
+}
+
 #[test]
 fn wrong_password_does_not_open_the_wallet() {
     let Some(lib) = wallet_library() else { return };

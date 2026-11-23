@@ -26,6 +26,10 @@ See [`../wallet_lib`](../wallet_lib) for the library itself.
   and reports its fee. Nothing is broadcast until `commit`.
 - **Secrets are wiped.** Recovery phrases and passwords are zeroed in memory
   after use and never appear in debug output or error messages.
+- **On Windows, nothing rides in with the library.** Windows would look for
+  the DLLs a library needs in the current folder and along `PATH`, where
+  anyone could have put a file with the right name. The wallet library is
+  loaded so that only its own folder and the system folder are searched.
 
 ## Library behaviours this crate guards against
 
@@ -39,6 +43,8 @@ Found while testing against the real library. Each has a test.
 | An amount of zero means "send everything" | Zero is rejected; `SendAmount::Everything` is the only way to sweep |
 | Transaction ids are gone once a transaction is broadcast | They are read before broadcasting |
 | An empty list is returned as a static string that must not be freed | Empty strings are never freed |
+| On Windows, a wallet in a folder whose name is not ASCII is not recognised as existing | Before creating or restoring, the system is asked as well as the library, and either answer refuses; a Veil patch makes the library read paths as UTF-8 |
+| Unloading the library after a wallet was opened waits for ever on Windows: its clean-up joins threads that cannot finish while it runs | The library is loaded once and never unloaded |
 | Building or sending a transaction switches on a thread that synchronises the wallet every ten seconds through whichever node is set | Every wallet is opened with that thread switched off (a Veil patch to the library); the regtest scenario in `veil_core` checks that nothing is contacted |
 
 A consequence of keeping the stored start height: a new wallet's first sync

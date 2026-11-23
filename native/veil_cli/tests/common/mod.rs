@@ -65,10 +65,26 @@ impl Run {
     }
 }
 
+/// The `veil` program built alongside this test.
+///
+/// Found from where the test itself is, not from the path the build knew:
+/// a test built on Linux for Windows runs on another machine's view of the
+/// file system, where the build's path means nothing.
+fn veil_program() -> PathBuf {
+    let test = std::env::current_exe().expect("the test program has a path");
+    // target/<profile>/deps/<test> is next to target/<profile>/veil.
+    let profile_dir = test
+        .parent()
+        .and_then(Path::parent)
+        .expect("the test program is in target/<profile>/deps");
+    profile_dir.join(format!("veil{}", std::env::consts::EXE_SUFFIX))
+}
+
 /// Runs `veil --data-dir <data_dir> <arguments>`, answering its questions
 /// with `answers`, one per line.
 pub fn veil(data_dir: &Path, arguments: &[&str], answers: &[&str]) -> Run {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_veil"))
+    let started = std::time::Instant::now();
+    let mut child = Command::new(veil_program())
         .arg("--data-dir")
         .arg(data_dir)
         .args(arguments)
@@ -89,6 +105,16 @@ pub fn veil(data_dir: &Path, arguments: &[&str], answers: &[&str]) -> Run {
         stdout,
         stderr,
     } = child.wait_with_output().expect("veil finishes");
+    // Shown when the test fails: how each run of the program ended. An exit
+    // code that is neither 0, 1 nor 2 is the system's, for a program that
+    // crashed or was stopped. Output is counted, not shown: it can hold a
+    // recovery phrase.
+    eprintln!(
+        "veil {arguments:?}: {status} after {:.1?}, {} bytes of output, {} of messages",
+        started.elapsed(),
+        stdout.len(),
+        stderr.len()
+    );
     Run {
         code: status.code(),
         stdout: String::from_utf8_lossy(&stdout).into_owned(),

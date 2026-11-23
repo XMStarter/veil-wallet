@@ -305,6 +305,15 @@ impl Wallet {
     ) -> Result<(*mut c_void, std::ffi::CString), Error> {
         let manager = Self::manager(lib)?;
         let c_path = c_string(path_text(path)?, "wallet path")?;
+        // Asked twice, of the system and of the library, and either answer
+        // is enough to refuse. The library alone has been wrong: on Windows
+        // it did not see a wallet in a folder whose name was not ASCII, and
+        // creating a wallet there again would have replaced the first.
+        let mut keys_file = path.as_os_str().to_owned();
+        keys_file.push(".keys");
+        if path.exists() || Path::new(&keys_file).exists() {
+            return Err(Error::WalletExists(path.to_path_buf()));
+        }
         // SAFETY: valid manager and NUL-terminated path.
         let exists = unsafe {
             lib.api
