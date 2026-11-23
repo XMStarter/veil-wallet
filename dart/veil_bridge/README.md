@@ -16,12 +16,15 @@ final last = session.close();
 ```
 
 - Commands return at once; their outcome shows in the state.
-- `recoveryPhrase()` and `close()` wait for the session's thread, which may
-  be in the middle of a synchronisation. An app calls them off its main
-  isolate: `session.address` crosses to another isolate, and
-  `VeilSession.fromAddress` takes it there.
+- `recoveryPhrase()` and `close()` wait for the session's thread. A
+  synchronisation under way stops for them, normally within seconds, but
+  not at once. An app calls them off its main isolate: `session.address`
+  crosses to another isolate, and `VeilSession.fromAddress` takes it
+  there.
 - Amounts are text, exactly as the core wrote them. This side shows them
-  and passes them back, and never calculates with them.
+  and passes them back, and never calculates with them: the part of the
+  balance that cannot be spent yet comes from the core as an amount of
+  its own.
 - A problem has a kind (`ProblemKind`) for the interface to put into its
   own words, and a detail in English for a log.
 - The network is stagenet. There is no other yet.

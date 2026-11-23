@@ -74,4 +74,43 @@ abstract final class VeilText {
     height: 1.5,
     color: VeilColors.ink,
   );
+
+  /// The beginning and the end of an address, which are what people
+  /// compare.
+  static const addressEdge = TextStyle(
+    fontFamily: VeilFonts.monospace,
+    fontSize: 14,
+    fontVariations: [FontVariation('wght', 700)],
+    height: 1.5,
+    color: VeilColors.ink,
+  );
+
+  /// The middle of an address.
+  static const addressMiddle = TextStyle(
+    fontFamily: VeilFonts.monospace,
+    fontSize: 14,
+    fontVariations: [FontVariation('wght', 400)],
+    height: 1.5,
+    color: VeilColors.muted,
+  );
+
+  /// The amount of one entry in the activity list.
+  static const listAmount = TextStyle(
+    fontFamily: VeilFonts.display,
+    fontSize: 22,
+    fontVariations: [FontVariation('wght', 600)],
+    height: 1.2,
+    color: VeilColors.ink,
+    fontFeatures: _figures,
+  );
+
+  /// The heading of a part of a screen: uppercase by the caller.
+  static const heading = TextStyle(
+    fontFamily: VeilFonts.interface,
+    fontSize: 12,
+    fontVariations: [FontVariation('wght', 500)],
+    letterSpacing: 2,
+    height: 1.4,
+    color: VeilColors.muted,
+  );
 }

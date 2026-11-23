@@ -18,7 +18,7 @@
 use std::collections::HashMap;
 use std::io;
 use std::net::Ipv4Addr;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -114,6 +114,8 @@ struct Shared {
     requests: Mutex<Vec<Request>>,
     cut: Mutex<Option<Cut>>,
     cuts: AtomicU32,
+    /// How many bytes a second a node's answers pass at. Zero is no limit.
+    reply_rate: AtomicUsize,
 }
 
 impl Shared {
@@ -185,6 +187,7 @@ impl StandIn {
             requests: Mutex::new(Vec::new()),
             cut: Mutex::new(None),
             cuts: AtomicU32::new(0),
+            reply_rate: AtomicUsize::new(0),
         });
         let (shutdown, shutdown_rx) = watch::channel(false);
 
@@ -247,6 +250,16 @@ impl StandIn {
             after,
             seen: 0,
         });
+    }
+
+    /// Lets what nodes send back pass at no more than `bytes_per_second`,
+    /// on every connection, from now on; `None` lifts the limit. Tor is
+    /// slow, and a test of what happens in the middle of a long download
+    /// needs the download to take a while.
+    pub fn limit_replies(&self, bytes_per_second: Option<usize>) {
+        self.shared
+            .reply_rate
+            .store(bytes_per_second.unwrap_or(0), Ordering::SeqCst);
     }
 
     /// How many connections have been cut so far.
@@ -415,6 +428,13 @@ async fn relay(
                 }
                 if to_wallet.write_all(&reply[..count]).await.is_err() {
                     break;
+                }
+                let rate = shared.reply_rate.load(Ordering::SeqCst);
+                if rate > 0 {
+                    // Nothing passes either way meanwhile, which is close
+                    // enough to a slow line for a wallet that asks and
+                    // then waits for the answer.
+                    tokio::time::sleep(Duration::from_secs_f64(count as f64 / rate as f64)).await;
                 }
             }
             () = tokio::time::sleep_until(deadline.unwrap_or_else(tokio::time::Instant::now)),

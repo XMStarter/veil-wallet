@@ -277,6 +277,14 @@ pub(crate) fn state_json(state: &SessionState) -> Value {
         "balance": {
             "total": state.balance.total.to_string(),
             "unlocked": state.balance.unlocked.to_string(),
+            // What is in the wallet and cannot be spent yet. Worked out
+            // here so that no interface does arithmetic on money.
+            "locked": state
+                .balance
+                .total
+                .checked_sub(state.balance.unlocked)
+                .unwrap_or(Amount::ZERO)
+                .to_string(),
         },
         "receive_address": state.receive_address.as_ref().map(|address| json!({
             "index": address.index,
@@ -407,6 +415,7 @@ pub unsafe extern "C" fn veil_session_start(
                 }),
             }),
             wallet: Box::new(|_| {}),
+            save_every: crate::session::SAVE_EVERY,
         };
         start_with(config, password, phrase, hooks)
     });

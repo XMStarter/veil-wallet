@@ -8,6 +8,8 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:veil_bridge/veil_bridge.dart';
+
 import 'support.dart';
 
 Future<void> capture(WidgetTester tester, String name) async {
@@ -32,6 +34,8 @@ const labels = {
     written: 'I wrote them down',
     restore: 'Restore from recovery phrase',
     phrase: 'Recovery phrase',
+    open: 'Open wallet',
+    receive: 'Receive',
   ),
   'ru': (
     create: 'Создать кошелёк',
@@ -40,6 +44,8 @@ const labels = {
     written: 'Слова записаны',
     restore: 'Восстановить по фразе',
     phrase: 'Фраза восстановления',
+    open: 'Открыть кошелёк',
+    receive: 'Получить',
   ),
 };
 
@@ -84,6 +90,48 @@ void main() {
         backend: FakeBackend(hasWallet: true, confirmed: true),
       );
       await capture(tester, '6-unlock-$language');
+    });
+
+    testWidgets('home and receive, drawn ($language)', (tester) async {
+      final backend = FakeBackend(hasWallet: true, confirmed: true);
+      await pumpApp(tester, language, backend: backend);
+      await type(tester, label.password, testPassword);
+      await press(tester, label.open);
+      await capture(tester, '7-home-new-$language');
+
+      backend.report(
+        tor: const TorStatus(TorState.ready, 100, null),
+        sync: const SyncStatus(
+          SyncPhase.running,
+          walletHeight: 2250000,
+          nodeHeight: 2256644,
+        ),
+        total: '12.345678901234',
+        unlocked: '10.50',
+        locked: '1.845678901234',
+        history: [
+          transfer(direction: Direction.incoming, amount: '12.50'),
+          transfer(direction: Direction.outgoing, amount: '0.15'),
+          transfer(
+            direction: Direction.incoming,
+            amount: '1.845678901234',
+            confirmations: 4,
+          ),
+        ],
+      );
+      await tester.pumpAndSettle();
+      backend.report(
+        sync: const SyncStatus(
+          SyncPhase.running,
+          walletHeight: 2254000,
+          nodeHeight: 2256644,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await capture(tester, '8-home-$language');
+
+      await press(tester, label.receive);
+      await capture(tester, '9-receive-$language');
     });
   }
 }

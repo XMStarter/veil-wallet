@@ -7,11 +7,12 @@ use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::time::Duration;
 
 use veil_tor::{AfterCut, CutPoint, Purpose, StandIn, State};
 use veil_wallet::{Error, Network, Wallet, WalletLibrary};
 
-use crate::{Core, CoreError, Nodes, OnionNode};
+use crate::{Core, CoreError, Nodes, OnionNode, SyncAttempt};
 
 use fake_node::FakeNode;
 
@@ -409,6 +410,67 @@ fn no_other_node_is_tried_once_tor_has_dropped() {
         .requests()
         .iter()
         .all(|request| request.host == SYNC_HOST));
+}
+
+/// How long the slow fake node takes over a request for blocks: long
+/// enough for something to happen while the wallet waits for them.
+const SLOW: Duration = Duration::from_secs(2);
+
+#[test]
+fn a_synchronisation_told_to_stop_tries_no_further_node_and_can_be_continued() {
+    let Some(lib) = wallet_library() else { return };
+    let dir = TempDir::new("stop");
+    let stand_in = StandIn::start().unwrap();
+    let mut core = core_on(&lib, &dir, &stand_in);
+    let height = core.restore_height() + BLOCKS_AHEAD;
+    let first = FakeNode::start_slow(height, SLOW);
+    let second = FakeNode::start(height);
+    stand_in.route(SYNC_HOST, SYNC_PORT, first.port());
+    stand_in.route(BROADCAST_HOST, BROADCAST_PORT, second.port());
+    let candidates = [
+        OnionNode::new(SYNC_HOST, SYNC_PORT).unwrap(),
+        OnionNode::new(BROADCAST_HOST, BROADCAST_PORT).unwrap(),
+    ];
+
+    // Told to stop before it starts, a synchronisation asks nothing of
+    // anyone.
+    let outcome = core.sync_with_any_until(&candidates, &|| true, &mut |_| {});
+    assert!(
+        matches!(outcome, Err(CoreError::Wallet(Error::SyncStopped))),
+        "{outcome:?}"
+    );
+    assert!(stand_in.requests().is_empty(), "{:?}", stand_in.requests());
+
+    // Now the stop comes while the first node is taking its time over the
+    // blocks. The wallet cannot leave that request. The node, a fake with
+    // no blocks to give, then fails as it would have anyway, and the stop
+    // keeps the second node from being asked at all.
+    let mut attempt = SyncAttempt::through(&candidates);
+    let outcome = core.continue_sync(&mut attempt, &|| asked_for_blocks(&first), &mut |_| {});
+    assert!(
+        matches!(outcome, Err(CoreError::Wallet(Error::SyncStopped))),
+        "{outcome:?}"
+    );
+    assert!(second.asked().is_empty(), "{:?}", second.asked());
+    let asked_of_first = first.asked().len();
+
+    // Continued, the attempt goes on with the second node and does not go
+    // back to the one that failed. So it ends, here with no node left; an
+    // attempt that is stopped and then finishes is tested on a private
+    // chain.
+    let outcome = core.continue_sync(&mut attempt, &|| false, &mut |_| {});
+    assert!(
+        matches!(
+            outcome,
+            Err(CoreError::NoNodeAnswered {
+                tried: 2,
+                last: Error::NodeUnreachable
+            })
+        ),
+        "{outcome:?}"
+    );
+    assert!(asked_for_blocks(&second), "{:?}", second.asked());
+    assert_eq!(first.asked().len(), asked_of_first);
 }
 
 mod fake_node;

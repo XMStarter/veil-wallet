@@ -134,11 +134,18 @@ private chain.
 | The node stops answering for good | Another node continues the synchronisation and finds what the first did not deliver | `veil_core`: that the next node is asked, in `offline`; that it finishes, in `regtest` |
 | The connection is lost while a transaction is handed to the node | The send is reported as neither done nor failed; the next synchronisation shows it, and the payee is paid once | `veil_core`, in `regtest` |
 | Payments went to addresses far apart | A wallet restored from the phrase finds all of them and continues after the last | `veil_wallet/tests/regtest.rs`, in `regtest` |
+| The app is killed, or the wallet locked, in the middle of a long scan | What was scanned up to the last save is on disk, at most minutes old; locking does not wait for the scan; the next session scans the rest and misses nothing | `veil_core`: that a command and closing stop a synchronisation and that it goes on afterwards, against fake nodes in `offline`; with blocks and a payment over a slowed line, in `regtest` |
 
 Connections are lost on purpose by `veil_tor`'s stand-in for Tor, which
-can close one at a chosen point. The fake node in `veil_core`'s tests is a
-few lines that answer a node's first questions and have no blocks; it is
-not a Monero node and starts no daemon.
+can close one at a chosen point, and can let a node's answers pass slowly,
+as Tor does. The fake node in `veil_core`'s tests is a few lines that
+answer a node's first questions and have no blocks; it is not a Monero
+node and starts no daemon.
+
+A scan that is stopped in the middle with blocks behind it needs real
+blocks, so that part runs only on a private chain. Its timing rests on an
+estimate of how large a thousand blocks of such a chain are; if a run
+shows the estimate wrong, the line's speed in the test is what to change.
 
 Not covered: a power cut. The wallet library replaces the data file by
 writing a new one and renaming it, which a killed process cannot break,

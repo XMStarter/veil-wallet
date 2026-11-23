@@ -1,5 +1,6 @@
 {
   "balance": {
+    "locked": "0.00",
     "total": "0.00",
     "unlocked": "0.00"
   },

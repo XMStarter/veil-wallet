@@ -86,7 +86,8 @@ that cannot lose the user's funds.
   in `veil_core/src/ffi.rs`; the state crosses as JSON, pinned by
   `native/veil_core/tests/fixtures`, which both sides test against.
 - `app/`: the app, written with Flutter, for Linux and Windows first. So
-  far the way to an open wallet: create, recovery phrase, restore, unlock.
+  far the way to an open wallet (create, recovery phrase, restore, unlock),
+  Home, and Receive.
   Screens talk to `WalletBackend` (`app/lib/core`), never to the core
   directly; tests use a backend that only pretends, and no test opens a
   real wallet, because that starts Tor. Read
@@ -177,9 +178,19 @@ the app has created a wallet there. How the walk through the app went
 never reported, and the two changes after that commit, the warning about
 25 words and the lock, have not been run there. The owner had the step
 merged on that footing; treat the app with a real wallet as not yet
-confirmed until a later step's run says otherwise. Next is step 3.5,
-home and receive, which also has to make a synchronisation stoppable and
-save its progress along the way. Not done: the app. See the build plan in
+confirmed until a later step's run says otherwise. Step 3.5, home and
+receive, is written and not yet accepted. In the core a synchronisation
+can now be stopped: the session saves every two minutes of a scan, and any
+command, closing included, stops the scan, is dealt with, and the scan
+goes on. In the app: Home (balance, Tor and synchronisation in words,
+recent activity), Receive (QR code, address in groups of four, copy, new
+address), and the wallet synchronises by itself while open. The offline
+tests pass in a cloud session. The test that stops a scan with real
+blocks behind it (`a_long_scan_is_saved_on_the_way_gives_way_and_misses_nothing`
+in `veil_core`) has never run: it needs a daemon, and its timing rests on
+an estimate of the size of a thousand regtest blocks, so the first run on
+the owner's machine may call for tuning the line speed in it. Next after
+its acceptance is step 3.6, send. Not done: the app. See the build plan in
 `docs/concept.md`.
 
 ## Environment notes

@@ -14,7 +14,8 @@ import 'paths.dart';
 /// Starting a session, giving it commands and reading its state return at
 /// once. The two calls that wait for the session's thread, the recovery
 /// phrase and closing, are made on another isolate, so the interface never
-/// stands still.
+/// stands still. Neither waits for a synchronisation to end: the core
+/// stops one for them.
 class CoreBackend implements WalletBackend {
   CoreBackend(this._paths);
 
@@ -27,6 +28,10 @@ class CoreBackend implements WalletBackend {
 
   /// How often the state's revision is looked at.
   static const _watchEvery = Duration(milliseconds: 200);
+
+  /// How long the core waits after a synchronisation has ended before it
+  /// starts the next. A block comes every two minutes.
+  static const _syncEvery = Duration(seconds: 60);
 
   @override
   ValueListenable<SessionState?> get state => _state;
@@ -59,6 +64,7 @@ class CoreBackend implements WalletBackend {
           torCacheDir: _paths.torCacheDir,
           source: source,
           restoreHeight: restoreHeight,
+          syncEvery: _syncEvery,
         ),
         password: password,
         phrase: phrase,
@@ -100,6 +106,9 @@ class CoreBackend implements WalletBackend {
       _state.value = session.state();
     }
   }
+
+  @override
+  void newAddress() => _session?.newAddress();
 
   @override
   Future<String?> recoveryPhrase() async {

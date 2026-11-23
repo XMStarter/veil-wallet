@@ -211,6 +211,7 @@ class SessionState {
     required this.syncsEnded,
     required this.balanceTotal,
     required this.balanceUnlocked,
+    required this.balanceLocked,
     required this.receiveAddress,
     required this.history,
     required this.send,
@@ -235,7 +236,13 @@ class SessionState {
 
   /// Funds as of the last synchronisation that finished.
   final String balanceTotal;
+
+  /// The part of it that can be spent now.
   final String balanceUnlocked;
+
+  /// The rest: received or returned as change, and not yet confirmed
+  /// often enough to be spent.
+  final String balanceLocked;
   final ReceiveAddress? receiveAddress;
 
   /// Transfers as of the last synchronisation, oldest first.
@@ -276,6 +283,7 @@ class SessionState {
       syncsEnded: json['syncs_ended'] as int,
       balanceTotal: balance['total'] as String,
       balanceUnlocked: balance['unlocked'] as String,
+      balanceLocked: balance['locked'] as String,
       receiveAddress: address == null
           ? null
           : ReceiveAddress(

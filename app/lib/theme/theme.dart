@@ -15,6 +15,13 @@ abstract final class VeilSizes {
   /// Desktop uses the same single column as the phone.
   static const columnWidth = 420.0;
   static const screenPadding = 24.0;
+
+  /// The side of the QR code on the Receive screen. An address makes a
+  /// code of 41 modules, 49 with its quiet zone: five pixels each.
+  static const qrCode = 245.0;
+
+  /// How thick the line that shows progress is.
+  static const progressLine = 2.0;
 }
 
 /// The light theme, the default. No gradients, no shadows, and no
@@ -83,6 +90,23 @@ ThemeData veilTheme() {
         side: const BorderSide(color: VeilColors.ink),
         textStyle: VeilText.button,
       ),
+    ),
+    // The quiet button: words only.
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: VeilColors.ink,
+        minimumSize: const Size(
+          VeilSizes.minTouchTarget,
+          VeilSizes.minTouchTarget,
+        ),
+        shape: shape,
+        textStyle: VeilText.button,
+      ),
+    ),
+    progressIndicatorTheme: const ProgressIndicatorThemeData(
+      color: VeilColors.ink,
+      linearTrackColor: VeilColors.hairline,
+      linearMinHeight: VeilSizes.progressLine,
     ),
   );
 }

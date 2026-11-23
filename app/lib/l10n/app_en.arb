@@ -48,7 +48,85 @@
   "unlockAction": "Open wallet",
   "unlockWorking": "Opening the wallet…",
   "homeTitle": "Wallet",
-  "homeNotBuilt": "The wallet is open. Its screens are not built yet.",
+  "homeBalanceHide": "Hide the balance",
+  "homeBalanceShow": "Show the balance",
+  "homeBalanceHidden": "Balance hidden",
+  "homeBalanceStale": "As of the last finished synchronisation.",
+  "amountXmr": "{amount} XMR",
+  "@amountXmr": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "homeAvailable": "Available: {amount} XMR",
+  "@homeAvailable": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "homePending": "Pending: {amount} XMR",
+  "@homePending": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "homeReceive": "Receive",
+  "homeSend": "Send",
+  "homeSendNotBuilt": "Sending is not built yet.",
+  "homeActivity": "Recent activity",
+  "homeNoActivity": "No payments yet.",
+  "activityReceived": "Received",
+  "activitySent": "Sent",
+  "activityUnconfirmed": "Not confirmed yet",
+  "activityConfirming": "{count} of 10 confirmations",
+  "@activityConfirming": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "activityFailed": "Failed",
+  "syncWaitingForTor": "Synchronisation starts when Tor is connected",
+  "syncNotYet": "Not synchronised yet",
+  "syncStarting": "Synchronising",
+  "syncRunning": "{count, plural, =1{Synchronising, 1 block left} other{Synchronising, {count} blocks left}}",
+  "@syncRunning": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "syncDone": "Synchronised",
+  "syncFailed": "Could not synchronise. {reason} The wallet tries again by itself.",
+  "@syncFailed": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "receiveTitle": "Receive",
+  "receiveAddressNumber": "Address {number}",
+  "@receiveAddressNumber": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "receiveNotice": "Every payment gets an address of its own. Once this one has been paid, the next is shown. Earlier addresses keep working.",
+  "receiveCopy": "Copy address",
+  "receiveCopied": "The address is in the clipboard.",
+  "receiveCopyFailed": "The address could not be copied.",
+  "receiveNew": "New address",
   "homeRebuilt": "The wallet's data file could not be read. The wallet was opened from its keys, which are intact; its funds will show again after a synchronisation.",
   "lockAction": "Lock wallet",
   "lockWorking": "Closing the wallet…",
@@ -66,6 +144,9 @@
   "problemWalletExists": "There is already a wallet on this device. Nothing was changed.",
   "problemInvalidPhrase": "This is not a recovery phrase: a word is wrong, or the words are in another order.",
   "problemTorFailed": "Tor could not start.",
+  "problemTorNotReady": "Tor is not connected.",
+  "problemNoNode": "No node answered.",
+  "problemTooManyAddresses": "Several addresses in a row have not been paid yet. Use one of them first: with more of them unused, a payment could be missed when the wallet is restored from its phrase.",
   "problemLibraryMissing": "The app is incomplete: a part of it was not found.",
   "problemOther": "Something went wrong.",
   "problemDetail": "Details: {detail}",

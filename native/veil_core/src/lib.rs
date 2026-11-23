@@ -84,6 +84,29 @@ pub struct Core {
     nodes: Nodes,
 }
 
+/// One synchronisation through a list of nodes, which can be stopped on the
+/// way and continued: see [`Core::continue_sync`].
+#[derive(Debug)]
+pub struct SyncAttempt {
+    candidates: Vec<OnionNode>,
+    /// The candidate to synchronise through next. Those before it failed.
+    position: usize,
+    /// What the last candidate that failed, failed with.
+    last: veil_wallet::Error,
+}
+
+impl SyncAttempt {
+    /// An attempt that tries `candidates` in order, as
+    /// [`Core::sync_with_any`] does.
+    pub fn through(candidates: &[OnionNode]) -> SyncAttempt {
+        SyncAttempt {
+            candidates: candidates.to_vec(),
+            position: 0,
+            last: veil_wallet::Error::NodeUnreachable,
+        }
+    }
+}
+
 impl Core {
     /// Joins `wallet` to `tor`. Contacts nothing.
     ///
@@ -239,20 +262,56 @@ impl Core {
         candidates: &[OnionNode],
         report: &mut (dyn FnMut(SyncProgress) + Send),
     ) -> Result<SyncProgress, CoreError> {
-        let mut last = veil_wallet::Error::NodeUnreachable;
-        for position in 0..candidates.len() {
+        self.sync_with_any_until(candidates, &|| false, report)
+    }
+
+    /// Like [`Core::sync_with_any`], and gives up as soon as `stop` says
+    /// so, with the wallet's
+    /// [`SyncStopped`](veil_wallet::Error::SyncStopped). See
+    /// [`Core::continue_sync`], which this is one call of.
+    pub fn sync_with_any_until(
+        &mut self,
+        candidates: &[OnionNode],
+        stop: &(dyn Fn() -> bool + Sync),
+        report: &mut (dyn FnMut(SyncProgress) + Send),
+    ) -> Result<SyncProgress, CoreError> {
+        self.continue_sync(&mut SyncAttempt::through(candidates), stop, report)
+    }
+
+    /// Goes on with `attempt` until the wallet is level with a node, every
+    /// candidate left has failed, or `stop` says to stop.
+    ///
+    /// `stop` is asked often, on another thread. When it says yes, this
+    /// ends with the wallet's
+    /// [`SyncStopped`](veil_wallet::Error::SyncStopped) and tries no
+    /// further node; see [`Wallet::refresh_until`] for how soon. Everything
+    /// scanned so far is kept in the open wallet, and [`Core::save`] writes
+    /// it to disk. Calling this again with the same `attempt` continues
+    /// through the node it was stopped at: candidates that have failed are
+    /// not gone back to, so an attempt that is stopped again and again
+    /// still comes to an end.
+    pub fn continue_sync(
+        &mut self,
+        attempt: &mut SyncAttempt,
+        stop: &(dyn Fn() -> bool + Sync),
+        report: &mut (dyn FnMut(SyncProgress) + Send),
+    ) -> Result<SyncProgress, CoreError> {
+        while attempt.position < attempt.candidates.len() {
             self.require_tor()?;
-            self.set_nodes(Self::nodes_from(candidates, position)?)?;
-            match self.wallet.refresh_with_progress(report) {
+            self.set_nodes(Self::nodes_from(&attempt.candidates, attempt.position)?)?;
+            match self.wallet.refresh_until(stop, report) {
                 Ok(progress) => return Ok(progress),
-                Err(error) if is_the_nodes_fault(&error) => last = error,
+                Err(error) if is_the_nodes_fault(&error) => {
+                    attempt.last = error;
+                    attempt.position += 1;
+                }
                 Err(other) => return Err(other.into()),
             }
         }
         self.require_tor()?;
         Err(CoreError::NoNodeAnswered {
-            tried: candidates.len(),
-            last,
+            tried: attempt.candidates.len(),
+            last: std::mem::replace(&mut attempt.last, veil_wallet::Error::NodeUnreachable),
         })
     }
 
