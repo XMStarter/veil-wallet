@@ -86,12 +86,12 @@ Done: the Tor component, and the wallet core (create, restore, receive on
 fresh addresses, send) tested on a private chain. Step 1.1 of the build plan
 is done too: the check script, hosted CI passing on Linux and Windows, and
 the owner's acceptance run passing at the `offline`, `regtest`, and `tor`
-levels. Step 1.2, the piece that connects the wallet to Tor (`veil_core`),
-is written and passes its offline tests; it is waiting for the owner's
-acceptance run (`regtest` and `tor`), which is the first time its
-private-chain scenario and its test over real Tor run at all. Not done: the
-command-line tool on stagenet, bridges, the wallet library for Windows, the
-app. See the build plan in `docs/concept.md`.
+levels. Step 1.2 is done as well: `veil_core` connects the wallet to Tor,
+and the owner's acceptance run passed at all three levels, including a
+send through a separate node on a private chain and a new wallet
+synchronising with a public onion node over Tor. Not done: the
+command-line tool on stagenet (step 1.3, next), bridges, the wallet
+library for Windows, the app. See the build plan in `docs/concept.md`.
 
 ## Environment notes
 

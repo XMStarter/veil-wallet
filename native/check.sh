@@ -130,14 +130,28 @@ level_setup() {
     echo "error: setup knows Debian and Ubuntu only (on Windows: run it inside WSL2)." >&2
     return 1
   fi
-  local sudo=""
-  if [ "$(id -u)" != 0 ]; then sudo="sudo"; fi
-  step $sudo apt-get update &&
-    step $sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y \
-      git curl ca-certificates build-essential cmake ninja-build pkg-config \
-      libssl-dev libzmq3-dev libunbound-dev libsodium-dev libboost-all-dev \
-      libhidapi-dev libusb-1.0-0-dev libudev-dev libreadline-dev libexpat1-dev \
-      libpgm-dev libnorm-dev || return 1
+  local packages="git curl ca-certificates build-essential cmake ninja-build pkg-config
+    libssl-dev libzmq3-dev libunbound-dev libsodium-dev libboost-all-dev
+    libhidapi-dev libusb-1.0-0-dev libudev-dev libreadline-dev libexpat1-dev
+    libpgm-dev libnorm-dev"
+  local package missing=""
+  for package in $packages; do
+    if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"; then
+      missing+=" $package"
+    fi
+  done
+  # A repeated setup, after the patches changed, needs no package manager
+  # and so no password, and cannot collide with the system's own updates.
+  if [ -z "$missing" ]; then
+    echo "system packages: all installed"
+  else
+    echo "system packages to install:$missing"
+    local sudo=""
+    if [ "$(id -u)" != 0 ]; then sudo="sudo"; fi
+    # shellcheck disable=SC2086
+    step $sudo apt-get update &&
+      step $sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y $missing || return 1
+  fi
   if ! command -v cargo >/dev/null && [ ! -x "$HOME/.cargo/bin/cargo" ]; then
     echo
     echo "--- installing Rust with rustup"
