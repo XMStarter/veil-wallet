@@ -136,11 +136,13 @@ showed. It has not happened again, and the daemon helper reports it if it
 does. The table of what
 is tested where is in `docs/development.md`, "Reliability tests". Next is
 step 3, the user interface, in the eight parts listed in the build plan.
-Step 3.1 is written and not yet accepted: `veil_core::Session` runs the
-core on a thread of its own for an app, with commands that return at once
-and a state to draw from. Its tests without a network pass in a cloud
-session; its scenario on a private chain has never run and waits for the
-owner's acceptance run. Not done: the app. See the build plan in
+Step 3.1 is done: `veil_core::Session` runs the core on a thread of its
+own for an app, with commands that return at once and a state to draw
+from. The owner's acceptance run passed at the `offline` and `regtest`
+levels as Linux and as Windows programs, the scenario with funds
+included: receiving, a send reviewed and cancelled, a send confirmed, a
+send whose answer is lost, and the same wallet in a new session. Next is
+step 3.2, the C interface to the session and its Dart side. Not done: the app. See the build plan in
 `docs/concept.md`.
 
 ## Environment notes
