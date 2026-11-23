@@ -360,6 +360,7 @@ mod tests {
     #[test]
     #[ignore = "starts a Tor client, which tries to reach the Tor network"]
     fn starts_without_network_and_reports_bootstrapping() {
+        veil_test_guard::refuse_in_hosted_ci("starting a Tor client");
         let (root, config) = temp_dirs("start");
         let service = TorService::start(config).expect("service starts");
 
@@ -382,6 +383,7 @@ mod tests {
     #[test]
     #[ignore = "starts a Tor client, which tries to reach the Tor network"]
     fn refuses_onion_connect_before_tor_is_ready() {
+        veil_test_guard::refuse_in_hosted_ci("starting a Tor client");
         use std::io::{Read, Write};
         use std::net::TcpStream;
 
@@ -413,6 +415,7 @@ mod tests {
     #[test]
     #[ignore = "starts a Tor client, which tries to reach the Tor network"]
     fn tor_directories_are_private() {
+        veil_test_guard::refuse_in_hosted_ci("starting a Tor client");
         use std::os::unix::fs::PermissionsExt;
 
         let (root, config) = temp_dirs("perms");

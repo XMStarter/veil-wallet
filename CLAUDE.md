@@ -60,16 +60,20 @@ that cannot lose the user's funds.
     before changing `wallet.rs`.
   - `wallet_lib`: pinned build script for the wallet library, Veil's
     patches to it, and the bindings generator.
+  - `veil_test_guard`: called first by every test that starts Tor or a
+    daemon; fails the test on a CI runner. A new test of that kind calls it
+    too.
+  - `check.sh`: the checks by level (`offline`, `regtest`, `tor`,
+    `stagenet`) with a log; `setup` prepares a machine.
 - `docs/`: concept, design, development rules.
 - `.github/workflows`: hosted CI, builds and offline tests only. Pin
   actions to commit hashes.
 
-Before committing, in `native/`: `cargo fmt --check`,
-`cargo clippy --workspace --all-targets --all-features -- -D warnings`,
-`cargo test --workspace`, and `cargo test -p veil_tor --lib -- --include-ignored`
-for the tests that start a Tor client. With the wallet library built, also
-`cargo test -p veil_wallet --features regtest` with `VEIL_WALLET_LIB` and
-`VEIL_MONEROD` set.
+Before committing, in `native/`: `./check.sh offline` (format, lint, and
+the tests that need no network; with the wallet library built in
+`~/veil-wallet-lib` it also runs the library tests that need no node). The
+`regtest` and `tor` levels are the owner's acceptance run, not something a
+cloud session runs.
 
 ## Status
 

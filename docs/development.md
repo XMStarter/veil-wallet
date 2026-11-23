@@ -40,6 +40,47 @@ network confirms the result; it is not the only test.
 Each step of the build plan ends with an acceptance run on the owner's
 machine. The log of that run is the evidence that the step is done.
 
+### One command
+
+`native/check.sh` runs the checks by level and writes a log to
+`native/target/check-logs/`.
+
+| Level | What it runs | Where |
+|---|---|---|
+| `offline` | Format, lint, and every test that needs no network. Uses the wallet library when it has been built. | Anywhere, hosted CI included |
+| `regtest` | The wallet on a private chain. Starts a Monero daemon. | The owner's machine |
+| `tor` | The tests that start the real Tor client, and a connection to an onion service. | The owner's machine |
+| `stagenet` | Nothing yet; arrives with the command-line tool. | The owner's machine |
+
+`./check.sh setup` prepares a Debian or Ubuntu machine once: system
+packages, Rust, and the wallet library with the daemon, built from source
+into `~/veil-wallet-lib` (about half an hour).
+
+Every level but `offline` refuses to start on a CI runner. The tests behind
+those levels refuse as well, through `native/veil_test_guard`, so that
+running them some other way in CI fails before anything is started.
+
+### Acceptance run on the owner's machine
+
+On Windows, once: install WSL2 with `wsl --install` in an administrator
+PowerShell, restart, and open Ubuntu. Then, inside Ubuntu:
+
+```bash
+git clone https://github.com/XMStarter/veil-wallet
+```
+
+```bash
+cd veil-wallet/native && ./check.sh setup
+```
+
+For each acceptance run, on the branch being accepted:
+
+```bash
+./check.sh offline regtest tor
+```
+
+The last line of the output names the log file to send.
+
 Reliability tests cover the failures that lose money or confuse users: Tor
 dropping mid-sync, the node changing, the process being killed during a
 write, and restoring a wallet whose payments went to many subaddresses.
@@ -85,6 +126,7 @@ out of hosted CI until the owner decides otherwise.
 
 - Triggers are `pull_request` and `workflow_dispatch` only. No `push`, no
   `schedule`.
+- A job runs `check.sh offline` and no other level.
 - Actions are pinned to commit hashes and runner images to a version.
 - `permissions` stays at `contents: read`.
 
@@ -121,9 +163,9 @@ Run every command from `native/`.
 | `native/veil_tor` | Embedded Tor client and loopback SOCKS listeners (Rust) | `cargo test -p veil_tor --lib -- --include-ignored` |
 | `native/veil_wallet` | Wallet operations on top of the Monero wallet library (Rust) | `cargo test -p veil_wallet --features regtest` with the library built |
 | `native/wallet_lib` | Pinned build of the Monero wallet library, Veil's patches to it, and the bindings generator | `native/wallet_lib/build.sh <dir> --with-daemon` |
+| `native/veil_test_guard` | Makes the tests that start Tor or a daemon fail at once on a CI runner | `cargo test -p veil_test_guard` |
 
-Before committing: `cargo fmt --check` and
-`cargo clippy --workspace --all-targets --all-features -- -D warnings`.
+Before committing: `./check.sh offline`.
 
 Hosted CI lives in `.github/workflows`. It builds on Linux and Windows and
 runs the tests that need neither a network nor the wallet library. It starts

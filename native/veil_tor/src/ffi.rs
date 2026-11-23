@@ -194,6 +194,7 @@ mod tests {
     #[test]
     #[ignore = "starts a Tor client, which tries to reach the Tor network"]
     fn start_poll_stop_round_trip() {
+        veil_test_guard::refuse_in_hosted_ci("starting a Tor client");
         let root = std::env::temp_dir().join(format!("veil-tor-ffi-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let state = CString::new(root.join("state").to_str().unwrap()).unwrap();

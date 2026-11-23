@@ -33,6 +33,7 @@ struct Daemon {
 
 impl Daemon {
     fn start() -> Option<Daemon> {
+        veil_test_guard::refuse_in_hosted_ci("starting a Monero daemon");
         let Some(binary) = std::env::var_os("VEIL_MONEROD") else {
             assert!(
                 std::env::var_os("VEIL_REQUIRE_WALLET_LIB").is_none(),
@@ -196,6 +197,9 @@ fn send(from: &mut Wallet, to: &str, amount: SendAmount) -> (Amount, Amount, Vec
 
 #[test]
 fn receive_on_fresh_addresses_send_and_restore() {
+    // Checked again in `Daemon::start`; here so that a CI run fails even
+    // when the library is missing and the test would otherwise be skipped.
+    veil_test_guard::refuse_in_hosted_ci("starting a Monero daemon");
     let Some(lib) = wallet_library() else { return };
     let Some(daemon) = Daemon::start() else {
         return;

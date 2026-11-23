@@ -21,6 +21,7 @@ const KNOWN_ONIONS: &[&str] = &[
 const BOOTSTRAP_TIMEOUT: Duration = Duration::from_secs(300);
 
 fn start(name: &str) -> (PathBuf, TorService) {
+    veil_test_guard::refuse_in_hosted_ci("connecting to the Tor network");
     let root = std::env::temp_dir().join(format!("veil-tor-net-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     let service = TorService::start(TorConfig {

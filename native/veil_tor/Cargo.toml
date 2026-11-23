@@ -21,3 +21,6 @@ tor-socksproto = { version = "0.48", default-features = false, features = ["prox
 tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "sync", "time", "macros"] }
 futures = "0.3"
 thiserror = "2"
+
+[dev-dependencies]
+veil_test_guard = { path = "../veil_test_guard" }

@@ -61,7 +61,8 @@ stand-in for Tor.
 
 Tests that start the real Tor client are ignored by default, because a
 started client tries to reach the Tor network. Run them on a machine you
-control, never in hosted CI:
+control, never in hosted CI; on a CI runner they fail before starting
+anything. `../check.sh tor` runs both commands below and keeps a log.
 
 ```bash
 # Lifecycle and fail-closed behaviour; pass with or without a network.

@@ -27,9 +27,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-latest]
+        os: [ubuntu-24.04, windows-2025]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
+    env:
+      # aws-lc-sys assembles with NASM on Windows. Where the runner has no
+      # NASM, use the assembled objects that ship inside the crate instead
+      # of failing the build. Ignored on Linux and when NASM is present.
+      AWS_LC_SYS_PREBUILT_NASM: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -41,9 +46,8 @@ jobs:
           key: native-${{ runner.os }}-${{ hashFiles('native/Cargo.lock', 'native/rust-toolchain.toml') }}
       - name: Install the pinned toolchain
         run: rustup show
-      - name: Format
-        run: cargo fmt --check
-      - name: Lint
-        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-      - name: Test
-        run: cargo test --workspace --locked
+      # The same command a developer runs before committing. The script
+      # refuses every level but `offline` on a CI runner.
+      - name: Format, lint, and offline tests
+        shell: bash
+        run: bash check.sh offline

@@ -59,7 +59,9 @@ cargo test -p veil_wallet --features regtest
 
 Set `VEIL_REQUIRE_WALLET_LIB=1` to turn a missing library into a failure
 instead of a skip. The private-chain scenario starts a Monero daemon, so it
-runs on a machine you control and never in hosted CI.
+runs on a machine you control and never in hosted CI; on a CI runner it
+fails before the daemon is started. `../check.sh regtest` sets the
+variables and keeps a log.
 
 ## Not done yet
 

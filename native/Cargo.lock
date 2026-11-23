@@ -4976,6 +4976,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
+name = "veil_test_guard"
+version = "0.1.0"
+
+[[package]]
 name = "veil_tor"
 version = "0.1.0"
 dependencies = [
@@ -4986,6 +4990,7 @@ dependencies = [
  "tokio",
  "tor-rtcompat",
  "tor-socksproto",
+ "veil_test_guard",
 ]
 
 [[package]]
@@ -4994,6 +4999,7 @@ version = "0.1.0"
 dependencies = [
  "libloading",
  "thiserror 2.0.21",
+ "veil_test_guard",
  "zeroize",
 ]
 
