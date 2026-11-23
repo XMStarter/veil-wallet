@@ -130,14 +130,20 @@ fn a_wallet_can_live_in_a_folder_with_any_name() {
     );
 
     // A second wallet may not overwrite it.
-    assert!(matches!(
-        Wallet::create(&lib, &path, PASSWORD, Network::Mainnet),
-        Err(Error::WalletExists(_))
-    ));
+    match Wallet::create(&lib, &path, PASSWORD, Network::Mainnet) {
+        Err(Error::WalletExists(_)) => {}
+        Err(other) => panic!("refused, but not as an existing wallet: {other}"),
+        Ok(_) => panic!("a second wallet was created over the first"),
+    }
 
     let mut reopened = Wallet::open(&lib, &path, PASSWORD, Network::Mainnet).unwrap();
     assert_eq!(reopened.seed_phrase().unwrap().as_str(), phrase.as_str());
     assert_eq!(reopened.receive_address().unwrap(), address);
+    reopened.close().unwrap();
+
+    // Restoring over it is refused as well.
+    let restored = Wallet::restore(&lib, &path, PASSWORD, Network::Mainnet, &phrase, 0);
+    assert!(matches!(restored, Err(Error::WalletExists(_))));
 }
 
 #[test]

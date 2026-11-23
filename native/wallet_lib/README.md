@@ -55,6 +55,8 @@ are computed.
 | `monero/0002` | A direct call to refresh downloads blocks even when the library's background refresh thread was never started | Without it a direct refresh reports success and downloads nothing. Veil drives the wallet from one thread and does not use the background thread. |
 | `monero/0003` and `monero_c/0002` | A switch that keeps the library's background refresh thread idle | Building or sending a transaction switches that thread on, and it then synchronises on a timer through whichever node the wallet points at. While Veil sends through its broadcast node, that would be the broadcast node. `veil_wallet` turns the thread off for every wallet it opens. |
 
+| `monero/0004` | On Windows, the library reads the paths it is given as UTF-8 | Without it, Boost.Filesystem reads them in the system's legacy code page. A wallet in a folder whose name is not ASCII was then not recognised as existing, so a second one could have been created over it. Programs that call the library's `Wallet::init` get the same setting from there, together with a log file, which Veil does not want. |
+
 `build.sh` notices when the patches here have changed since a work
 directory was built: it puts the library's sources back, applies the current
 set, and rebuilds only what changed. A library that lacks a function added
