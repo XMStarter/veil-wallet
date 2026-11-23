@@ -145,11 +145,13 @@ from. The owner's acceptance run passed at the `offline` and `regtest`
 levels as Linux and as Windows programs, the scenario with funds
 included: receiving, a send reviewed and cancelled, a send confirmed, a
 send whose answer is lost, and the same wallet in a new session. Step 3.2
-is written and not yet accepted: the C interface to the session
-(`veil_core/src/ffi.rs`) and its Dart side (`dart/veil_bridge`). Their
-tests pass in a cloud session, the Dart ones calling the real library;
-none has run on the owner's machine, where `./check.sh setup` has to
-install Flutter first. Not done: the app. See the build plan in
+is done: the C interface to the session (`veil_core/src/ffi.rs`) and its
+Dart side (`dart/veil_bridge`). The owner's acceptance run passed at the
+`offline` and `regtest` levels as Linux and as Windows programs, with
+Flutter installed by `./check.sh setup` and the Dart tests calling the
+real library on Linux. The Dart side has not been run against the Windows
+build of the library: there is no Dart for Windows in that setup. Next is
+step 3.3, the app shell, which also brings Flutter to hosted CI. Not done: the app. See the build plan in
 `docs/concept.md`.
 
 ## Environment notes
