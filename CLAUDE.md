@@ -127,8 +127,12 @@ unknown, found in the history, paid once), and a restore past long runs
 of unused addresses. The same run closed what step 1.5 had left open: the
 `bridges` level after the library was rebuilt, and the `tor` level as
 Windows programs. In the first run of this step one of two test daemons
-did not come up on Linux; the cause was never seen, it has not happened
-again, and the daemon helper now reports it if it does. The table of what
+did not come up on Linux. The cause was never seen. `./check.sh daemons`
+then started eighty daemons in pairs there, with and without loopback
+ports being taken around them: all came up, the slowest in 4.2 seconds
+against a limit of sixty, so neither a race for ports nor a slow start
+showed. It has not happened again, and the daemon helper reports it if it
+does. The table of what
 is tested where is in `docs/development.md`, "Reliability tests". Next is
 step 3, the user interface. Not done: the app. See the build plan in
 `docs/concept.md`.
