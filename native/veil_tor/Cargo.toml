@@ -1,10 +1,10 @@
 [package]
 name = "veil_tor"
-version = "0.1.0"
-edition = "2021"
-license = "MIT"
 description = "Embedded Tor client for the Veil wallet: Arti plus a loopback SOCKS listener"
-publish = false
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
 
 [lib]
 crate-type = ["lib", "cdylib", "staticlib"]

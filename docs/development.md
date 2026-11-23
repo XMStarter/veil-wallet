@@ -42,9 +42,27 @@ write, and restoring a wallet whose payments went to many subaddresses.
 
 ## Components
 
+Run every command from `native/`.
+
 | Path | What it is | Check it with |
 |---|---|---|
-| `native/veil_tor` | Embedded Tor client and loopback SOCKS listeners (Rust) | `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` |
+| `native/veil_tor` | Embedded Tor client and loopback SOCKS listeners (Rust) | `cargo test -p veil_tor --lib -- --include-ignored` |
+| `native/veil_wallet` | Wallet operations on top of the Monero wallet library (Rust) | `cargo test -p veil_wallet --features regtest` with the library built |
+| `native/wallet_lib` | Pinned build of the Monero wallet library, Veil's patches to it, and the bindings generator | `native/wallet_lib/build.sh <dir> --with-daemon` |
+
+Before committing: `cargo fmt --check` and
+`cargo clippy --workspace --all-targets --all-features -- -D warnings`.
+
+Hosted CI lives in `.github/workflows`. Actions are pinned to commit
+hashes. It builds on Linux and Windows and runs the tests that need neither
+a network nor the wallet library. It starts on pull requests and by hand.
+
+## Third-party code
+
+Veil's own code is MIT. The Monero wallet library it loads is LGPL-3.0
+(monero_c) and BSD-3-Clause (Monero). It must be shipped as a separate
+shared library with its licence texts and source. Details are in
+[`native/wallet_lib/README.md`](../native/wallet_lib/README.md).
 
 ## Releases
 

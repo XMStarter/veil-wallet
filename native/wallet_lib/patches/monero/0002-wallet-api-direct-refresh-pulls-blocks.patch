@@ -1,0 +1,17 @@
+diff --git a/src/wallet/api/wallet.cpp b/src/wallet/api/wallet.cpp
+index a6ef695..6f242b6 100644
+--- a/src/wallet/api/wallet.cpp
++++ b/src/wallet/api/wallet.cpp
+@@ -1278,7 +1278,12 @@ bool WalletImpl::refresh()
+     clearStatus();
+     //TODO: make doRefresh return bool to know whether the error occured during refresh or not
+     //otherwise one may try, say, to send transaction, transfer fails and this method returns false
++    // A direct call must pull blocks even if the background refresh thread
++    // was never started; the flag is restored so that thread stays idle.
++    const bool refresh_was_enabled = m_wallet->get_refresh_enabled();
++    m_wallet->set_refresh_enabled(true);
+     doRefresh();
++    m_wallet->set_refresh_enabled(refresh_was_enabled);
+     return status() == Status_Ok;
+ }
+ 

@@ -1,0 +1,17 @@
+[package]
+name = "veil_wallet"
+description = "Wallet operations for Veil on top of the official Monero wallet library"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+# Lets tests connect straight to a local regtest daemon and accept its
+# hard-fork schedule. Never enabled in the app.
+regtest = []
+
+[dependencies]
+libloading = "0.8"
+thiserror = "2"
+zeroize = "1"

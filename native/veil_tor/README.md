@@ -52,7 +52,7 @@ The crate also builds as a shared and a static library. See
 ## Build and test
 
 ```bash
-cargo test
+cargo test -p veil_tor
 ```
 
 An ordinary test run opens no connection to the Tor network. It covers the
@@ -65,10 +65,10 @@ control, never in hosted CI:
 
 ```bash
 # Lifecycle and fail-closed behaviour; pass with or without a network.
-cargo test --lib -- --include-ignored
+cargo test -p veil_tor --lib -- --include-ignored
 
 # Bootstraps Tor and reaches an onion service; needs the Tor network.
-cargo test --test network -- --ignored --nocapture
+cargo test -p veil_tor --test network -- --ignored --nocapture
 ```
 
 ## Not done yet

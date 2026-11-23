@@ -42,22 +42,42 @@ that cannot lose the user's funds.
 
 ## Layout
 
-- `native/veil_tor`: embedded Tor client (Rust, Arti) with loopback SOCKS
-  listeners and a C interface. Run `cargo fmt --check`,
-  `cargo clippy --all-targets -- -D warnings` and `cargo test` there before
-  committing. Tests that start a Tor client are ignored by default; its
-  README says how to run them.
+- `native/` is one Cargo workspace. Run cargo from there.
+  - `veil_tor`: embedded Tor client (Arti) with onion-only loopback SOCKS
+    listeners and a C interface.
+  - `veil_wallet`: wallet operations over the Monero wallet library. Its
+    README lists library behaviours the crate guards against; read it
+    before changing `wallet.rs`.
+  - `wallet_lib`: pinned build script for the wallet library, Veil's
+    patches to it, and the bindings generator.
 - `docs/`: concept, design, development rules.
+- `.github/workflows`: hosted CI, builds and offline tests only. Pin
+  actions to commit hashes.
+
+Before committing, in `native/`: `cargo fmt --check`,
+`cargo clippy --workspace --all-targets --all-features -- -D warnings`,
+`cargo test --workspace`, and `cargo test -p veil_tor --lib -- --include-ignored`
+for the tests that start a Tor client. With the wallet library built, also
+`cargo test -p veil_wallet --features regtest` with `VEIL_WALLET_LIB` and
+`VEIL_MONEROD` set.
 
 ## Status
 
-The Tor component exists and passes its tests. Bridges are not done.
-The next step is the wallet core on top of the Monero wallet library, then
-the command-line tool that ties wallet and Tor together on stagenet. See the
-build plan in `docs/concept.md`.
+Done: the Tor component, and the wallet core (create, restore, receive on
+fresh addresses, send) tested on a private chain. Not done: the piece that
+connects the two and the command-line tool on stagenet, bridges, the app.
+See the build plan in `docs/concept.md`.
 
 ## Environment notes
 
 - Cloud sessions cannot reach the Tor network, `downloads.getmonero.org`, or
   GitHub release downloads of other repositories. Anything that needs them
-  runs on a machine the project controls.
+  runs on a machine the project controls, not in hosted CI.
+- The wallet library can be built in a cloud session from source with
+  `native/wallet_lib/build.sh` (about half an hour; install the packages
+  listed at the top of the script first).
+- CI results are readable from cloud sessions with `gh api`:
+  `repos/XMStarter/veil-wallet/commits/<ref>/check-runs` for the outcome,
+  `repos/XMStarter/veil-wallet/actions/jobs/<id>/logs` for a job's log.
+- A GitHub account was suspended shortly after a CI job of this project
+  connected to the Tor network. Treat the hosted-CI rule above as firm.

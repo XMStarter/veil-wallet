@@ -27,6 +27,7 @@ In this order when they conflict:
 | Layer | Choice | Why |
 |---|---|---|
 | Cryptography and transactions | The official Monero `wallet2` library, called through the `monero_c` FFI wrapper | Veil writes no cryptography of its own. Its transactions look the same as those of the official wallet. |
+| Core | A Rust library that owns the Tor client and the wallet | The rules that protect the user (Tor only, fresh addresses, exact amounts) live in one memory-safe place that the interface cannot bypass. |
 | Tor | Arti, the Rust implementation of Tor, embedded in the app process | No separate Tor app is needed. The code is memory-safe. |
 | Bridges | obfs4, Snowflake, WebTunnel | Tor is blocked in a number of countries. Without bridges the wallet cannot connect there. |
 | User interface | Flutter: Android, Windows, and Linux from one codebase | The Flutter and `monero_c` combination is already used by other Monero wallets. |
@@ -123,7 +124,8 @@ See [design.md](design.md) for the visual language.
 
 ## Known limitations
 
-- **Sync over Tor is slow.** A new wallet syncs in minutes. Restoring an old
+- **Sync over Tor is slow.** A new wallet's first sync covers about a month
+  of blocks, as a safety margin around its creation date. Restoring an old
   wallet can take hours.
 - **A remote node cannot steal funds,** but it can delay transactions and try
   to feed the wallet distorted data. Choosing randomly among several nodes
@@ -139,9 +141,9 @@ See [design.md](design.md) for the visual language.
 - **Recovery phrase format.** Polyseed (16 words) is planned for new wallets.
   The alternative is the classic 25-word phrase, which every Monero wallet
   understands but which requires a creation date when restoring.
-- **Tor implementation.** Arti is planned. This depends on Arti supporting
-  bridges on Android at build time.
-- **Monero protocol upgrade.** The status of the FCMP++ and Carrot upgrade,
-  which changes key derivation and transaction structure, must be checked
-  before the core work starts, along with its support in `wallet2` and
-  `monero_c`.
+- **Tor implementation.** Arti is used and works on Linux and Windows.
+  Bridges and the Android build are still to be verified.
+- **Monero protocol upgrade.** Veil builds on Monero 0.18.5, the current
+  release line. The FCMP++ and Carrot upgrade, which changes key derivation
+  and transaction structure, has not been released; the wallet library will
+  have to be updated when it is.

@@ -9,9 +9,10 @@ four things: create a wallet, restore a wallet, receive, and send. All network
 traffic goes through a built-in Tor client, and every incoming payment gets a
 fresh address.
 
-> **Status: pre-alpha.** The embedded Tor component exists; the wallet core
-> and the app do not. There is no working wallet yet. Do not use anything
-> here with real funds. Read the [disclaimer](DISCLAIMER.md).
+> **Status: pre-alpha.** The embedded Tor component and the wallet core
+> exist and are tested, the latter only on a private test chain. There is no
+> app yet. Do not use anything here with real funds. Read the
+> [disclaimer](DISCLAIMER.md).
 
 ## Priorities
 
@@ -48,7 +49,9 @@ fresh address.
 
 ## License
 
-[MIT](LICENSE).
+Veil's own code is under the [MIT License](LICENSE). The Monero wallet
+library it loads at run time has its own licences; see
+[native/wallet_lib](native/wallet_lib/README.md).
 
 ## Notices
 
