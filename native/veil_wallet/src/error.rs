@@ -50,6 +50,17 @@ pub enum Error {
     #[error("{unused} unused addresses already exist; use one of them first")]
     TooManyUnusedAddresses { unused: u32 },
 
+    /// The connection was lost while a transaction was being handed to the
+    /// node. The node may have received it, or not; the wallet has not
+    /// recorded it either way. The next synchronisation shows it in the
+    /// history if it went out, and a second send before that could pay
+    /// twice.
+    #[error(
+        "the connection was lost while the transaction was being sent, and it may \
+         have gone out; synchronise and check the history before sending again"
+    )]
+    SendOutcomeUnknown,
+
     /// The amount to send is zero.
     #[error("the amount must be greater than zero")]
     ZeroAmount,

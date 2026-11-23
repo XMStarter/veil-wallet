@@ -152,6 +152,8 @@ pub struct Wallet {
     /// The library's record of the last block it scanned, for reading
     /// progress while a refresh runs. Belongs to the library.
     listener: *mut c_void,
+    /// See [`Wallet::was_rebuilt_from_keys`].
+    rebuilt_from_keys: bool,
 }
 
 /// A pointer the progress thread of [`Wallet::refresh_with_progress`] may
@@ -234,8 +236,68 @@ impl Wallet {
         }
     }
 
-    /// Opens an existing wallet file.
+    /// Opens an existing wallet.
+    ///
+    /// A wallet is two files. The keys file holds the keys and is written
+    /// once. The other, at `path`, holds what was learned from the chain
+    /// and is rewritten on every save. If that second file can no longer
+    /// be read (a power cut, a failing disk), the wallet is opened from the
+    /// keys file alone and the unreadable file is kept next to it under
+    /// another name. [`Wallet::was_rebuilt_from_keys`] then returns true:
+    /// the funds are found again by the next synchronisation, which starts
+    /// from the wallet's start height.
     pub fn open(
+        lib: &WalletLibrary,
+        path: &Path,
+        password: &str,
+        network: Network,
+    ) -> Result<Wallet, Error> {
+        let first = match Self::open_files(lib, path, password, network) {
+            Ok(wallet) => return Ok(wallet),
+            Err(error) => error,
+        };
+        // A wrong password is by far the usual reason, and no reason to
+        // touch any file.
+        if matches!(&first, Error::Wallet(message) if message.contains("invalid password")) {
+            return Err(first);
+        }
+        let mut keys_file = path.as_os_str().to_owned();
+        keys_file.push(".keys");
+        if !path.is_file() || !Path::new(&keys_file).is_file() {
+            return Err(first);
+        }
+        // Try without the file that changes. If the wallet opens then, that
+        // file was the reason; if not, it goes back where it was and the
+        // first error stands.
+        let aside = set_aside_name(path);
+        if std::fs::rename(path, &aside).is_err() {
+            return Err(first);
+        }
+        match Self::open_files(lib, path, password, network) {
+            Ok(mut wallet) => {
+                wallet.rebuilt_from_keys = true;
+                Ok(wallet)
+            }
+            Err(_) => {
+                let _ = std::fs::rename(&aside, path);
+                Err(first)
+            }
+        }
+    }
+
+    /// Whether this wallet was opened from its keys alone because its other
+    /// file could not be read. See [`Wallet::open`].
+    ///
+    /// The keys, the recovery phrase and the start height are as they were.
+    /// The balance and the history are empty until the next
+    /// synchronisation has scanned the chain again. Addresses that were
+    /// handed out and never paid are forgotten and will be handed out
+    /// again; payments to them are still found.
+    pub fn was_rebuilt_from_keys(&self) -> bool {
+        self.rebuilt_from_keys
+    }
+
+    fn open_files(
         lib: &WalletLibrary,
         path: &Path,
         password: &str,
@@ -353,6 +415,7 @@ impl Wallet {
             broadcast_node: None,
             on_sync_node: true,
             listener: std::ptr::null_mut(),
+            rebuilt_from_keys: false,
         };
         // The manager returns an object even when opening failed; the error
         // is on the object. Dropping `wallet` on the error path closes it.
@@ -388,6 +451,9 @@ impl Wallet {
             self.lib
                 .take_string(self.lib.api.MONERO_Wallet_errorString(self.wallet))
         };
+        if lost_connection(&message) {
+            return Err(Error::NodeUnreachable);
+        }
         Err(Error::Wallet(non_empty(
             message,
             "the wallet library reported an error",
@@ -595,6 +661,10 @@ impl Wallet {
     /// Fails if the node cannot be reached or is itself still synchronising.
     /// The wallet library would skip the scan in both cases and report
     /// success, which would show a stale balance as if it were current.
+    ///
+    /// A connection lost part way fails with [`Error::NodeUnreachable`] as
+    /// well. The blocks scanned until then stay scanned, and the next
+    /// refresh, through this node or another, continues after them.
     pub fn refresh(&mut self) -> Result<SyncProgress, Error> {
         self.refresh_with_progress(&mut |_| {})
     }
@@ -1076,6 +1146,12 @@ impl PendingSend<'_> {
             let sent = api.MONERO_PendingTransaction_commit(pending, empty.as_ptr(), false);
             if !sent || api.MONERO_PendingTransaction_status(pending) != sys::STATUS_OK {
                 let message = lib.take_string(api.MONERO_PendingTransaction_errorString(pending));
+                // The library says the same whether the node never heard
+                // the request or only its answer was lost. Treat both as
+                // the worse case: the transaction may be on its way.
+                if lost_connection(&message) {
+                    return Err(Error::SendOutcomeUnknown);
+                }
                 return Err(Error::Wallet(non_empty(
                     message,
                     "the transaction could not be sent",
@@ -1086,10 +1162,31 @@ impl PendingSend<'_> {
     }
 }
 
+/// Where a wallet file that cannot be read is kept: next to the wallet,
+/// under a name that is not taken.
+fn set_aside_name(path: &Path) -> PathBuf {
+    let numbered = |number: u32| {
+        let mut name = path.as_os_str().to_owned();
+        name.push(format!(".unreadable-{number}"));
+        PathBuf::from(name)
+    };
+    (1..1000)
+        .map(numbered)
+        .find(|candidate| !candidate.exists())
+        .unwrap_or_else(|| numbered(1000))
+}
+
 fn path_text(path: &Path) -> Result<&str, Error> {
     path.to_str().ok_or(Error::InvalidArgument {
         what: "wallet path",
     })
+}
+
+/// Whether the library's error text says that a request to the node got no
+/// usable answer: the connection could not be made, broke on the way, or
+/// carried something that is not a node's reply.
+fn lost_connection(message: &str) -> bool {
+    message.contains("no connection to daemon")
 }
 
 fn non_empty(message: String, fallback: &str) -> String {
