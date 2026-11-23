@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["veil_test_guard", "veil_tor", "veil_wallet"]
+members = ["veil_core", "veil_test_guard", "veil_tor", "veil_wallet"]
 
 [workspace.package]
 version = "0.1.0"

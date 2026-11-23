@@ -51,15 +51,23 @@ if [ ! -f monero/.patch-applied ]; then
   ./apply_patches.sh monero
 fi
 
-# Veil's own patches, on top of monero_c's.
-if [ ! -f .veil-patched ]; then
+# Veil's own patches, on top of monero_c's. They stay uncommitted, so that a
+# changed patch set can be dropped and applied again: the marker file holds
+# the checksum of the set that is applied.
+patch_set="$(cat "$here"/patches/monero/*.patch "$here"/patches/monero_c/*.patch | sha256sum | cut -d' ' -f1)"
+if [ "$(cat .veil-patched 2>/dev/null)" != "$patch_set" ]; then
+  if [ -f .veil-patched ]; then
+    echo "Veil's patches changed; applying them again"
+    git -C monero checkout -- src
+    git checkout -- monero_libwallet2_api_c
+  fi
   for patch in "$here"/patches/monero/*.patch; do
     git -C monero apply --whitespace=nowarn "$patch"
   done
   for patch in "$here"/patches/monero_c/*.patch; do
     git apply --whitespace=nowarn "$patch"
   done
-  touch .veil-patched
+  echo "$patch_set" > .veil-patched
 fi
 
 cmake -S monero_libwallet2_api_c -B "$work/build" -G Ninja \
@@ -70,6 +78,8 @@ cmake --build "$work/build" -j"$jobs"
 
 mkdir -p "$work/out"
 cp "$work/build/libmonero_wallet2_api_c.so" "$work/out/"
+# Lets check.sh tell a library built from an older patch set from this one.
+echo "$patch_set" > "$work/out/veil-patches.sha256"
 if [ "$with_daemon" = "--with-daemon" ]; then
   cmake --build "$work/build" --target daemon -j"$jobs"
   cp "$work/build/bin/monerod" "$work/out/"

@@ -51,12 +51,45 @@ step() {
   "$@"
 }
 
+# Says whether the built wallet library carries the patches this checkout
+# has: "current", "stale" (built from another patch set), or "missing".
+wallet_lib_state() {
+  if [ ! -f "$wallet_lib" ]; then
+    echo missing
+    return
+  fi
+  local built wanted
+  built="$(cat "$lib_dir/out/veil-patches.sha256" 2>/dev/null || true)"
+  wanted="$(cat wallet_lib/patches/monero/*.patch wallet_lib/patches/monero_c/*.patch | sha256sum | cut -d' ' -f1)"
+  if [ "$built" = "$wanted" ]; then echo current; else echo stale; fi
+}
+
+# For the levels that cannot do without the library and the daemon.
+require_wallet_lib() {
+  case "$(wallet_lib_state)" in
+    current) ;;
+    stale)
+      echo "error: the wallet library in $lib_dir/out was built from older patches." >&2
+      echo "Run ./check.sh setup again; it rebuilds only what changed." >&2
+      return 1
+      ;;
+    *)
+      echo "error: no wallet library in $lib_dir/out. Run ./check.sh setup first." >&2
+      return 1
+      ;;
+  esac
+  export VEIL_WALLET_LIB="$wallet_lib" VEIL_REQUIRE_WALLET_LIB=1
+}
+
 level_offline() {
-  if [ -z "${VEIL_WALLET_LIB:-}" ] && [ -f "$wallet_lib" ]; then
+  if [ -z "${VEIL_WALLET_LIB:-}" ] && [ "$(wallet_lib_state)" = current ]; then
     export VEIL_WALLET_LIB="$wallet_lib"
   fi
   if [ -n "${VEIL_WALLET_LIB:-}" ]; then
     echo "wallet library: $VEIL_WALLET_LIB"
+  elif [ "$(wallet_lib_state)" = stale ]; then
+    echo "wallet library: built from older patches and not used; the tests that need"
+    echo "it are skipped. Run ./check.sh setup to rebuild it."
   else
     echo "wallet library: not built, the tests that need it are skipped"
   fi
@@ -66,19 +99,24 @@ level_offline() {
 }
 
 level_regtest() {
-  if [ ! -f "$wallet_lib" ] || [ ! -x "$monerod" ]; then
-    echo "error: no wallet library and daemon in $lib_dir/out. Run ./check.sh setup first." >&2
+  require_wallet_lib || return 1
+  if [ ! -x "$monerod" ]; then
+    echo "error: no daemon in $lib_dir/out. Run ./check.sh setup first." >&2
     return 1
   fi
-  export VEIL_WALLET_LIB="$wallet_lib" VEIL_MONEROD="$monerod" VEIL_REQUIRE_WALLET_LIB=1
-  step cargo test -p veil_wallet --features regtest --locked
+  export VEIL_MONEROD="$monerod"
+  # The wallet alone, then the wallet behind the stand-in for Tor.
+  step cargo test -p veil_wallet --features regtest --locked &&
+    step cargo test -p veil_core --features regtest --locked
 }
 
 level_tor() {
-  # Lifecycle and fail-closed behaviour, then a real bootstrap and a
-  # connection to an onion service.
+  require_wallet_lib || return 1
+  # Lifecycle and fail-closed behaviour, a real bootstrap with a connection
+  # to an onion service, then a wallet synchronising with a public node.
   step cargo test -p veil_tor --locked --lib -- --include-ignored &&
-    step cargo test -p veil_tor --locked --test network -- --include-ignored --nocapture
+    step cargo test -p veil_tor --locked --test network -- --include-ignored --nocapture &&
+    step cargo test -p veil_core --locked --test network -- --include-ignored --nocapture
 }
 
 level_stagenet() {
@@ -92,14 +130,28 @@ level_setup() {
     echo "error: setup knows Debian and Ubuntu only (on Windows: run it inside WSL2)." >&2
     return 1
   fi
-  local sudo=""
-  if [ "$(id -u)" != 0 ]; then sudo="sudo"; fi
-  step $sudo apt-get update &&
-    step $sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y \
-      git curl ca-certificates build-essential cmake ninja-build pkg-config \
-      libssl-dev libzmq3-dev libunbound-dev libsodium-dev libboost-all-dev \
-      libhidapi-dev libusb-1.0-0-dev libudev-dev libreadline-dev libexpat1-dev \
-      libpgm-dev libnorm-dev || return 1
+  local packages="git curl ca-certificates build-essential cmake ninja-build pkg-config
+    libssl-dev libzmq3-dev libunbound-dev libsodium-dev libboost-all-dev
+    libhidapi-dev libusb-1.0-0-dev libudev-dev libreadline-dev libexpat1-dev
+    libpgm-dev libnorm-dev"
+  local package missing=""
+  for package in $packages; do
+    if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"; then
+      missing+=" $package"
+    fi
+  done
+  # A repeated setup, after the patches changed, needs no package manager
+  # and so no password, and cannot collide with the system's own updates.
+  if [ -z "$missing" ]; then
+    echo "system packages: all installed"
+  else
+    echo "system packages to install:$missing"
+    local sudo=""
+    if [ "$(id -u)" != 0 ]; then sudo="sudo"; fi
+    # shellcheck disable=SC2086
+    step $sudo apt-get update &&
+      step $sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y $missing || return 1
+  fi
   if ! command -v cargo >/dev/null && [ ! -x "$HOME/.cargo/bin/cargo" ]; then
     echo
     echo "--- installing Rust with rustup"

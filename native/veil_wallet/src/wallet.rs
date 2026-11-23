@@ -138,6 +138,15 @@ pub struct Wallet {
     wallet: *mut c_void,
     network: Network,
     path: PathBuf,
+    /// The node given to [`Wallet::connect`].
+    sync_node: Option<Node>,
+    /// The node transactions are broadcast through, when it is not the
+    /// sync node. See [`Wallet::set_broadcast_node`].
+    broadcast_node: Option<Node>,
+    /// False while the library is pointed at the broadcast node, or after a
+    /// failed attempt to point it back. Nothing but a broadcast may contact
+    /// a node in that state.
+    on_sync_node: bool,
 }
 
 // SAFETY: the wallet library's objects are not tied to the thread that
@@ -317,10 +326,25 @@ impl Wallet {
             wallet,
             network,
             path: path.to_path_buf(),
+            sync_node: None,
+            broadcast_node: None,
+            on_sync_node: true,
         };
         // The manager returns an object even when opening failed; the error
         // is on the object. Dropping `wallet` on the error path closes it.
         wallet.check()?;
+        // The library has a thread that refreshes the wallet on a timer, and
+        // building or sending a transaction switches it on. Veil decides
+        // itself when a node is contacted and which one: left on, that
+        // thread would synchronise through the broadcast node while a
+        // transaction is being sent through it.
+        // SAFETY: live wallet object.
+        unsafe {
+            wallet
+                .lib
+                .api
+                .MONERO_Wallet_setBackgroundRefresh(wallet.wallet, false)
+        };
         Ok(wallet)
     }
 
@@ -414,26 +438,46 @@ impl Wallet {
         }
     }
 
-    /// Points the wallet at a node. Does not contact it yet.
+    /// Points the wallet at the node it synchronises with. Does not contact
+    /// it yet.
     pub fn connect(&mut self, node: &Node) -> Result<(), Error> {
-        let (daemon, proxy) = match node {
-            Node::Onion {
-                host,
-                port,
-                socks_port,
-            } => {
-                let host = host.trim().to_ascii_lowercase();
-                if !is_onion_host(&host) {
-                    return Err(Error::NodeNotOnion);
-                }
-                (
-                    format!("http://{host}:{port}"),
-                    format!("127.0.0.1:{socks_port}"),
-                )
-            }
-            #[cfg(feature = "regtest")]
-            Node::LocalRegtest { port } => (format!("http://127.0.0.1:{port}"), String::new()),
+        self.point_at(node)?;
+        self.sync_node = Some(node.clone());
+        self.on_sync_node = true;
+        Ok(())
+    }
+
+    /// Chooses the node transactions are broadcast through. Does not contact
+    /// it.
+    ///
+    /// With a broadcast node set, [`PendingSend::commit`] points the wallet
+    /// at it for the one request that hands over the transaction and then
+    /// back at the sync node. The node that sees the wallet synchronise then
+    /// never sees it spend. `None` broadcasts through the sync node.
+    pub fn set_broadcast_node(&mut self, node: Option<Node>) -> Result<(), Error> {
+        if let Some(node) = &node {
+            node_addresses(node)?;
+        }
+        self.broadcast_node = node;
+        Ok(())
+    }
+
+    /// Makes the wallet accept a private test chain, whichever way its node
+    /// is reached. [`Node::LocalRegtest`] does this by itself; a test that
+    /// reaches a regtest daemon through a stand-in proxy calls this.
+    #[cfg(feature = "regtest")]
+    pub fn accept_regtest_chain(&mut self) {
+        // SAFETY: live wallet object.
+        unsafe {
+            self.lib
+                .api
+                .MONERO_Wallet_setAllowMismatchedDaemonVersion(self.wallet, true)
         };
+    }
+
+    /// Points the wallet library at `node`.
+    fn point_at(&mut self, node: &Node) -> Result<(), Error> {
+        let (daemon, proxy) = node_addresses(node)?;
 
         // When a node is set, the wallet library moves the scan start of a
         // wallet it considers new to the node's current height. It considers
@@ -524,6 +568,32 @@ impl Wallet {
     /// The wallet library would skip the scan in both cases and report
     /// success, which would show a stale balance as if it were current.
     pub fn refresh(&mut self) -> Result<SyncProgress, Error> {
+        self.node_height()?;
+
+        let before = self.sync_progress().wallet_height;
+        // SAFETY: live wallet object.
+        let refreshed = unsafe { self.lib.api.MONERO_Wallet_refresh(self.wallet) };
+        self.check()?;
+        if !refreshed {
+            return Err(Error::Wallet("synchronisation failed".into()));
+        }
+        let progress = self.sync_progress();
+        // Success with blocks still missing and none scanned means the
+        // library skipped the scan. Never report that as up to date.
+        if progress.blocks_left() > 0 && progress.wallet_height <= before {
+            return Err(Error::Wallet(
+                "synchronisation made no progress".to_string(),
+            ));
+        }
+        Ok(progress)
+    }
+
+    /// Asks the sync node for the height of its chain. Scans nothing.
+    ///
+    /// Fails if the node cannot be reached, runs an incompatible version, or
+    /// is itself still synchronising.
+    pub fn node_height(&mut self) -> Result<u64, Error> {
+        self.return_to_sync_node()?;
         // SAFETY: live wallet object.
         let connection = unsafe { self.lib.api.MONERO_Wallet_connected(self.wallet) };
         match connection {
@@ -548,23 +618,19 @@ impl Wallet {
         if height < target || height <= 1 {
             return Err(Error::NodeSyncing { height, target });
         }
+        Ok(height)
+    }
 
-        let before = self.sync_progress().wallet_height;
-        // SAFETY: live wallet object.
-        let refreshed = unsafe { self.lib.api.MONERO_Wallet_refresh(self.wallet) };
-        self.check()?;
-        if !refreshed {
-            return Err(Error::Wallet("synchronisation failed".into()));
+    /// Makes sure the library is pointed at the sync node before anything
+    /// but a broadcast contacts a node.
+    fn return_to_sync_node(&mut self) -> Result<(), Error> {
+        if self.on_sync_node {
+            return Ok(());
         }
-        let progress = self.sync_progress();
-        // Success with blocks still missing and none scanned means the
-        // library skipped the scan. Never report that as up to date.
-        if progress.blocks_left() > 0 && progress.wallet_height <= before {
-            return Err(Error::Wallet(
-                "synchronisation made no progress".to_string(),
-            ));
-        }
-        Ok(progress)
+        let node = self.sync_node.clone().ok_or(Error::NodeUnreachable)?;
+        self.point_at(&node)?;
+        self.on_sync_node = true;
+        Ok(())
     }
 
     pub fn sync_progress(&self) -> SyncProgress {
@@ -742,6 +808,7 @@ impl Wallet {
         if !self.is_valid_address(to) {
             return Err(Error::InvalidAddress);
         }
+        self.return_to_sync_node()?;
         // The wallet library reads an amount of zero as "send everything".
         // That meaning is only ever used on purpose.
         let units = match amount {
@@ -883,24 +950,54 @@ impl PendingSend<'_> {
     }
 
     /// Broadcasts the transaction and returns its transaction ids.
+    ///
+    /// With a broadcast node set, the transaction goes through that node and
+    /// the wallet is pointed back at the sync node afterwards, whether the
+    /// broadcast worked or not.
     pub fn commit(self) -> Result<Vec<String>, Error> {
-        let lib = &self.wallet.lib;
+        let PendingSend {
+            wallet,
+            pending,
+            txids,
+            ..
+        } = self;
+        let Some(node) = wallet.broadcast_node.clone() else {
+            Self::broadcast(wallet, pending)?;
+            return Ok(txids);
+        };
+
+        // From here until the wallet is back on the sync node, the only
+        // request the library may make is the broadcast itself.
+        wallet.on_sync_node = false;
+        let sent = wallet
+            .point_at(&node)
+            .and_then(|()| Self::broadcast(wallet, pending));
+        // A failure to switch back is not an error of this send: the
+        // transaction may be on its way. The wallet stays marked as off the
+        // sync node, and the next call that needs a node switches back or
+        // reports why it cannot.
+        let _ = wallet.return_to_sync_node();
+        sent?;
+        Ok(txids)
+    }
+
+    fn broadcast(wallet: &Wallet, pending: *mut c_void) -> Result<(), Error> {
+        let lib = &wallet.lib;
         let empty = c_string("", "file name")?;
         // SAFETY: live pending-transaction object and valid string. An empty
         // file name means "broadcast" rather than "write to a file".
         unsafe {
             let api = &lib.api;
-            let sent = api.MONERO_PendingTransaction_commit(self.pending, empty.as_ptr(), false);
-            if !sent || api.MONERO_PendingTransaction_status(self.pending) != sys::STATUS_OK {
-                let message =
-                    lib.take_string(api.MONERO_PendingTransaction_errorString(self.pending));
+            let sent = api.MONERO_PendingTransaction_commit(pending, empty.as_ptr(), false);
+            if !sent || api.MONERO_PendingTransaction_status(pending) != sys::STATUS_OK {
+                let message = lib.take_string(api.MONERO_PendingTransaction_errorString(pending));
                 return Err(Error::Wallet(non_empty(
                     message,
                     "the transaction could not be sent",
                 )));
             }
         }
-        Ok(self.txids)
+        Ok(())
     }
 }
 
@@ -918,8 +1015,31 @@ fn non_empty(message: String, fallback: &str) -> String {
     }
 }
 
+/// The node's address and the proxy to reach it through, as the wallet
+/// library wants them. An empty proxy means a direct connection.
+fn node_addresses(node: &Node) -> Result<(String, String), Error> {
+    match node {
+        Node::Onion {
+            host,
+            port,
+            socks_port,
+        } => {
+            let host = host.trim().to_ascii_lowercase();
+            if !is_onion_host(&host) {
+                return Err(Error::NodeNotOnion);
+            }
+            Ok((
+                format!("http://{host}:{port}"),
+                format!("127.0.0.1:{socks_port}"),
+            ))
+        }
+        #[cfg(feature = "regtest")]
+        Node::LocalRegtest { port } => Ok((format!("http://127.0.0.1:{port}"), String::new())),
+    }
+}
+
 /// True for a bare `.onion` hostname: no scheme, port, path, or user info.
-fn is_onion_host(host: &str) -> bool {
+pub fn is_onion_host(host: &str) -> bool {
     let Some(name) = host.strip_suffix(".onion") else {
         return false;
     };

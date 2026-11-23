@@ -1,0 +1,22 @@
+[package]
+name = "veil_core"
+description = "The core of Veil: a Monero wallet that reaches its nodes through the embedded Tor client and nothing else"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+# Lets tests run the core against a regtest daemon. Never enabled in the app.
+regtest = ["veil_wallet/regtest"]
+
+[dependencies]
+veil_tor = { path = "../veil_tor" }
+veil_wallet = { path = "../veil_wallet" }
+thiserror = "2"
+
+[dev-dependencies]
+# The stand-in for Tor is a dev-dependency feature, so it is compiled into
+# this crate's tests and never into the crate itself.
+veil_tor = { path = "../veil_tor", features = ["stand-in"] }
+veil_test_guard = { path = "../veil_test_guard" }

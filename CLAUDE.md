@@ -58,8 +58,13 @@ that cannot lose the user's funds.
   - `veil_wallet`: wallet operations over the Monero wallet library. Its
     README lists library behaviours the crate guards against; read it
     before changing `wallet.rs`.
+  - `veil_core`: joins the two. The app reaches a wallet only through it;
+    it points the wallet at Tor's listeners and nowhere else. Tests replace
+    Tor with `veil_tor`'s stand-in (the `stand-in` feature, never in an app
+    build).
   - `wallet_lib`: pinned build script for the wallet library, Veil's
-    patches to it, and the bindings generator.
+    patches to it, and the bindings generator. After changing a patch, run
+    `build.sh` again and regenerate the bindings.
   - `veil_test_guard`: called first by every test that starts Tor or a
     daemon; fails the test on a CI runner. A new test of that kind calls it
     too.
@@ -81,9 +86,12 @@ Done: the Tor component, and the wallet core (create, restore, receive on
 fresh addresses, send) tested on a private chain. Step 1.1 of the build plan
 is done too: the check script, hosted CI passing on Linux and Windows, and
 the owner's acceptance run passing at the `offline`, `regtest`, and `tor`
-levels. Not done: the piece that connects the wallet to Tor (step 1.2,
-next), the command-line tool on stagenet, bridges, the wallet library for
-Windows, the app. See the build plan in `docs/concept.md`.
+levels. Step 1.2 is done as well: `veil_core` connects the wallet to Tor,
+and the owner's acceptance run passed at all three levels, including a
+send through a separate node on a private chain and a new wallet
+synchronising with a public onion node over Tor. Not done: the
+command-line tool on stagenet (step 1.3, next), bridges, the wallet
+library for Windows, the app. See the build plan in `docs/concept.md`.
 
 ## Environment notes
 

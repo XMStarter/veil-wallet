@@ -8,13 +8,10 @@
 
 mod common;
 
-use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
 use std::path::Path;
-use std::process::{Child, Command, Stdio};
-use std::time::{Duration, Instant};
 
 use common::{wallet_library, TempDir};
+use veil_test_guard::RegtestDaemon;
 use veil_wallet::{Amount, Direction, Error, Network, Node, SendAmount, Wallet, WalletLibrary};
 
 const PASSWORD: &str = "regtest";
@@ -24,142 +21,10 @@ const INITIAL_BLOCKS: u64 = 130;
 /// Received funds unlock after 10 confirmations.
 const UNLOCK_BLOCKS: u64 = 10;
 
-/// A regtest daemon that is killed when dropped.
-struct Daemon {
-    child: Child,
-    rpc_port: u16,
-    _data: TempDir,
-}
-
-impl Daemon {
-    fn start() -> Option<Daemon> {
-        veil_test_guard::refuse_in_hosted_ci("starting a Monero daemon");
-        let Some(binary) = std::env::var_os("VEIL_MONEROD") else {
-            assert!(
-                std::env::var_os("VEIL_REQUIRE_WALLET_LIB").is_none(),
-                "VEIL_MONEROD is not set but the daemon is required"
-            );
-            eprintln!("skipped: set VEIL_MONEROD to a monerod binary to run this test");
-            return None;
-        };
-        let data = TempDir::new("monerod");
-        let rpc_port = free_port();
-        let p2p_port = free_port();
-        let child = Command::new(binary)
-            .arg("--regtest")
-            .arg("--offline")
-            .arg("--fixed-difficulty=1")
-            .arg("--non-interactive")
-            .arg("--no-zmq")
-            .arg("--disable-rpc-ban")
-            .arg("--log-level=0")
-            .arg(format!("--data-dir={}", data.0.display()))
-            .arg("--rpc-bind-ip=127.0.0.1")
-            .arg(format!("--rpc-bind-port={rpc_port}"))
-            .arg("--p2p-bind-ip=127.0.0.1")
-            .arg(format!("--p2p-bind-port={p2p_port}"))
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .expect("monerod starts");
-        let daemon = Daemon {
-            child,
-            rpc_port,
-            _data: data,
-        };
-        let started = Instant::now();
-        while daemon.rpc("get_info", "{}").is_none() {
-            assert!(
-                started.elapsed() < Duration::from_secs(60),
-                "monerod did not answer within a minute"
-            );
-            std::thread::sleep(Duration::from_millis(200));
-        }
-        Some(daemon)
+fn node(daemon: &RegtestDaemon) -> Node {
+    Node::LocalRegtest {
+        port: daemon.rpc_port(),
     }
-
-    fn node(&self) -> Node {
-        Node::LocalRegtest {
-            port: self.rpc_port,
-        }
-    }
-
-    /// Calls a JSON-RPC method and returns the response body.
-    fn rpc(&self, method: &str, params: &str) -> Option<String> {
-        let body = format!(r#"{{"jsonrpc":"2.0","id":"0","method":"{method}","params":{params}}}"#);
-        let mut stream = TcpStream::connect(("127.0.0.1", self.rpc_port)).ok()?;
-        stream
-            .set_read_timeout(Some(Duration::from_secs(300)))
-            .ok()?;
-        write!(
-            stream,
-            "POST /json_rpc HTTP/1.0\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
-            body.len(),
-            body
-        )
-        .ok()?;
-        // The daemon keeps the connection open, so read exactly the body
-        // that Content-Length announces instead of waiting for a close.
-        let mut response = Vec::new();
-        let mut chunk = [0u8; 4096];
-        loop {
-            if let Some(end) = find(&response, b"\r\n\r\n") {
-                let headers = String::from_utf8_lossy(&response[..end]).to_ascii_lowercase();
-                let length: usize = headers
-                    .lines()
-                    .find_map(|line| line.strip_prefix("content-length:"))
-                    .and_then(|value| value.trim().parse().ok())?;
-                let body_start = end + 4;
-                while response.len() < body_start + length {
-                    let read = stream.read(&mut chunk).ok()?;
-                    if read == 0 {
-                        return None;
-                    }
-                    response.extend_from_slice(&chunk[..read]);
-                }
-                let body = &response[body_start..body_start + length];
-                return Some(String::from_utf8_lossy(body).into_owned());
-            }
-            let read = stream.read(&mut chunk).ok()?;
-            if read == 0 {
-                return None;
-            }
-            response.extend_from_slice(&chunk[..read]);
-        }
-    }
-
-    /// Asks the daemon to add `count` blocks, crediting `address`.
-    fn add_blocks(&self, count: u64, address: &str) {
-        let params = format!(r#"{{"amount_of_blocks":{count},"wallet_address":"{address}"}}"#);
-        let response = self
-            .rpc("generateblocks", &params)
-            .expect("the daemon answers generateblocks");
-        assert!(
-            response.contains("\"status\": \"OK\""),
-            "generateblocks failed: {response}"
-        );
-    }
-}
-
-impl Drop for Daemon {
-    fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-    }
-}
-
-fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    haystack
-        .windows(needle.len())
-        .position(|window| window == needle)
-}
-
-fn free_port() -> u16 {
-    TcpListener::bind(("127.0.0.1", 0))
-        .and_then(|listener| listener.local_addr())
-        .expect("a free port")
-        .port()
 }
 
 fn xmr(text: &str) -> Amount {
@@ -167,12 +32,12 @@ fn xmr(text: &str) -> Amount {
 }
 
 /// A new wallet connected to the regtest daemon and scanning from genesis.
-fn new_wallet(lib: &WalletLibrary, path: &Path, daemon: &Daemon) -> Wallet {
+fn new_wallet(lib: &WalletLibrary, path: &Path, daemon: &RegtestDaemon) -> Wallet {
     let (mut wallet, _) = Wallet::create(lib, path, PASSWORD, Network::Mainnet).unwrap();
     // A new wallet starts scanning near today's public-chain height, which
     // is far above this private chain.
     wallet.set_restore_height(0);
-    wallet.connect(&daemon.node()).unwrap();
+    wallet.connect(&node(daemon)).unwrap();
     wallet
 }
 
@@ -181,8 +46,8 @@ fn new_wallet(lib: &WalletLibrary, path: &Path, daemon: &Daemon) -> Wallet {
 /// The wallet library remembers the node's height for 30 seconds. On a real
 /// network that is harmless; here blocks appear on request, so the node is
 /// set again first, which drops the remembered height.
-fn sync(wallet: &mut Wallet, daemon: &Daemon) {
-    wallet.connect(&daemon.node()).unwrap();
+fn sync(wallet: &mut Wallet, daemon: &RegtestDaemon) {
+    wallet.connect(&node(daemon)).unwrap();
     let progress = wallet.refresh().unwrap();
     assert_eq!(progress.blocks_left(), 0);
 }
@@ -197,11 +62,12 @@ fn send(from: &mut Wallet, to: &str, amount: SendAmount) -> (Amount, Amount, Vec
 
 #[test]
 fn receive_on_fresh_addresses_send_and_restore() {
-    // Checked again in `Daemon::start`; here so that a CI run fails even
-    // when the library is missing and the test would otherwise be skipped.
+    // Checked again in `RegtestDaemon::start`; here so that a CI run fails
+    // even when the library is missing and the test would otherwise be
+    // skipped.
     veil_test_guard::refuse_in_hosted_ci("starting a Monero daemon");
     let Some(lib) = wallet_library() else { return };
-    let Some(daemon) = Daemon::start() else {
+    let Some(daemon) = RegtestDaemon::start() else {
         return;
     };
     let dir = TempDir::new("regtest");

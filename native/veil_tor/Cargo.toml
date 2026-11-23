@@ -9,6 +9,12 @@ publish.workspace = true
 [lib]
 crate-type = ["lib", "cdylib", "staticlib"]
 
+[features]
+# Adds `StandIn`: the same loopback SOCKS listeners, leading to local ports
+# instead of into Tor, so that code using them can be tested without a
+# network. Never enabled in the app.
+stand-in = []
+
 [dependencies]
 # static-sqlite compiles SQLite into the library, so no platform needs a
 # system copy (Windows and Android do not ship one).
