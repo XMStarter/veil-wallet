@@ -172,14 +172,46 @@ void main() {
     await type(tester, 'Recovery phrase', legacy);
     expect(find.textContaining('25 words'), findsOneWidget);
     expect(find.text('Block to scan from (optional)'), findsOneWidget);
+    // Leaving the block out is allowed, and the cost is said in so many
+    // words, as a warning.
+    Notice costNotice() => tester.widget<Notice>(
+      find.ancestor(
+        of: find.textContaining('can take more than an hour'),
+        matching: find.byType(Notice),
+      ),
+    );
+    expect(find.textContaining('nothing is missed'), findsOneWidget);
+    expect(costNotice().warning, isTrue);
     await type(tester, 'Password', testPassword);
     await type(tester, 'Repeat the password', testPassword);
     await type(tester, 'Block to scan from (optional)', 'spring');
     expect(enabled(tester, 'Restore wallet'), isFalse);
     await type(tester, 'Block to scan from (optional)', '1234567');
+    // With a block given it is an explanation and no longer a warning.
+    expect(costNotice().warning, isFalse);
     await press(tester, 'Restore wallet');
     expect(backend.restoredHeight, 1234567);
   });
+
+  testWidgets(
+    'twenty-five words without a block are restored from the first one',
+    (tester) async {
+      final backend = FakeBackend();
+      await pumpApp(tester, 'ru', backend: backend);
+      await press(tester, 'Восстановить по фразе');
+      await type(
+        tester,
+        'Фраза восстановления',
+        List.filled(25, 'abbey').join(' '),
+      );
+      expect(find.textContaining('может занять больше часа'), findsOneWidget);
+      await type(tester, 'Пароль', testPassword);
+      await type(tester, 'Пароль ещё раз', testPassword);
+      await press(tester, 'Восстановить кошелёк');
+      expect(backend.startedWith, WalletSource.restore);
+      expect(backend.restoredHeight, isNull);
+    },
+  );
 
   testWidgets('a phrase the wallet refuses is said to be the reason', (
     tester,

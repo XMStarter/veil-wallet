@@ -170,9 +170,10 @@ Windows build of the core, both for the first time, and passed. Step 3.4,
 the start flow, is written and not yet accepted: creating a wallet with
 its password, showing and checking the recovery phrase, restoring from a
 phrase, and opening the wallet on the device, on stagenet. Its tests walk
-that way on a wallet that only pretends and pass in a cloud session; no
-real wallet has been opened by the app anywhere yet, which needs the
-owner's machine, because an open wallet starts Tor. Not done: the app. See the build plan in
+that way on a wallet that only pretends. On the owner's machine the
+`offline` and `regtest` levels passed with it; the walk through the app
+itself, which opens a real wallet and starts Tor for the first time, has
+not been reported yet. Not done: the app. See the build plan in
 `docs/concept.md`.
 
 ## Environment notes

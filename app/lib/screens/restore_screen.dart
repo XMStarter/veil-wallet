@@ -118,7 +118,12 @@ class _RestoreScreenState extends State<RestoreScreen> {
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 8),
-          Notice(text.restoreHeightNotice),
+          // A warning for as long as no block is given: that is the choice
+          // that costs an hour.
+          Notice(
+            text.restoreHeightNotice,
+            warning: _height.text.trim().isEmpty,
+          ),
         ],
         const SizedBox(height: 16),
         PasswordFields(

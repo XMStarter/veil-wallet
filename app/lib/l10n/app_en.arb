@@ -41,7 +41,7 @@
     }
   },
   "restoreHeightLabel": "Block to scan from (optional)",
-  "restoreHeightNotice": "A 25-word phrase does not say when the wallet was made. Without a block number the whole chain is scanned, which takes long.",
+  "restoreHeightNotice": "A 25-word phrase does not say when the wallet was made. Without a block number the chain is scanned from its first block: nothing is missed, but it can take more than an hour.",
   "restoreAction": "Restore wallet",
   "restoreWorking": "Restoring the wallet…",
   "unlockTitle": "Veil",
