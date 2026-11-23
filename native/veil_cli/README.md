@@ -67,7 +67,10 @@ The second runs on a machine you control and never in hosted CI.
 
 ## Not done yet
 
-- A send is tried by hand; there is no funded test wallet.
+- A send is tried by hand; there is no funded test wallet. It has been
+  tried once: coins from a faucet arrived, part of them went to a second
+  address of the same wallet through a different node than the one
+  synchronised with, and the transaction was in the next block.
 - Bridges, for networks that block Tor.
 - Moving on to another node when one stops answering in the middle of a
   sync.

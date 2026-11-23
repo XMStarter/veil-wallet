@@ -132,6 +132,10 @@ fn receive_on_fresh_addresses_send_and_restore() {
     assert_eq!(incoming[1].amount, xmr("3"));
     assert_eq!(incoming[1].address_indices, vec![2]);
     assert!(incoming.iter().all(|t| !t.pending && !t.failed));
+    assert!(
+        incoming.iter().all(|t| t.fee.is_zero()),
+        "the sender's fee is not shown on what was received"
+    );
 
     // --- Alice pays Bob ------------------------------------------------
     let mut bob = new_wallet(&lib, &dir.file("bob"), &daemon);

@@ -91,12 +91,13 @@ the owner's acceptance run passing at the `offline`, `regtest`, and `tor`
 levels. Step 1.2 is done as well: `veil_core` connects the wallet to Tor,
 and the owner's acceptance run passed at all three levels, including a
 send through a separate node on a private chain and a new wallet
-synchronising with a public onion node over Tor. Step 1.3, the
-command-line tool on stagenet (`veil_cli`), is written and passes its
-offline tests; it is waiting for the owner's acceptance run, which is the
-first time it goes online at all, and for a send tried by hand with
-stagenet coins. Not done: bridges, the wallet library for Windows, the
-app. See the build plan in `docs/concept.md`.
+synchronising with a public onion node over Tor. Step 1.3 is done: `veil`,
+the command-line tool on stagenet (`veil_cli`), passed the owner's
+acceptance run at all four levels, and a send tried by hand on stagenet
+went through a separate node and confirmed. A new wallet's first sync on
+stagenet took about two minutes over Tor. Not done: bridges (step 1.4,
+next), the wallet library for Windows, the app. See the build plan in
+`docs/concept.md`.
 
 ## Environment notes
 

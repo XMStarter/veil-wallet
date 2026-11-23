@@ -856,7 +856,14 @@ impl Wallet {
                     txid: self.lib.take_string(api.MONERO_TransactionInfo_hash(info)),
                     direction,
                     amount: Amount::from_atomic(api.MONERO_TransactionInfo_amount(info)),
-                    fee: Amount::from_atomic(api.MONERO_TransactionInfo_fee(info)),
+                    // The library reports the fee of an incoming transfer
+                    // too. The sender paid it, not this wallet.
+                    fee: match direction {
+                        Direction::Incoming => Amount::ZERO,
+                        Direction::Outgoing => {
+                            Amount::from_atomic(api.MONERO_TransactionInfo_fee(info))
+                        }
+                    },
                     block_height: api.MONERO_TransactionInfo_blockHeight(info),
                     confirmations: api.MONERO_TransactionInfo_confirmations(info),
                     timestamp: api.MONERO_TransactionInfo_timestamp(info),
