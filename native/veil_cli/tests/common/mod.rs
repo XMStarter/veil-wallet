@@ -83,6 +83,7 @@ fn veil_program() -> PathBuf {
 /// Runs `veil --data-dir <data_dir> <arguments>`, answering its questions
 /// with `answers`, one per line.
 pub fn veil(data_dir: &Path, arguments: &[&str], answers: &[&str]) -> Run {
+    let started = std::time::Instant::now();
     let mut child = Command::new(veil_program())
         .arg("--data-dir")
         .arg(data_dir)
@@ -104,6 +105,16 @@ pub fn veil(data_dir: &Path, arguments: &[&str], answers: &[&str]) -> Run {
         stdout,
         stderr,
     } = child.wait_with_output().expect("veil finishes");
+    // Shown when the test fails: how each run of the program ended. An exit
+    // code that is neither 0, 1 nor 2 is the system's, for a program that
+    // crashed or was stopped. Output is counted, not shown: it can hold a
+    // recovery phrase.
+    eprintln!(
+        "veil {arguments:?}: {status} after {:.1?}, {} bytes of output, {} of messages",
+        started.elapsed(),
+        stdout.len(),
+        stderr.len()
+    );
     Run {
         code: status.code(),
         stdout: String::from_utf8_lossy(&stdout).into_owned(),

@@ -107,8 +107,8 @@ unsafe fn open_library(path: &Path) -> Result<libloading::Library, libloading::E
     .map(Into::into)
 }
 
-/// The loaded wallet library. Cheap to clone; the library stays loaded for
-/// as long as any clone or any wallet created from it is alive.
+/// The loaded wallet library. Cheap to clone. Once loaded, the library stays
+/// loaded until the process ends.
 #[derive(Clone)]
 pub struct WalletLibrary {
     pub(crate) api: Arc<MoneroC>,
@@ -154,7 +154,15 @@ impl WalletLibrary {
         // and amounts, so they are turned off.
         // SAFETY: plain call with a valid level.
         unsafe { api.MONERO_WalletManagerFactory_setLogLevel(-1) };
-        Ok(WalletLibrary { api: Arc::new(api) })
+        let api = Arc::new(api);
+        // The library is never unloaded. Once a wallet has been opened it
+        // owns threads that outlive the wallet, and its clean-up joins them.
+        // Unloading runs that clean-up while the system holds the lock a
+        // thread needs in order to finish, so on Windows the two wait for
+        // each other. Keeping one reference for ever leaves the clean-up to
+        // the end of the process, where the threads are gone already.
+        std::mem::forget(Arc::clone(&api));
+        Ok(WalletLibrary { api })
     }
 
     /// Takes ownership of a string returned by the library and frees it.

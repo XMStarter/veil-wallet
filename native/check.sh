@@ -137,7 +137,7 @@ level_offline() {
   fi
   step cargo fmt --check &&
     step cargo_for_target clippy --workspace --all-targets --all-features --locked -- -D warnings &&
-    step cargo_for_target test --workspace --locked
+    step cargo_for_target test --workspace --locked --no-fail-fast
 }
 
 level_regtest() {
