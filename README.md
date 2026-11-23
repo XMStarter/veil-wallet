@@ -10,10 +10,10 @@ traffic goes through a built-in Tor client, and every incoming payment gets a
 fresh address.
 
 > **Status: pre-alpha.** The embedded Tor component, the wallet core, and
-> the piece that joins them exist and are tested: on a private test chain,
-> and by synchronising an empty wallet with a public node over Tor. There is
-> no app yet. Do not use anything here with real funds. Read the
-> [disclaimer](DISCLAIMER.md).
+> the piece that joins them exist and are tested on a private test chain. A
+> command-line tool creates, restores, synchronises, and sends on the Monero
+> stagenet through Tor. There is no app yet. Do not use anything here with
+> real funds. Read the [disclaimer](DISCLAIMER.md).
 
 ## Priorities
 

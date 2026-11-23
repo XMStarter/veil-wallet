@@ -196,5 +196,56 @@ fn a_reopened_wallet_is_joined_to_tor_the_same_way() {
     assert!(!stand_in.requests().is_empty());
 }
 
+#[test]
+fn nodes_are_tried_in_order_until_one_answers() {
+    let Some(lib) = wallet_library() else { return };
+    let dir = TempDir::new("settle");
+    let stand_in = StandIn::start().unwrap();
+    let mut core = core_on(&lib, &dir, &stand_in);
+    stand_in.clear_requests();
+
+    // Neither candidate is reachable. Both are tried, in the order given,
+    // each through the sync listener, and the outcome names the count.
+    let first = OnionNode::new(BROADCAST_HOST, BROADCAST_PORT).unwrap();
+    let second = OnionNode::new(SYNC_HOST, SYNC_PORT).unwrap();
+    let outcome = core.settle_on_nodes(&[first.clone(), second.clone()]);
+    assert!(
+        matches!(
+            outcome,
+            Err(CoreError::NoNodeAnswered {
+                tried: 2,
+                last: Error::NodeUnreachable
+            })
+        ),
+        "{outcome:?}"
+    );
+    let hosts: Vec<String> = stand_in.requests().into_iter().map(|r| r.host).collect();
+    let mut order = hosts.clone();
+    order.dedup();
+    assert_eq!(order, vec![BROADCAST_HOST, SYNC_HOST], "{hosts:?}");
+    assert!(stand_in
+        .requests()
+        .iter()
+        .all(|request| request.purpose == Purpose::Sync));
+
+    // The last candidate tried is the one the core is left on, with the
+    // other as its broadcast node.
+    assert_eq!(core.nodes().sync(), &second);
+    assert_eq!(core.nodes().broadcast(), &first);
+
+    // One candidate serves both purposes.
+    let _ = core.settle_on_nodes(std::slice::from_ref(&first));
+    assert_eq!(core.nodes().sync(), core.nodes().broadcast());
+
+    // And before Tor is ready no candidate is tried at all.
+    stand_in.set_ready(false);
+    stand_in.clear_requests();
+    assert!(matches!(
+        core.settle_on_nodes(&[first, second]),
+        Err(CoreError::TorNotReady { .. })
+    ));
+    assert!(stand_in.requests().is_empty());
+}
+
 #[cfg(feature = "regtest")]
 mod regtest;

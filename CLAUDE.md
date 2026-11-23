@@ -62,6 +62,8 @@ that cannot lose the user's funds.
     it points the wallet at Tor's listeners and nowhere else. Tests replace
     Tor with `veil_tor`'s stand-in (the `stand-in` feature, never in an app
     build).
+  - `veil_cli`: `veil`, the command-line wallet on stagenet. Stagenet
+    only; do not add another network to it.
   - `wallet_lib`: pinned build script for the wallet library, Veil's
     patches to it, and the bindings generator. After changing a patch, run
     `build.sh` again and regenerate the bindings.
@@ -89,9 +91,13 @@ the owner's acceptance run passing at the `offline`, `regtest`, and `tor`
 levels. Step 1.2 is done as well: `veil_core` connects the wallet to Tor,
 and the owner's acceptance run passed at all three levels, including a
 send through a separate node on a private chain and a new wallet
-synchronising with a public onion node over Tor. Not done: the
-command-line tool on stagenet (step 1.3, next), bridges, the wallet
-library for Windows, the app. See the build plan in `docs/concept.md`.
+synchronising with a public onion node over Tor. Step 1.3 is done: `veil`,
+the command-line tool on stagenet (`veil_cli`), passed the owner's
+acceptance run at all four levels, and a send tried by hand on stagenet
+went through a separate node and confirmed. A new wallet's first sync on
+stagenet took about two minutes over Tor. Not done: bridges (step 1.4,
+next), the wallet library for Windows, the app. See the build plan in
+`docs/concept.md`.
 
 ## Environment notes
 

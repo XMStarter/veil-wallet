@@ -69,6 +69,11 @@ variables and keeps a log.
 
 ## Not done yet
 
+- A payment to one of the wallet's own addresses appears in the history as
+  an outgoing transfer of zero plus the fee once it is confirmed, with no
+  incoming entry. That is how the library reports it; the balance is right.
+  The interface will have to say "to yourself".
+
 - Warning when a payment has to combine coins from different addresses.
 - Choosing the restore height from a date.
 - Background sync with progress reporting.

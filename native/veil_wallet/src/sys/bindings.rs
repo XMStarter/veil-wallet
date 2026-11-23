@@ -191,6 +191,11 @@ pub struct MoneroC {
     pub MONERO_WalletManagerFactory_getWalletManager:
         unsafe extern "C" fn() -> *mut ::std::os::raw::c_void,
     pub MONERO_WalletManagerFactory_setLogLevel: unsafe extern "C" fn(level: ::std::os::raw::c_int),
+    pub MONERO_cw_getWalletListener: unsafe extern "C" fn(
+        wallet_ptr: *mut ::std::os::raw::c_void,
+    ) -> *mut ::std::os::raw::c_void,
+    pub MONERO_cw_WalletListener_height:
+        unsafe extern "C" fn(cw_walletListener_ptr: *mut ::std::os::raw::c_void) -> u64,
     pub MONERO_free: unsafe extern "C" fn(ptr: *mut ::std::os::raw::c_void),
 }
 impl MoneroC {
@@ -354,6 +359,12 @@ impl MoneroC {
         let MONERO_WalletManagerFactory_setLogLevel = __library
             .get(b"MONERO_WalletManagerFactory_setLogLevel\0")
             .map(|sym| *sym)?;
+        let MONERO_cw_getWalletListener = __library
+            .get(b"MONERO_cw_getWalletListener\0")
+            .map(|sym| *sym)?;
+        let MONERO_cw_WalletListener_height = __library
+            .get(b"MONERO_cw_WalletListener_height\0")
+            .map(|sym| *sym)?;
         let MONERO_free = __library.get(b"MONERO_free\0").map(|sym| *sym)?;
         Ok(MoneroC {
             __library,
@@ -412,6 +423,8 @@ impl MoneroC {
             MONERO_WalletManager_errorString,
             MONERO_WalletManagerFactory_getWalletManager,
             MONERO_WalletManagerFactory_setLogLevel,
+            MONERO_cw_getWalletListener,
+            MONERO_cw_WalletListener_height,
             MONERO_free,
         })
     }
@@ -832,6 +845,18 @@ impl MoneroC {
     }
     pub unsafe fn MONERO_WalletManagerFactory_setLogLevel(&self, level: ::std::os::raw::c_int) {
         (self.MONERO_WalletManagerFactory_setLogLevel)(level)
+    }
+    pub unsafe fn MONERO_cw_getWalletListener(
+        &self,
+        wallet_ptr: *mut ::std::os::raw::c_void,
+    ) -> *mut ::std::os::raw::c_void {
+        (self.MONERO_cw_getWalletListener)(wallet_ptr)
+    }
+    pub unsafe fn MONERO_cw_WalletListener_height(
+        &self,
+        cw_walletListener_ptr: *mut ::std::os::raw::c_void,
+    ) -> u64 {
+        (self.MONERO_cw_WalletListener_height)(cw_walletListener_ptr)
     }
     pub unsafe fn MONERO_free(&self, ptr: *mut ::std::os::raw::c_void) {
         (self.MONERO_free)(ptr)
