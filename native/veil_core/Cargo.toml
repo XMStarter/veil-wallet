@@ -14,6 +14,8 @@ regtest = ["veil_wallet/regtest"]
 veil_tor = { path = "../veil_tor" }
 veil_wallet = { path = "../veil_wallet" }
 thiserror = "2"
+# Wipes the password a session holds until its wallet is open.
+zeroize = "1"
 
 [dev-dependencies]
 # The stand-in for Tor is a dev-dependency feature, so it is compiled into

@@ -142,7 +142,29 @@ run where is set out in [development.md](development.md).
    of a write. The wallet file is saved atomically. The scenarios run
    against stand-ins without a network, and are repeated on the real network
    on the owner's machine.
-3. **User interface** on top of the finished core, desktop first.
+3. **User interface** on top of the finished core, desktop first. Until
+   the release steps the app works on stagenet only, like the command-line
+   tool.
+   1. *The core for an app.* The core is one thread that waits for a node.
+      A layer on top runs it on a thread of its own, takes commands, and
+      keeps a picture of the state an interface shows: Tor, synchronisation,
+      balance, addresses, history, a send under review. Tested against the
+      stand-ins and on a private chain.
+   2. *Bridge to the interface.* A small C interface to that layer, like the
+      Tor component's, and the Dart side of it. Commands and state cross it
+      as text, so nothing is generated and no bridging package is needed.
+   3. *App shell.* The Flutter project, the visual language of
+      [design.md](design.md), English and Russian, tests of the screens,
+      and hosted CI compiling it for Linux and Windows.
+   4. *Start:* create a wallet, show and check the recovery phrase, restore,
+      set a password.
+   5. *Home and Receive.*
+   6. *Send:* form, review, confirmation, and the case where the outcome is
+      not known.
+   7. *Settings:* node, bridges, password, auto-lock, recovery phrase,
+      theme, language.
+   8. *The app on Windows:* the build from hosted CI with the wallet library
+      next to it, run on the owner's machine.
 4. **Android.** Background sync through a foreground service, battery
    restrictions, a build without Google services.
 5. **Hardening.** Network-level leak checks, fuzzing of address and URI

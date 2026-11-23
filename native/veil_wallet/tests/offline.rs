@@ -155,7 +155,7 @@ fn wrong_password_does_not_open_the_wallet() {
     wallet.close().unwrap();
 
     match Wallet::open(&lib, &path, "not the password", Network::Mainnet) {
-        Err(Error::Wallet(_)) => {}
+        Err(Error::WrongPassword) => {}
         Err(other) => panic!("unexpected error {other}"),
         Ok(_) => panic!("a wrong password must not open the wallet"),
     }

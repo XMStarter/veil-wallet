@@ -5049,6 +5049,7 @@ dependencies = [
  "veil_test_guard",
  "veil_tor",
  "veil_wallet",
+ "zeroize",
 ]
 
 [[package]]
