@@ -103,12 +103,15 @@ passed at all five levels. Tor connected through obfs4 and through
 Snowflake, did not connect when its only bridge did not exist, and the
 tool synchronised a wallet through obfs4 bridges, about three and a half
 times slower than directly. WebTunnel is configured like the other two but
-cannot be tried yet. Step 1.5, the wallet library for Windows, is written:
+cannot be tried yet. Step 1.5, the wallet library for Windows:
 `wallet_lib/build.sh --windows` cross-builds the DLL and `monerod.exe`, and
-the whole workspace and its tests compile for Windows on Linux. None of it
-has run on Windows yet; that is the owner's acceptance run with
-`./check.sh --windows`. Not done: the app. See the build plan in
-`docs/concept.md`.
+`./check.sh --windows` runs the checks as Windows programs. On the owner's
+machine the `offline`, `tor` and `stagenet` levels pass that way, which
+took three fixes found by those runs (never unloading the library, UTF-8
+paths, and not trusting the library alone about an existing wallet). The
+`regtest` level does not run there yet: starting `monerod.exe` is denied,
+most likely by the antivirus, so sending has not been exercised on
+Windows. Not done: the app. See the build plan in `docs/concept.md`.
 
 ## Environment notes
 
@@ -116,7 +119,11 @@ has run on Windows yet; that is the owner's acceptance run with
   machine: Windows, inside WSL2 (Ubuntu 24.04), as Linux programs and with
   `--windows` as Windows programs. The owner runs them and sends the log.
   A cloud session can build for Windows but cannot run the result: Wine
-  does not start there. Tor connects
+  does not start there. The machine's antivirus (ESET) flags the wallet DLL
+  and `monerod.exe` as a coin miner; the owner has to allow each after it
+  is rebuilt, and a run made while its question is open fails on loading.
+  Each run of `veil.exe` takes 15 to 20 seconds there before it does
+  anything, from loading over the WSL file share and being scanned. Tor connects
   from that machine without bridges, so the `bridges` level shows there
   that a bridged connection works, not that it gets through a block.
 - What a cloud session can reach depends on its environment's network
