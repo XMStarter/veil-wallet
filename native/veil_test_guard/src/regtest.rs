@@ -79,6 +79,11 @@ impl RegtestDaemon {
     /// On failure, says what is known: how it ended and the end of its log.
     fn start_once(binary: &OsStr) -> Result<RegtestDaemon, String> {
         let (rpc_port, p2p_port) = two_free_ports();
+        Self::start_on(binary, rpc_port, p2p_port)
+    }
+
+    /// Starts the daemon on the given ports and waits until it answers.
+    fn start_on(binary: &OsStr, rpc_port: u16, p2p_port: u16) -> Result<RegtestDaemon, String> {
         let data_dir =
             std::env::temp_dir().join(format!("veil-monerod-{}-{rpc_port}", std::process::id()));
         let _ = std::fs::remove_dir_all(&data_dir);
@@ -250,6 +255,107 @@ mod tests {
         };
         assert!(failure.contains("ended by itself"), "{failure}");
         assert!(failure.contains("RPC port"), "{failure}");
+    }
+
+    /// How ports were picked when a daemon once failed to come up: one at
+    /// a time, each given back before the daemon took it.
+    fn free_port() -> u16 {
+        TcpListener::bind(("127.0.0.1", 0))
+            .and_then(|listener| listener.local_addr())
+            .expect("a free port")
+            .port()
+    }
+
+    /// One round: two daemons started at the same moment, the way two tests
+    /// of one test program did. Returns, for each, how long it took to
+    /// answer or what went wrong.
+    fn start_a_pair(binary: &OsStr) -> Vec<Result<Duration, String>> {
+        std::thread::scope(|scope| {
+            let starts: Vec<_> = (0..2)
+                .map(|_| {
+                    scope.spawn(|| {
+                        let began = Instant::now();
+                        // The daemon is stopped as soon as it has answered.
+                        RegtestDaemon::start_on(binary, free_port(), free_port())
+                            .map(|_daemon| began.elapsed())
+                    })
+                })
+                .collect();
+            starts
+                .into_iter()
+                .map(|start| start.join().expect("a start does not panic"))
+                .collect()
+        })
+    }
+
+    /// Takes and gives back loopback ports all the time, as the other
+    /// tests of a test program do while a daemon is starting, until told
+    /// to stop.
+    fn keep_ports_busy(stop: &std::sync::atomic::AtomicBool) {
+        while !stop.load(std::sync::atomic::Ordering::SeqCst) {
+            let taken: Vec<TcpListener> = (0..8)
+                .filter_map(|_| TcpListener::bind(("127.0.0.1", 0)).ok())
+                .collect();
+            std::thread::sleep(Duration::from_millis(100));
+            drop(taken);
+        }
+    }
+
+    /// Not a check of Veil: a way to find out why a test daemon once did
+    /// not come up within a minute, when the log of that run could not
+    /// say. It starts daemons in pairs at the same moment, without what
+    /// was added afterwards (one start at a time, ports picked together, a
+    /// second attempt), first with nothing else going on and then while
+    /// loopback ports are taken and given back around it. Every start that
+    /// fails is shown with how the daemon ended and the end of its log, and
+    /// fails the test: a failure here is the finding.
+    ///
+    /// `VEIL_DAEMON_ROUNDS` sets the number of pairs per part (20).
+    #[test]
+    #[ignore = "starts Monero daemons; run it with ./check.sh daemons"]
+    fn daemons_started_side_by_side_come_up() {
+        refuse_in_hosted_ci("starting a Monero daemon");
+        let binary = std::env::var_os("VEIL_MONEROD").expect("VEIL_MONEROD names the daemon");
+        let rounds: usize = std::env::var("VEIL_DAEMON_ROUNDS")
+            .ok()
+            .and_then(|text| text.parse().ok())
+            .unwrap_or(20);
+
+        let mut failures = 0;
+        for (part, busy) in [("nothing else going on", false), ("ports busy", true)] {
+            let stop = std::sync::atomic::AtomicBool::new(false);
+            let mut times = Vec::new();
+            std::thread::scope(|scope| {
+                if busy {
+                    scope.spawn(|| keep_ports_busy(&stop));
+                }
+                for round in 1..=rounds {
+                    for outcome in start_a_pair(&binary) {
+                        match outcome {
+                            Ok(time) => times.push(time),
+                            Err(failure) => {
+                                failures += 1;
+                                println!("{part}, pair {round}: FAILED: {failure}");
+                            }
+                        }
+                    }
+                }
+                stop.store(true, std::sync::atomic::Ordering::SeqCst);
+            });
+            times.sort();
+            let seconds = |time: Option<&Duration>| time.map_or(0.0, Duration::as_secs_f64);
+            println!(
+                "{part}: {} of {} daemons came up; time to answer: fastest {:.1}s, \
+                 middle {:.1}s, slowest {:.1}s (the limit is {}s)",
+                times.len(),
+                rounds * 2,
+                seconds(times.first()),
+                seconds(times.get(times.len() / 2)),
+                seconds(times.last()),
+                START_TIMEOUT.as_secs(),
+            );
+        }
+        assert_eq!(failures, 0, "{failures} daemons did not come up; see above");
     }
 
     #[test]

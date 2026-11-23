@@ -61,6 +61,11 @@ wallet library with the daemon, built from source into `~/veil-wallet-lib`
 patches in `native/wallet_lib/patches` change; it rebuilds only what
 changed, and the other levels say so when the library is out of date.
 
+`./check.sh daemons` is not a check of Veil. It starts the test daemon in
+pairs, many times, to find out why one may fail to come up, and shows how
+each one that fails ended. It is run when asked for, on the owner's
+machine.
+
 Every level but `offline` refuses to start on a CI runner. The tests behind
 those levels refuse as well, through `native/veil_test_guard`, so that
 running them some other way in CI fails before anything is started.

@@ -77,7 +77,8 @@ that cannot lose the user's funds.
     daemon does not come up it says how it ended and shows the end of its
     log.
   - `check.sh`: the checks by level (`offline`, `regtest`, `tor`,
-    `stagenet`, `bridges`) with a log; `setup` prepares a machine. With
+    `stagenet`, `bridges`) with a log; `setup` prepares a machine;
+    `daemons` is a diagnosis of the test daemon, not a check. With
     `--windows` in front, the levels are built for Windows on Linux and run
     as Windows programs through WSL.
 - `docs/`: concept, design, development rules.

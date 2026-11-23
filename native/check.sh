@@ -6,6 +6,7 @@
 #   ./check.sh tor         the tests that start the real Tor client
 #   ./check.sh stagenet    the command-line tool on stagenet, through Tor
 #   ./check.sh bridges     Tor through obfs4 and Snowflake bridges
+#   ./check.sh daemons     not a check: starts test daemons in pairs to see why one may not come up
 #   ./check.sh setup       once per machine: packages, Rust, the wallet library
 #
 # Several levels can be given at once: ./check.sh offline regtest tor
@@ -45,7 +46,7 @@ if [ "$windows" = 1 ]; then
   setup_hint="./check.sh --windows setup"
   # WSL hands a Windows program only the variables named here; /p turns a
   # Linux path into the Windows one.
-  export WSLENV="${WSLENV:+$WSLENV:}VEIL_WALLET_LIB/p:VEIL_MONEROD/p:VEIL_REQUIRE_WALLET_LIB:VEIL_TEST_NODES:VEIL_TEST_ONION:CI:GITHUB_ACTIONS"
+  export WSLENV="${WSLENV:+$WSLENV:}VEIL_WALLET_LIB/p:VEIL_MONEROD/p:VEIL_REQUIRE_WALLET_LIB:VEIL_DAEMON_ROUNDS:VEIL_TEST_NODES:VEIL_TEST_ONION:CI:GITHUB_ACTIONS"
 else
   out_dir="$lib_dir/out"
   wallet_lib="$out_dir/libmonero_wallet2_api_c.so"
@@ -55,7 +56,7 @@ else
 fi
 
 usage() {
-  sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 # cargo with the target of this run. An empty array needs this spelling in
@@ -190,6 +191,18 @@ level_bridges() {
     step cargo test -p veil_cli --locked --test bridges -- --include-ignored --nocapture
 }
 
+level_daemons() {
+  if [ ! -x "$monerod" ]; then
+    echo "error: no daemon in $out_dir. Run $setup_hint first." >&2
+    return 1
+  fi
+  export VEIL_MONEROD="$monerod"
+  # A diagnosis, not part of an acceptance run: a test daemon once failed to
+  # come up and the log could not say why. This starts daemons in pairs,
+  # many times, and shows how each one that fails ended.
+  step cargo_for_target test -p veil_test_guard --locked --lib -- --ignored --nocapture daemons_started_side_by_side_come_up
+}
+
 level_setup() {
   if ! command -v apt-get >/dev/null; then
     echo "error: setup knows Debian and Ubuntu only (on Windows: run it inside WSL2)." >&2
@@ -275,7 +288,7 @@ fi
 for level in "$@"; do
   case "$level" in
     offline) ;;
-    regtest | tor | stagenet | bridges | setup)
+    regtest | tor | stagenet | bridges | daemons | setup)
       if in_hosted_ci; then
         echo "refused: '$level' does not run in hosted CI. Only 'offline' does." >&2
         echo "See docs/development.md, \"Hosted CI and the hosting account\"." >&2
@@ -296,7 +309,7 @@ done
 
 if [ "$windows" = 1 ] && ! can_run_windows_programs; then
   case " $* " in
-    *" offline "* | *" regtest "* | *" tor "* | *" stagenet "*)
+    *" offline "* | *" regtest "* | *" tor "* | *" stagenet "* | *" daemons "*)
       echo "error: --windows runs the tests as Windows programs, which works inside" >&2
       echo "WSL on a Windows machine. This is not WSL." >&2
       exit 2
