@@ -55,6 +55,20 @@ else
   setup_hint="./check.sh setup"
 fi
 
+# Flutter, which brings Dart, for the app and for the Dart side of the core.
+# `setup` puts this exact version here and checks the download against the
+# checksum, which is the one published in Flutter's list of releases.
+flutter_version="3.47.9"
+flutter_sha256="25ed8c3c29d51a7353f2a944310b478af8214920639524b19c50a19e6c044c5a"
+flutter_dir="${VEIL_FLUTTER_DIR:-$HOME/veil-flutter}"
+
+# Prints the path of the Dart to use, or nothing.
+dart_program() {
+  if [ -x "$flutter_dir/flutter/bin/dart" ]; then
+    echo "$flutter_dir/flutter/bin/dart"
+  fi
+}
+
 usage() {
   sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'
 }
@@ -138,7 +152,38 @@ level_offline() {
   fi
   step cargo fmt --check &&
     step cargo_for_target clippy --workspace --all-targets --all-features --locked -- -D warnings &&
-    step cargo_for_target test --workspace --locked --no-fail-fast
+    step cargo_for_target test --workspace --locked --no-fail-fast &&
+    dart_side
+}
+
+# The Dart side of the core: its own tests, which also load the core as a
+# shared library and call it. Nothing in them opens a wallet or starts Tor.
+dart_side() {
+  if [ "$windows" = 1 ]; then
+    echo
+    echo "Dart side: not run with --windows; there is no Dart for Windows here."
+    return 0
+  fi
+  local dart
+  dart="$(dart_program)"
+  if [ -z "$dart" ]; then
+    echo
+    echo "Dart side: Flutter is not installed in $flutter_dir, its tests are skipped."
+    echo "Run ./check.sh setup to install it."
+    return 0
+  fi
+  step cargo build -p veil_core --locked || return 1
+  # Packages come from the registry the first time and from the local cache
+  # after that. Where cargo is told to stay offline, so is this.
+  local offline=()
+  if [ "${CARGO_NET_OFFLINE:-}" = true ]; then offline=(--offline); fi
+  (
+    cd "$here/../dart/veil_bridge" &&
+      step "$dart" pub get --enforce-lockfile "${offline[@]}" &&
+      step "$dart" format --output=none --set-exit-if-changed . &&
+      step "$dart" analyze --fatal-infos &&
+      step "$dart" test
+  )
 }
 
 level_regtest() {
@@ -211,7 +256,7 @@ level_setup() {
   local packages="git curl ca-certificates build-essential cmake ninja-build pkg-config
     libssl-dev libzmq3-dev libunbound-dev libsodium-dev libboost-all-dev
     libhidapi-dev libusb-1.0-0-dev libudev-dev libreadline-dev libexpat1-dev
-    libpgm-dev libnorm-dev obfs4proxy snowflake-client"
+    libpgm-dev libnorm-dev obfs4proxy snowflake-client xz-utils unzip"
   if [ "$windows" = 1 ]; then
     # The cross compiler, and what Monero's dependency build asks for.
     packages="git curl ca-certificates build-essential cmake ninja-build pkg-config
@@ -249,8 +294,32 @@ level_setup() {
     step rustup target add x86_64-pc-windows-gnu &&
       step "$here/wallet_lib/build.sh" "$lib_dir" --windows --with-daemon
   else
-    step "$here/wallet_lib/build.sh" "$lib_dir" --with-daemon
+    step "$here/wallet_lib/build.sh" "$lib_dir" --with-daemon &&
+      install_flutter
   fi
+}
+
+# Downloads the pinned Flutter, checks it, and unpacks it. Its tools report
+# usage to Google unless told not to; they are told not to.
+install_flutter() {
+  if [ -x "$flutter_dir/flutter/bin/dart" ] &&
+    [ "$(cat "$flutter_dir/installed-version" 2>/dev/null)" = "$flutter_version" ]; then
+    echo "Flutter $flutter_version: installed in $flutter_dir"
+    return 0
+  fi
+  echo
+  echo "--- installing Flutter $flutter_version into $flutter_dir"
+  local archive="$flutter_dir/flutter.tar.xz"
+  mkdir -p "$flutter_dir" && rm -rf "$flutter_dir/flutter" &&
+    curl --proto '=https' --tlsv1.2 -sSf -o "$archive" \
+      "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_$flutter_version-stable.tar.xz" &&
+    echo "$flutter_sha256  $archive" | sha256sum -c - &&
+    tar -xf "$archive" -C "$flutter_dir" &&
+    rm -f "$archive" &&
+    "$flutter_dir/flutter/bin/flutter" --disable-analytics >/dev/null &&
+    "$flutter_dir/flutter/bin/dart" --disable-analytics >/dev/null &&
+    echo "$flutter_version" >"$flutter_dir/installed-version" &&
+    echo "Flutter $flutter_version: installed, usage reporting off"
 }
 
 run_levels() {

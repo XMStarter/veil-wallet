@@ -5045,6 +5045,7 @@ dependencies = [
 name = "veil_core"
 version = "0.1.0"
 dependencies = [
+ "serde_json",
  "thiserror 2.0.21",
  "veil_test_guard",
  "veil_tor",

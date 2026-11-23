@@ -17,6 +17,7 @@
 //!   for every connection, and by default through a different node
 //!   ([`Nodes::separate`]).
 
+pub mod ffi;
 mod node;
 mod session;
 

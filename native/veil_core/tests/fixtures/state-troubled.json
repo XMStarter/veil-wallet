@@ -1,0 +1,35 @@
+{
+  "balance": {
+    "total": "0.00",
+    "unlocked": "0.00"
+  },
+  "history": [],
+  "last_problem": null,
+  "node": null,
+  "phase": {
+    "name": "failed",
+    "problem": {
+      "detail": "wrong password",
+      "kind": "wrong_password"
+    }
+  },
+  "rebuilt_from_keys": true,
+  "receive_address": null,
+  "revision": 7,
+  "send": {
+    "name": "outcome_unknown"
+  },
+  "sync": {
+    "name": "failed",
+    "problem": {
+      "detail": "Tor is not ready yet (45%)",
+      "kind": "tor_not_ready"
+    }
+  },
+  "syncs_ended": 1,
+  "tor": {
+    "message": "the network may be blocking Tor",
+    "percent": 45,
+    "state": "bootstrapping"
+  }
+}
