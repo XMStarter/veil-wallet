@@ -22,6 +22,28 @@ native/wallet_lib/build.sh ~/veil-wallet-lib --with-daemon
 This is the development and test build. It links against the system's
 libraries. Release builds will use monero_c's reproducible toolchain.
 
+### For Windows
+
+```bash
+native/wallet_lib/build.sh ~/veil-wallet-lib --windows --with-daemon
+```
+
+builds `libmonero_wallet2_api_c.dll` and `monerod.exe` on Linux, into
+`out/windows`. The cross compiler is the distribution's
+(`g++-mingw-w64-x86-64`). There are no system libraries to link against for
+Windows, so Monero's own dependency build compiles Boost, OpenSSL, ZeroMQ,
+Unbound, libsodium and the others from source, about ten minutes, and they
+are linked into the DLL. The result needs nothing but Windows itself: no
+other DLL has to be shipped beside it.
+
+monero_c's own Windows build was not used. It downloads a prebuilt compiler
+from its author's file server and builds some seventy tools before it gets
+to the library; the route above uses a compiler from the distribution and
+sources fetched over HTTPS and checked by hash.
+
+Because the Windows DLL contains those libraries, a build that ships it has
+to carry their licence texts as well as monero_c's and Monero's.
+
 ## Veil's patches
 
 Each one is a few lines. None changes how keys, addresses, or transactions

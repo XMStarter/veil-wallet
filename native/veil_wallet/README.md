@@ -26,6 +26,10 @@ See [`../wallet_lib`](../wallet_lib) for the library itself.
   and reports its fee. Nothing is broadcast until `commit`.
 - **Secrets are wiped.** Recovery phrases and passwords are zeroed in memory
   after use and never appear in debug output or error messages.
+- **On Windows, nothing rides in with the library.** Windows would look for
+  the DLLs a library needs in the current folder and along `PATH`, where
+  anyone could have put a file with the right name. The wallet library is
+  loaded so that only its own folder and the system folder are searched.
 
 ## Library behaviours this crate guards against
 

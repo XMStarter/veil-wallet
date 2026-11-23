@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds the Monero wallet library that Veil loads, from pinned sources.
 #
-#   build.sh <work-dir> [--with-daemon]
+#   build.sh <work-dir> [--with-daemon] [--windows]
 #
 # The result is <work-dir>/out/libmonero_wallet2_api_c.so and, with
 # --with-daemon, <work-dir>/out/monerod for regtest tests.
@@ -13,6 +13,14 @@
 #   pkg-config libssl-dev libzmq3-dev libunbound-dev libsodium-dev
 #   libboost-all-dev libhidapi-dev libusb-1.0-0-dev libudev-dev
 #   libreadline-dev libexpat1-dev libpgm-dev libnorm-dev
+#
+# With --windows the library is built for 64-bit Windows instead, on Linux,
+# into <work-dir>/out/windows/libmonero_wallet2_api_c.dll (and monerod.exe).
+# The libraries it needs do not come from the system then: Monero's own
+# dependency build compiles them from source for Windows, and they end up
+# inside the one DLL. That needs the distribution's cross compiler and
+# build tools:
+#   g++-mingw-w64-x86-64 autoconf automake libtool pkg-config python3 gperf
 set -euo pipefail
 
 # monero_c wraps wallet2 in a C interface and adds Polyseed support. Its
@@ -20,8 +28,20 @@ set -euo pipefail
 MONERO_C_REPO="https://github.com/MrCyjaneK/monero_c"
 MONERO_C_COMMIT="a59deb815a9c806c09bb434fb9017763e2e944f2" # tag v0.18.5.3-RC1
 
-work="${1:?usage: build.sh <work-dir> [--with-daemon]}"
-with_daemon="${2:-}"
+work="${1:?usage: build.sh <work-dir> [--with-daemon] [--windows]}"
+shift
+with_daemon=""
+windows=""
+for option in "$@"; do
+  case "$option" in
+    --with-daemon) with_daemon=yes ;;
+    --windows) windows=yes ;;
+    *)
+      echo "error: unknown option $option" >&2
+      exit 2
+      ;;
+  esac
+done
 here="$(cd "$(dirname "$0")" && pwd)"
 jobs="$(nproc 2>/dev/null || echo 2)"
 
@@ -70,19 +90,54 @@ if [ "$(cat .veil-patched 2>/dev/null)" != "$patch_set" ]; then
   echo "$patch_set" > .veil-patched
 fi
 
-cmake -S monero_libwallet2_api_c -B "$work/build" -G Ninja \
-  -DMONERO_FLAVOR=monero -DHOST_ABI=x86_64-linux-gnu -DOUTPUT_MODE=SHARED \
-  -DCMAKE_BUILD_TYPE=Release -DUSE_DEVICE_TREZOR=OFF -DBUILD_TESTS=OFF \
-  -DMANUAL_SUBMODULES=1 -DBUILD_DOCUMENTATION=OFF
-cmake --build "$work/build" -j"$jobs"
+if [ -n "$windows" ]; then
+  host=x86_64-w64-mingw32
+  depends="$src/monero/contrib/depends"
+  # Monero's dependency build: Boost, OpenSSL, ZeroMQ, Unbound and the rest,
+  # compiled for Windows from sources it downloads and checks by hash. Monero
+  # needs the cross compiler in its POSIX-threads form, which the
+  # distribution installs beside the default one.
+  make -C "$depends" HOST="$host" -j"$jobs" \
+    mingw32_CC="$host-gcc-posix" mingw32_CXX="$host-g++-posix"
 
-mkdir -p "$work/out"
-cp "$work/build/libmonero_wallet2_api_c.so" "$work/out/"
-# Lets check.sh tell a library built from an older patch set from this one.
-echo "$patch_set" > "$work/out/veil-patches.sha256"
-if [ "$with_daemon" = "--with-daemon" ]; then
-  cmake --build "$work/build" --target daemon -j"$jobs"
-  cp "$work/build/bin/monerod" "$work/out/"
+  build="$work/build-windows"
+  out="$work/out/windows"
+  # Three things the wallet library's own build files leave out in this
+  # setup: where the dependencies' libraries are; that Polyseed is linked in
+  # statically (without the definition its functions are looked for in a
+  # DLL that does not exist); and -static, so that the compiler's own
+  # thread library goes into the DLL too and the result needs nothing but
+  # Windows itself.
+  cmake -S monero_libwallet2_api_c -B "$build" -G Ninja \
+    -DCMAKE_TOOLCHAIN_FILE="$depends/$host/share/toolchain.cmake" \
+    -DMONERO_FLAVOR=monero -DHOST_ABI="$host" -DOUTPUT_MODE=SHARED \
+    -DCMAKE_BUILD_TYPE=Release -DUSE_DEVICE_TREZOR=OFF -DBUILD_TESTS=OFF \
+    -DMANUAL_SUBMODULES=1 -DBUILD_DOCUMENTATION=OFF \
+    -DCMAKE_SHARED_LINKER_FLAGS="-L$depends/$host/lib -static" \
+    -DCMAKE_EXE_LINKER_FLAGS="-L$depends/$host/lib -static" \
+    -DCMAKE_C_FLAGS="-DPOLYSEED_STATIC" -DCMAKE_CXX_FLAGS="-DPOLYSEED_STATIC"
+  cmake --build "$build" -j"$jobs"
+  library="libmonero_wallet2_api_c.dll"
+  daemon="monerod.exe"
+else
+  build="$work/build"
+  out="$work/out"
+  cmake -S monero_libwallet2_api_c -B "$build" -G Ninja \
+    -DMONERO_FLAVOR=monero -DHOST_ABI=x86_64-linux-gnu -DOUTPUT_MODE=SHARED \
+    -DCMAKE_BUILD_TYPE=Release -DUSE_DEVICE_TREZOR=OFF -DBUILD_TESTS=OFF \
+    -DMANUAL_SUBMODULES=1 -DBUILD_DOCUMENTATION=OFF
+  cmake --build "$build" -j"$jobs"
+  library="libmonero_wallet2_api_c.so"
+  daemon="monerod"
 fi
-echo "built: $work/out"
-ls -l "$work/out"
+
+mkdir -p "$out"
+cp "$build/$library" "$out/"
+# Lets check.sh tell a library built from an older patch set from this one.
+echo "$patch_set" > "$out/veil-patches.sha256"
+if [ -n "$with_daemon" ]; then
+  cmake --build "$build" --target daemon -j"$jobs"
+  cp "$build/bin/$daemon" "$out/"
+fi
+echo "built: $out"
+ls -l "$out"

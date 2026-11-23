@@ -55,6 +55,42 @@ const EXPECTED_CONSTANTS: &[(&[u8], c_int)] = &[
     ),
 ];
 
+/// Loads the shared library at `path`.
+///
+/// # Safety
+///
+/// Loading a library runs its initialisers.
+#[cfg(not(windows))]
+unsafe fn open_library(path: &Path) -> Result<libloading::Library, libloading::Error> {
+    libloading::Library::new(path)
+}
+
+/// Loads the shared library at `path`.
+///
+/// Windows looks for the other libraries a library needs in a list of
+/// places that by default includes the current folder and everything on
+/// `PATH`. A file with the right name dropped into any of them would be
+/// loaded into the wallet. Here only the wallet library's own folder and
+/// the system folder are searched.
+///
+/// # Safety
+///
+/// Loading a library runs its initialisers.
+#[cfg(windows)]
+unsafe fn open_library(path: &Path) -> Result<libloading::Library, libloading::Error> {
+    use libloading::os::windows::{
+        Library, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR, LOAD_LIBRARY_SEARCH_SYSTEM32,
+    };
+    // The restricted search needs a full path. If the path cannot be made
+    // absolute, the load below fails on it and reports that.
+    let full = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+    Library::load_with_flags(
+        full,
+        LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32,
+    )
+    .map(Into::into)
+}
+
 /// The loaded wallet library. Cheap to clone; the library stays loaded for
 /// as long as any clone or any wallet created from it is alive.
 #[derive(Clone)]
@@ -76,7 +112,7 @@ impl WalletLibrary {
 
         // SAFETY: loading a shared library runs its initialisers. The path is
         // chosen by the app and points at the library it ships.
-        let library = unsafe { libloading::Library::new(path) }.map_err(|e| fail(e.to_string()))?;
+        let library = unsafe { open_library(path) }.map_err(|e| fail(e.to_string()))?;
 
         for (symbol, expected) in EXPECTED_CONSTANTS {
             // SAFETY: each symbol is declared in the library's header as

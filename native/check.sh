@@ -10,6 +10,12 @@
 #
 # Several levels can be given at once: ./check.sh offline regtest tor
 #
+# With --windows in front, the same levels are built for Windows and run as
+# Windows programs: ./check.sh --windows offline regtest tor stagenet. That
+# works inside WSL, which starts Windows programs for a Linux shell; nothing
+# has to be installed on the Windows side. `./check.sh --windows setup`
+# prepares it: a cross compiler and the wallet library built for Windows.
+#
 # `offline` runs anywhere, hosted CI included. Every other level refuses to
 # start in hosted CI: see docs/development.md, "Hosted CI and the hosting
 # account". They are for the owner's machine.
@@ -24,12 +30,47 @@ set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 cd "$here"
 
+windows=0
+if [ "${1:-}" = "--windows" ]; then
+  windows=1
+  shift
+fi
+
 lib_dir="${VEIL_WALLET_LIB_DIR:-$HOME/veil-wallet-lib}"
-wallet_lib="$lib_dir/out/libmonero_wallet2_api_c.so"
-monerod="$lib_dir/out/monerod"
+if [ "$windows" = 1 ]; then
+  out_dir="$lib_dir/out/windows"
+  wallet_lib="$out_dir/libmonero_wallet2_api_c.dll"
+  monerod="$out_dir/monerod.exe"
+  cargo_target=(--target x86_64-pc-windows-gnu)
+  setup_hint="./check.sh --windows setup"
+  # WSL hands a Windows program only the variables named here; /p turns a
+  # Linux path into the Windows one.
+  export WSLENV="${WSLENV:+$WSLENV:}VEIL_WALLET_LIB/p:VEIL_MONEROD/p:VEIL_REQUIRE_WALLET_LIB:VEIL_TEST_NODES:VEIL_TEST_ONION:CI:GITHUB_ACTIONS"
+else
+  out_dir="$lib_dir/out"
+  wallet_lib="$out_dir/libmonero_wallet2_api_c.so"
+  monerod="$out_dir/monerod"
+  cargo_target=()
+  setup_hint="./check.sh setup"
+fi
 
 usage() {
-  sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+# cargo with the target of this run. An empty array needs this spelling in
+# older shells.
+cargo_for_target() {
+  local command="$1"
+  shift
+  cargo "$command" ${cargo_target[@]+"${cargo_target[@]}"} "$@"
+}
+
+# True where a Linux shell can start Windows programs.
+can_run_windows_programs() {
+  [ -e /proc/sys/fs/binfmt_misc/WSLInterop ] ||
+    [ -e /proc/sys/fs/binfmt_misc/WSLInterop-late ] ||
+    grep -qi microsoft /proc/sys/kernel/osrelease 2>/dev/null
 }
 
 # True on a CI runner. The same test as native/veil_test_guard.
@@ -60,7 +101,7 @@ wallet_lib_state() {
     return
   fi
   local built wanted
-  built="$(cat "$lib_dir/out/veil-patches.sha256" 2>/dev/null || true)"
+  built="$(cat "$out_dir/veil-patches.sha256" 2>/dev/null || true)"
   wanted="$(cat wallet_lib/patches/monero/*.patch wallet_lib/patches/monero_c/*.patch | sha256sum | cut -d' ' -f1)"
   if [ "$built" = "$wanted" ]; then echo current; else echo stale; fi
 }
@@ -70,12 +111,12 @@ require_wallet_lib() {
   case "$(wallet_lib_state)" in
     current) ;;
     stale)
-      echo "error: the wallet library in $lib_dir/out was built from older patches." >&2
-      echo "Run ./check.sh setup again; it rebuilds only what changed." >&2
+      echo "error: the wallet library in $out_dir was built from older patches." >&2
+      echo "Run $setup_hint again; it rebuilds only what changed." >&2
       return 1
       ;;
     *)
-      echo "error: no wallet library in $lib_dir/out. Run ./check.sh setup first." >&2
+      echo "error: no wallet library in $out_dir. Run $setup_hint first." >&2
       return 1
       ;;
   esac
@@ -90,34 +131,34 @@ level_offline() {
     echo "wallet library: $VEIL_WALLET_LIB"
   elif [ "$(wallet_lib_state)" = stale ]; then
     echo "wallet library: built from older patches and not used; the tests that need"
-    echo "it are skipped. Run ./check.sh setup to rebuild it."
+    echo "it are skipped. Run $setup_hint to rebuild it."
   else
     echo "wallet library: not built, the tests that need it are skipped"
   fi
   step cargo fmt --check &&
-    step cargo clippy --workspace --all-targets --all-features --locked -- -D warnings &&
-    step cargo test --workspace --locked
+    step cargo_for_target clippy --workspace --all-targets --all-features --locked -- -D warnings &&
+    step cargo_for_target test --workspace --locked
 }
 
 level_regtest() {
   require_wallet_lib || return 1
   if [ ! -x "$monerod" ]; then
-    echo "error: no daemon in $lib_dir/out. Run ./check.sh setup first." >&2
+    echo "error: no daemon in $out_dir. Run $setup_hint first." >&2
     return 1
   fi
   export VEIL_MONEROD="$monerod"
   # The wallet alone, then the wallet behind the stand-in for Tor.
-  step cargo test -p veil_wallet --features regtest --locked &&
-    step cargo test -p veil_core --features regtest --locked
+  step cargo_for_target test -p veil_wallet --features regtest --locked &&
+    step cargo_for_target test -p veil_core --features regtest --locked
 }
 
 level_tor() {
   require_wallet_lib || return 1
   # Lifecycle and fail-closed behaviour, a real bootstrap with a connection
   # to an onion service, then a wallet synchronising with a public node.
-  step cargo test -p veil_tor --locked --lib -- --include-ignored &&
-    step cargo test -p veil_tor --locked --test network -- --include-ignored --nocapture &&
-    step cargo test -p veil_core --locked --test network -- --include-ignored --nocapture
+  step cargo_for_target test -p veil_tor --locked --lib -- --include-ignored &&
+    step cargo_for_target test -p veil_tor --locked --test network -- --include-ignored --nocapture &&
+    step cargo_for_target test -p veil_core --locked --test network -- --include-ignored --nocapture
 }
 
 level_stagenet() {
@@ -125,10 +166,15 @@ level_stagenet() {
   # The command-line tool creates a wallet and synchronises it with a public
   # stagenet node through Tor. A new wallet scans about a month of blocks,
   # so this takes a while.
-  step cargo test -p veil_cli --locked --test stagenet -- --include-ignored --nocapture
+  step cargo_for_target test -p veil_cli --locked --test stagenet -- --include-ignored --nocapture
 }
 
 level_bridges() {
+  if [ "$windows" = 1 ]; then
+    echo "error: the bridges level is not available for Windows yet: there are no" >&2
+    echo "transport programs for Windows to test with." >&2
+    return 1
+  fi
   require_wallet_lib || return 1
   local program
   for program in obfs4proxy snowflake-client; do
@@ -153,6 +199,12 @@ level_setup() {
     libssl-dev libzmq3-dev libunbound-dev libsodium-dev libboost-all-dev
     libhidapi-dev libusb-1.0-0-dev libudev-dev libreadline-dev libexpat1-dev
     libpgm-dev libnorm-dev obfs4proxy snowflake-client"
+  if [ "$windows" = 1 ]; then
+    # The cross compiler, and what Monero's dependency build asks for.
+    packages="git curl ca-certificates build-essential cmake ninja-build pkg-config
+      g++-mingw-w64-x86-64 nasm autoconf automake libtool python3 gperf bzip2
+      xz-utils bc bsdmainutils patch unzip"
+  fi
   local package missing=""
   for package in $packages; do
     if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"; then
@@ -179,8 +231,13 @@ level_setup() {
   fi
   export PATH="$HOME/.cargo/bin:$PATH"
   # The first cargo call installs the toolchain pinned in rust-toolchain.toml.
-  step cargo --version &&
+  step cargo --version || return 1
+  if [ "$windows" = 1 ]; then
+    step rustup target add x86_64-pc-windows-gnu &&
+      step "$here/wallet_lib/build.sh" "$lib_dir" --windows --with-daemon
+  else
     step "$here/wallet_lib/build.sh" "$lib_dir" --with-daemon
+  fi
 }
 
 run_levels() {
@@ -189,6 +246,9 @@ run_levels() {
   echo "date:    $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
   echo "commit:  $(git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)$(git diff --quiet HEAD 2>/dev/null || echo ' (with local changes)')"
   echo "system:  $(uname -sr)"
+  if [ "$windows" = 1 ]; then
+    echo "target:  Windows (x86_64-pc-windows-gnu), run as Windows programs"
+  fi
   echo "rustc:   $(rustc --version 2>/dev/null || echo 'not installed')"
   for level in "$@"; do
     echo
@@ -234,9 +294,21 @@ for level in "$@"; do
   esac
 done
 
+if [ "$windows" = 1 ] && ! can_run_windows_programs; then
+  case " $* " in
+    *" offline "* | *" regtest "* | *" tor "* | *" stagenet "*)
+      echo "error: --windows runs the tests as Windows programs, which works inside" >&2
+      echo "WSL on a Windows machine. This is not WSL." >&2
+      exit 2
+      ;;
+  esac
+fi
+
 export PATH="$HOME/.cargo/bin:$PATH"
 mkdir -p target/check-logs
-log="target/check-logs/$(date -u '+%Y%m%d-%H%M%S')-$(IFS=-; echo "$*").log"
+prefix=""
+if [ "$windows" = 1 ]; then prefix="windows-"; fi
+log="target/check-logs/$(date -u '+%Y%m%d-%H%M%S')-$prefix$(IFS=-; echo "$*").log"
 run_levels "$@" 2>&1 | tee "$log"
 status="${PIPESTATUS[0]}"
 echo

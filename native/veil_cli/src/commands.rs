@@ -452,7 +452,7 @@ fn find_wallet_library(named: Option<PathBuf>) -> Result<PathBuf, Fail> {
     const FILE_NAMES: &[&str] = &[
         "libmonero_wallet2_api_c.so",
         "libmonero_wallet2_api_c.dylib",
-        "monero_wallet2_api_c.dll",
+        "libmonero_wallet2_api_c.dll",
     ];
     if let Some(path) = named {
         return Ok(path);
@@ -468,7 +468,9 @@ fn find_wallet_library(named: Option<PathBuf>) -> Result<PathBuf, Fail> {
         places.push(dir);
     }
     if let Some(home) = std::env::home_dir() {
-        places.push(home.join("veil-wallet-lib").join("out"));
+        let built = home.join("veil-wallet-lib").join("out");
+        places.push(built.join("windows"));
+        places.push(built);
     }
     for place in &places {
         for name in FILE_NAMES {

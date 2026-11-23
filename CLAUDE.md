@@ -71,7 +71,9 @@ that cannot lose the user's funds.
     daemon; fails the test on a CI runner. A new test of that kind calls it
     too.
   - `check.sh`: the checks by level (`offline`, `regtest`, `tor`,
-    `stagenet`, `bridges`) with a log; `setup` prepares a machine.
+    `stagenet`, `bridges`) with a log; `setup` prepares a machine. With
+    `--windows` in front, the levels are built for Windows on Linux and run
+    as Windows programs through WSL.
 - `docs/`: concept, design, development rules.
 - `.github/workflows`: hosted CI, builds and offline tests only. Pin
   actions to commit hashes.
@@ -101,14 +103,20 @@ passed at all five levels. Tor connected through obfs4 and through
 Snowflake, did not connect when its only bridge did not exist, and the
 tool synchronised a wallet through obfs4 bridges, about three and a half
 times slower than directly. WebTunnel is configured like the other two but
-cannot be tried yet. Not done: the wallet library for Windows (step 1.5,
-next), the app. See the build plan in `docs/concept.md`.
+cannot be tried yet. Step 1.5, the wallet library for Windows, is written:
+`wallet_lib/build.sh --windows` cross-builds the DLL and `monerod.exe`, and
+the whole workspace and its tests compile for Windows on Linux. None of it
+has run on Windows yet; that is the owner's acceptance run with
+`./check.sh --windows`. Not done: the app. See the build plan in
+`docs/concept.md`.
 
 ## Environment notes
 
 - Tests on a private chain, over Tor, and on stagenet run on the owner's
-  machine: Windows, inside WSL2 (Ubuntu 24.04) until the wallet library
-  builds for Windows. The owner runs them and sends the log. Tor connects
+  machine: Windows, inside WSL2 (Ubuntu 24.04), as Linux programs and with
+  `--windows` as Windows programs. The owner runs them and sends the log.
+  A cloud session can build for Windows but cannot run the result: Wine
+  does not start there. Tor connects
   from that machine without bridges, so the `bridges` level shows there
   that a bridged connection works, not that it gets through a block.
 - What a cloud session can reach depends on its environment's network
