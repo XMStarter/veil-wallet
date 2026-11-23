@@ -157,15 +157,15 @@ Dart side (`dart/veil_bridge`). The owner's acceptance run passed at the
 Flutter installed by `./check.sh setup` and the Dart tests calling the
 real library on Linux. The Dart side has not been run against the Windows
 build of the library: there is no Dart for Windows in that setup. Next is
-step 3.3, the app shell, which also brings Flutter to hosted CI. It is
-written and not yet accepted: the Flutter project in `app/` with the
+step 3.3, the app shell, which also brings Flutter to hosted CI. On the
+owner's machine it is accepted: the Flutter project in `app/` with the
 visual language of the design document, English and Russian, the start
-screen, and tests that draw it. In a cloud session it passes its tests,
-builds for Linux, and runs on a virtual display. On the owner's machine
-the `offline` level passed with it, the Linux build included; whether the
-window opens there has not been reported yet. It has not run in hosted CI,
-where the Windows build and the Dart side against the Windows library
-will run for the first time. Not done: the app. See the build plan in
+screen, and tests that draw it. The `offline` level passed there with the
+app's checks and its Linux build, and the built app opened its window
+under WSL, in English, which is the language of that WSL. It has not run
+in hosted CI yet, where the Windows build and the Dart side against the
+Windows library will run for the first time; that happens with its pull
+request. Next is step 3.4, the start flow. Not done: the app. See the build plan in
 `docs/concept.md`.
 
 ## Environment notes
