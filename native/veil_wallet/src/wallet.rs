@@ -259,7 +259,7 @@ impl Wallet {
         // A wrong password is by far the usual reason, and no reason to
         // touch any file.
         if matches!(&first, Error::Wallet(message) if message.contains("invalid password")) {
-            return Err(first);
+            return Err(Error::WrongPassword);
         }
         let mut keys_file = path.as_os_str().to_owned();
         keys_file.push(".keys");

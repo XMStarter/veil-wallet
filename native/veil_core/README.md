@@ -25,6 +25,32 @@ is the only way the rest of the app reaches a wallet.
 `sync_with_progress` reports about once a second how far scanning has come,
 so that an interface can show a long first sync moving.
 
+## For an app: a session
+
+A `Core` waits for its node, sometimes for minutes, and an interface cannot
+wait with it. A `Session` runs the core on a thread of its own:
+
+```rust
+let session = Session::start(config, WalletSource::Open, password);
+// Returns at once. Draw from session.state() whenever needed:
+// phase, Tor, synchronisation, balance, receive address, history, send.
+session.sync();
+session.prepare_send(&to, amount); // state.send becomes Review { fee, .. }
+session.confirm_send();            // or cancel_send()
+```
+
+Commands return at once and their outcome appears in the state, which
+carries a revision number that goes up with every change. Problems are
+given as a kind (`WrongPassword`, `TorNotReady`, `NoNode`,
+`SendOutcomeUnknown`, and so on) for the interface to put into its own
+words, with the English text as a detail.
+
+The session decides when things happen and nothing else: it synchronises
+on command, and on a timer if told to; it saves after every
+synchronisation and every send; while a transaction is under review it
+takes no other command but closing. Closing, or dropping the session,
+saves the wallet and stops Tor.
+
 ## When a connection is lost
 
 - **In the middle of a synchronisation.** While it downloads blocks, the
@@ -72,7 +98,9 @@ node block until the node has answered.
 |---|---|---|
 | Node names; Tor not ready; the wallet asks for its node by name through the sync listener only; no listeners, no connection; a web server is not a node | The wallet library for all but the first. No network: Tor is replaced by `veil_tor`'s stand-in. | `../check.sh offline` |
 | A connection cut in the middle of a synchronisation, with the node still there, with the node gone, and with Tor gone: what is reported, that the next node is tried, and that the wallet is unharmed. The node is a fake that knows its version and height and has no blocks | The wallet library. No network. | `../check.sh offline` |
+| The session: a new wallet, the same wallet opened again, a wrong password, a restore, a synchronisation that fails, the timer, the cap on addresses, a send that cannot be built, a damaged data file | The wallet library. No network. | `../check.sh offline` |
 | A wallet behind the stand-in on a private chain: synchronises through one listener, sends through the other, and stays silent in between | The wallet library and a Monero daemon | `../check.sh regtest` |
+| The session on a private chain: receives, reviews a send and cancels it, sends, loses the answer to a send and finds it in the history, and shows the same in a new session | The wallet library and a Monero daemon | `../check.sh regtest` |
 | On a private chain: a download cut once is retried; a node that disappears is reported and another node finishes; a send whose answer is lost is reported as unknown and turns up in the history, paid once | The wallet library and a Monero daemon | `../check.sh regtest` |
 | A new wallet synchronises with a public onion node over the real Tor network | The wallet library and the Tor network | `../check.sh tor` |
 
@@ -86,4 +114,7 @@ runner they fail before starting anything.
   still open.
 - Keeping a transaction whose outcome is unknown, to show it as "maybe
   sent" and to send the same one again instead of a new one.
-- A C interface for the app.
+- Stopping a synchronisation that is under way. Closing a session waits
+  for it, which on a first synchronisation can be minutes.
+- Changing the password, and the other things the Settings screen needs.
+- A C interface for the app: step 3.2 of the build plan.

@@ -41,6 +41,10 @@ pub enum Error {
     #[error("the node is still synchronising ({height} of {target})")]
     NodeSyncing { height: u64, target: u64 },
 
+    /// The password does not open this wallet.
+    #[error("wrong password")]
+    WrongPassword,
+
     /// A wallet file already exists at the target path.
     #[error("a wallet already exists at {0}")]
     WalletExists(PathBuf),

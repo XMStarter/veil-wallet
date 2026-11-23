@@ -59,7 +59,8 @@ that cannot lose the user's funds.
     README lists library behaviours the crate guards against; read it
     before changing `wallet.rs`.
   - `veil_core`: joins the two. The app reaches a wallet only through it;
-    it points the wallet at Tor's listeners and nowhere else. Tests replace
+    it points the wallet at Tor's listeners and nowhere else. `Session` is
+    what an interface talks to: the core on its own thread. Tests replace
     Tor with `veil_tor`'s stand-in (the `stand-in` feature, never in an app
     build), which can also cut a connection at a chosen point. The fake
     node in its tests is a few lines of test code that answer a node's
@@ -134,8 +135,12 @@ against a limit of sixty, so neither a race for ports nor a slow start
 showed. It has not happened again, and the daemon helper reports it if it
 does. The table of what
 is tested where is in `docs/development.md`, "Reliability tests". Next is
-step 3, the user interface, in the eight parts listed in the build plan;
-none is started. Not done: the app. See the build plan in
+step 3, the user interface, in the eight parts listed in the build plan.
+Step 3.1 is written and not yet accepted: `veil_core::Session` runs the
+core on a thread of its own for an app, with commands that return at once
+and a state to draw from. Its tests without a network pass in a cloud
+session; its scenario on a private chain has never run and waits for the
+owner's acceptance run. Not done: the app. See the build plan in
 `docs/concept.md`.
 
 ## Environment notes

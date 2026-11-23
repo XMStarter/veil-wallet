@@ -18,6 +18,7 @@
 //!   ([`Nodes::separate`]).
 
 mod node;
+mod session;
 
 use veil_tor::{Purpose, State, Status, TorService, Transport};
 use veil_wallet::{
@@ -26,6 +27,10 @@ use veil_wallet::{
 };
 
 pub use node::{Nodes, OnionNode};
+pub use session::{
+    Phase, Problem, ProblemKind, SendState, Session, SessionConfig, SessionState, SyncState,
+    WalletSource,
+};
 
 /// Why a call on the core failed.
 #[derive(Debug, thiserror::Error)]
