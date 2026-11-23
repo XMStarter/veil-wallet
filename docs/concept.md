@@ -110,11 +110,29 @@ See [design.md](design.md) for the visual language.
 
 ## Build plan
 
+Each step is written with tests that need no network, and ends with an
+acceptance run on the owner's machine before the next step starts. What may
+run where is set out in [development.md](development.md).
+
 1. **Core without a user interface.** `wallet2` plus Tor as a command-line
    tool on the Monero stagenet: create, restore, sync over `.onion`, send.
+   1. *Checks in one command.* A script with the levels `offline`,
+      `regtest`, `tor`, and `stagenet` that writes a log. The levels that
+      touch a network refuse to start inside hosted CI. First hosted CI run,
+      on Linux and Windows.
+   2. *Wallet through Tor.* The piece that points the wallet library at the
+      Tor component's SOCKS listeners and fails closed without them. Tested
+      against a stand-in proxy first, then on a private chain and over Tor.
+   3. *Command-line tool* on stagenet.
+   4. *Bridges:* obfs4, Snowflake, WebTunnel. This moves ahead of step 1.2 if
+      the owner's machine cannot reach Tor without them.
+   5. *Wallet library for Windows.* Until it exists, wallet tests on Windows
+      run inside WSL2. It has to be done before step 3.
 2. **Reliability tests.** Automated tests for restoring, and for behaviour
    when Tor drops, the node changes, or the process is killed in the middle
-   of a write. The wallet file is saved atomically.
+   of a write. The wallet file is saved atomically. The scenarios run
+   against stand-ins without a network, and are repeated on the real network
+   on the owner's machine.
 3. **User interface** on top of the finished core, desktop first.
 4. **Android.** Background sync through a foreground service, battery
    restrictions, a build without Google services.

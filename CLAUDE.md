@@ -28,13 +28,23 @@ that cannot lose the user's funds.
 - Do not commit secrets, signing keys, or wallet files.
 - Do not use real funds in tests. Use a local chain or stagenet.
 - Do not add settings that let the user weaken privacy defaults.
-- Do not add a hosted CI job that connects to the Tor network or starts a
-  Monero daemon. Hosted CI compiles and runs offline tests, nothing else.
+- Do not add a CI job that connects to the Tor network or starts a Monero
+  daemon, on GitHub's runners or on a self-hosted one. CI compiles and runs
+  offline tests, nothing else. The full list of what a workflow may do is in
+  `docs/development.md`, "Hosted CI and the hosting account".
+- Do not start a Monero daemon or connect to the Tor network in a cloud
+  session unless the owner says so for that session.
 
 ## Workflow
 
 - One task, one branch. Do not push to `main` directly.
-- Open a pull request only when the owner asks for one.
+- Open a pull request only when the owner asks for one. A pull request
+  starts hosted CI.
+- Workflows start on pull requests and by hand only. Do not add `push` or
+  `schedule` triggers, and do not re-run a failed job to get it to pass.
+- Group pushes. Do not create bursts of automated activity on GitHub.
+- A step of the build plan is done when the owner's acceptance run passes.
+  Ask for that run at the end of a step, not after every commit.
 - Run the tests before committing and report failures as they are.
 - When behaviour changes, update the documents in `docs/` in the same change.
 - The project is licensed under MIT. Keep [DISCLAIMER.md](DISCLAIMER.md)
@@ -66,16 +76,21 @@ for the tests that start a Tor client. With the wallet library built, also
 Done: the Tor component, and the wallet core (create, restore, receive on
 fresh addresses, send) tested on a private chain. Not done: the piece that
 connects the two and the command-line tool on stagenet, bridges, the app.
-See the build plan in `docs/concept.md`.
+See the build plan in `docs/concept.md`. Next is step 1.1: the check script
+and the first hosted CI run. Hosted CI has not run in this repository yet.
 
 ## Environment notes
 
-- Cloud sessions cannot reach the Tor network, `downloads.getmonero.org`, or
-  GitHub release downloads of other repositories. Anything that needs them
-  runs on a machine the project controls, not in hosted CI.
+- Tests on a private chain, over Tor, and on stagenet run on the owner's
+  machine: Windows, inside WSL2 until the wallet library builds for Windows.
+  The owner runs them and sends the log.
+- What a cloud session can reach depends on its environment's network
+  settings, which the owner can change. The rule above about Tor and the
+  daemon holds either way.
 - The wallet library can be built in a cloud session from source with
   `native/wallet_lib/build.sh` (about half an hour; install the packages
-  listed at the top of the script first).
+  listed at the top of the script first). Building it is fine; `monerod`
+  from that build is not started there.
 - CI results are readable from cloud sessions with `gh api`:
   `repos/XMStarter/veil-wallet/commits/<ref>/check-runs` for the outcome,
   `repos/XMStarter/veil-wallet/actions/jobs/<id>/logs` for a job's log.
