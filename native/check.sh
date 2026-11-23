@@ -325,13 +325,16 @@ app_side() {
   if on_windows; then system=windows; fi
   local offline=()
   if [ "${CARGO_NET_OFFLINE:-}" = true ]; then offline=(--offline); fi
+  # Packages are fetched once, by the first command, and exactly the
+  # versions in the lock file. The tool is also kept from asking its
+  # publisher whether a newer Flutter exists: the version is pinned.
   (
     cd "$here/../app" &&
-      step "$flutter" pub get --enforce-lockfile "${offline[@]}" &&
+      step "$flutter" --no-version-check pub get --enforce-lockfile "${offline[@]}" &&
       step "$dart" format --output=none --set-exit-if-changed lib test &&
-      step "$flutter" analyze --fatal-infos &&
-      step "$flutter" test &&
-      step "$flutter" build "$system" --release
+      step "$flutter" --no-version-check analyze --no-pub --fatal-infos &&
+      step "$flutter" --no-version-check test --no-pub &&
+      step "$flutter" --no-version-check build "$system" --release --no-pub
   )
 }
 
