@@ -26,7 +26,7 @@ mod stand_in;
 pub use bridges::{Bridges, TransportProgram};
 pub use service::{Purpose, State, Status, TorConfig, TorError, TorService};
 #[cfg(feature = "stand-in")]
-pub use stand_in::{Request, StandIn};
+pub use stand_in::{AfterCut, CutPoint, Request, StandIn};
 
 /// What the rest of Veil uses to reach the network: loopback SOCKS listeners
 /// and their state.
