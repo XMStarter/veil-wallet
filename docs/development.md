@@ -51,10 +51,12 @@ machine. The log of that run is the evidence that the step is done.
 | `regtest` | The wallet on a private chain, alone and behind a stand-in for Tor. Starts a Monero daemon. | The owner's machine |
 | `tor` | The tests that start the real Tor client, a connection to an onion service, and a new wallet synchronising with a public node. | The owner's machine |
 | `stagenet` | The command-line tool: a new wallet synchronises with a public stagenet node through Tor. | The owner's machine |
+| `bridges` | Tor through obfs4 and Snowflake bridges, a bridge that does not exist, and the tool synchronising through bridges. | The owner's machine |
 
 `./check.sh setup` prepares a Debian or Ubuntu machine once: system
-packages, Rust, and the wallet library with the daemon, built from source
-into `~/veil-wallet-lib` (about half an hour). Run it again when the
+packages, among them the transport programs for bridges, Rust, and the
+wallet library with the daemon, built from source into `~/veil-wallet-lib`
+(about half an hour). Run it again when the
 patches in `native/wallet_lib/patches` change; it rebuilds only what
 changed, and the other levels say so when the library is out of date.
 
@@ -78,7 +80,7 @@ cd veil-wallet/native && ./check.sh setup
 For each acceptance run, on the branch being accepted:
 
 ```bash
-./check.sh offline regtest tor stagenet
+./check.sh offline regtest tor stagenet bridges
 ```
 
 The last line of the output names the log file to send.

@@ -48,6 +48,21 @@ will ship.
 `--node host.onion:port` names a node; give it twice to send through a
 different node than the one synchronised with.
 
+## Bridges
+
+On a network that blocks Tor:
+
+```bash
+veil sync --bridges bridges.txt
+```
+
+`bridges.txt` holds bridge lines, one per line, as given out at
+<https://bridges.torproject.org> or by Tor Browser. The tool looks for an
+installed program for the transports they use (`lyrebird` or `obfs4proxy`
+for obfs4, `snowflake-client` for Snowflake); `--transport obfs4=/full/path`
+names one instead. The setting is not remembered: give it with every
+`sync` and `send`.
+
 ## Trying a send
 
 A send needs coins. Stagenet faucets are linked from
@@ -62,8 +77,9 @@ the same wallet from `veil address --new`.
 |---|---|---|
 | The command line; create, restore, addresses, the password, no overwriting; no Tor without a network command | The wallet library for all but the command line | `../check.sh offline` |
 | A new wallet synchronises on stagenet through Tor, and the result is saved | The wallet library and the Tor network | `../check.sh stagenet` |
+| A new wallet synchronises through obfs4 bridges | The same, and an obfs4 program | `../check.sh bridges` |
 
-The second runs on a machine you control and never in hosted CI.
+The last two run on a machine you control and never in hosted CI.
 
 ## Not done yet
 
@@ -71,6 +87,6 @@ The second runs on a machine you control and never in hosted CI.
   tried once: coins from a faucet arrived, part of them went to a second
   address of the same wallet through a different node than the one
   synchronised with, and the transaction was in the next block.
-- Bridges, for networks that block Tor.
+- Remembering bridge settings between runs.
 - Moving on to another node when one stops answering in the middle of a
   sync.

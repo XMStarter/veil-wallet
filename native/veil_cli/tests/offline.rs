@@ -170,6 +170,44 @@ fn a_new_password_must_be_typed_twice_the_same_and_not_be_empty() {
 }
 
 #[test]
+fn wrong_bridge_settings_stop_a_command_before_it_goes_online() {
+    if !have_wallet_library() {
+        return;
+    }
+    let dir = TempDir::new("bridge-settings");
+    let wallet = dir.path("w");
+    assert!(veil(&wallet, &["create"], &[PASSWORD, PASSWORD]).ok());
+
+    let file = |name: &str, text: &str| {
+        let path = dir.path(name);
+        std::fs::write(&path, text).unwrap();
+        path.to_str().unwrap().to_owned()
+    };
+    let missing = dir.path("missing.txt");
+    let cases = [
+        (missing.to_str().unwrap().to_owned(), "cannot read"),
+        (file("empty.txt", "# no bridges\n\n"), "no bridge lines"),
+        (file("wrong.txt", "obfs4 not-an-address\n"), "bridge line 1"),
+        // A transport nobody has a program for.
+        (
+            file(
+                "unknown.txt",
+                "conjure 192.0.2.3:80 2B280B23E1107BB62ABFC40DDCC8824814F80A72\n",
+            ),
+            "--transport conjure=FILE",
+        ),
+    ];
+    for (bridges, expected) in cases {
+        let run = veil(&wallet, &["sync", "--bridges", &bridges], &[PASSWORD]);
+        assert_eq!(run.code, Some(1), "{bridges}: {}", run.stderr);
+        assert!(run.stderr.contains(expected), "{bridges}: {}", run.stderr);
+        assert!(run.stdout.is_empty());
+    }
+    // None of that started Tor.
+    assert!(!wallet.join("tor").exists());
+}
+
+#[test]
 fn commands_that_need_no_network_do_not_start_tor() {
     if !have_wallet_library() {
         return;

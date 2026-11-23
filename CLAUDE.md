@@ -71,7 +71,7 @@ that cannot lose the user's funds.
     daemon; fails the test on a CI runner. A new test of that kind calls it
     too.
   - `check.sh`: the checks by level (`offline`, `regtest`, `tor`,
-    `stagenet`) with a log; `setup` prepares a machine.
+    `stagenet`, `bridges`) with a log; `setup` prepares a machine.
 - `docs/`: concept, design, development rules.
 - `.github/workflows`: hosted CI, builds and offline tests only. Pin
   actions to commit hashes.
@@ -95,8 +95,12 @@ synchronising with a public onion node over Tor. Step 1.3 is done: `veil`,
 the command-line tool on stagenet (`veil_cli`), passed the owner's
 acceptance run at all four levels, and a send tried by hand on stagenet
 went through a separate node and confirmed. A new wallet's first sync on
-stagenet took about two minutes over Tor. Not done: bridges (step 1.4,
-next), the wallet library for Windows, the app. See the build plan in
+stagenet took about two minutes over Tor. Step 1.4, bridges, is written
+(`veil_tor::Bridges`, `veil sync --bridges`) and passes its offline tests;
+it is waiting for the owner's acceptance run of the `bridges` level, which
+is the first time a transport program is started at all. WebTunnel is
+configured like obfs4 and Snowflake but cannot be tried yet. Not done: the
+wallet library for Windows, the app. See the build plan in
 `docs/concept.md`.
 
 ## Environment notes
@@ -104,7 +108,8 @@ next), the wallet library for Windows, the app. See the build plan in
 - Tests on a private chain, over Tor, and on stagenet run on the owner's
   machine: Windows, inside WSL2 (Ubuntu 24.04) until the wallet library
   builds for Windows. The owner runs them and sends the log. Tor connects
-  from that machine without bridges, so bridges stay at step 1.4.
+  from that machine without bridges, so the `bridges` level shows there
+  that a bridged connection works, not that it gets through a block.
 - What a cloud session can reach depends on its environment's network
   settings, which the owner can change. The rule above about Tor and the
   daemon holds either way.

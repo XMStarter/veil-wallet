@@ -3,7 +3,10 @@
 use std::path::PathBuf;
 
 use veil_core::OnionNode;
+use veil_tor::TransportProgram;
 use veil_wallet::SendAmount;
+
+use crate::transports;
 
 pub const USAGE: &str = "\
 veil: a command-line wallet for trying Veil on the Monero stagenet.
@@ -33,6 +36,12 @@ options:
                              it twice to send through a different node than
                              the one synchronised with. Without it, public
                              stagenet nodes are tried in random order.
+  --bridges FILE             for sync and send: connect to Tor through the
+                             bridges in FILE, one bridge line per line, for
+                             a network that blocks Tor
+  --transport NAME=FILE      the program for a transport the bridges use,
+                             for example obfs4=/usr/bin/obfs4proxy. Without
+                             it, installed programs are looked for.
   -h, --help                 show this text
 ";
 
@@ -40,6 +49,10 @@ options:
 pub struct Options {
     pub data_dir: Option<PathBuf>,
     pub wallet_lib: Option<PathBuf>,
+    /// A file of bridge lines to connect to Tor through.
+    pub bridges: Option<PathBuf>,
+    /// Programs named for the transports those bridges use.
+    pub transports: Vec<TransportProgram>,
     pub command: Command,
 }
 
@@ -75,6 +88,8 @@ where
     let mut data_dir = None;
     let mut wallet_lib = None;
     let mut nodes = Vec::new();
+    let mut bridges = None;
+    let mut transports = Vec::new();
     let mut height = None;
     let mut new = false;
     let mut help = false;
@@ -98,6 +113,8 @@ where
                     .map_err(|_| format!("`{text}` is not a node; write host.onion:port"))?;
                 nodes.push(node);
             }
+            "--bridges" => bridges = Some(PathBuf::from(value("--bridges")?)),
+            "--transport" => transports.push(transports::parse_named(&value("--transport")?)?),
             "--height" => {
                 let text = value("--height")?;
                 height = Some(
@@ -160,6 +177,13 @@ where
         if !nodes.is_empty() {
             return Err("--node only applies to sync and send".into());
         }
+        let online = matches!(command, Command::Sync { .. } | Command::Send { .. });
+        if !online && (bridges.is_some() || !transports.is_empty()) {
+            return Err("--bridges and --transport only apply to sync and send".into());
+        }
+        if bridges.is_none() && !transports.is_empty() {
+            return Err("--transport is for the bridges given with --bridges".into());
+        }
         if height.is_some() {
             return Err("--height only applies to restore".into());
         }
@@ -171,6 +195,8 @@ where
     Ok(Options {
         data_dir,
         wallet_lib,
+        bridges,
+        transports,
         command,
     })
 }
@@ -263,6 +289,41 @@ mod tests {
             &["send", "7Addr", "lots"],
             &["send", "7Addr", "-1"],
             &["send", "7Addr", "1.5", "extra"],
+        ] {
+            assert!(parse_words(wrong).is_err(), "{wrong:?} must be refused");
+        }
+    }
+
+    #[test]
+    fn bridges_are_a_file_and_optionally_named_programs() {
+        let program = if cfg!(windows) {
+            "C:\\pt\\obfs4proxy.exe"
+        } else {
+            "/usr/bin/obfs4proxy"
+        };
+        let transport = format!("obfs4={program}");
+        let options = parse_words(&[
+            "sync",
+            "--bridges",
+            "bridges.txt",
+            "--transport",
+            &transport,
+        ])
+        .unwrap();
+        assert_eq!(options.bridges, Some(PathBuf::from("bridges.txt")));
+        assert_eq!(options.transports.len(), 1);
+        assert_eq!(options.transports[0].protocols, vec!["obfs4"]);
+        assert_eq!(options.transports[0].path, PathBuf::from(program));
+
+        let plain = parse_words(&["sync"]).unwrap();
+        assert_eq!(plain.bridges, None);
+        assert!(plain.transports.is_empty());
+
+        for wrong in [
+            &["balance", "--bridges", "bridges.txt"][..],
+            &["sync", "--transport", &transport],
+            &["sync", "--bridges", "b.txt", "--transport", "obfs4"],
+            &["sync", "--bridges"],
         ] {
             assert!(parse_words(wrong).is_err(), "{wrong:?} must be refused");
         }

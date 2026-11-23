@@ -8,7 +8,7 @@ use std::net::TcpStream;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use veil_tor::{Purpose, State, TorConfig, TorService};
+use veil_tor::{Bridges, Purpose, State, TorConfig, TorService};
 
 /// Long-lived public onion services, tried in order. One reachable service
 /// is enough; any single one may be down. Override with `VEIL_TEST_ONION`
@@ -27,6 +27,7 @@ fn start(name: &str) -> (PathBuf, TorService) {
     let service = TorService::start(TorConfig {
         state_dir: root.join("state"),
         cache_dir: root.join("cache"),
+        bridges: Bridges::none(),
     })
     .expect("service starts");
     (root, service)

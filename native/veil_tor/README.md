@@ -25,11 +25,12 @@ by default.
 ## Use from Rust
 
 ```rust
-use veil_tor::{Purpose, State, TorConfig, TorService};
+use veil_tor::{Bridges, Purpose, State, TorConfig, TorService};
 
 let tor = TorService::start(TorConfig {
     state_dir: "/path/private/to/app/tor-state".into(),
     cache_dir: "/path/private/to/app/tor-cache".into(),
+    bridges: Bridges::none(),
 })?;
 
 let port = tor.socks_port(Purpose::Sync); // known immediately
@@ -41,6 +42,38 @@ while tor.status().state != State::Ready {
 `start` returns immediately; Tor bootstraps on its own threads. While Tor is
 bootstrapping, a `message` in the status usually means the network blocks
 Tor and bridges are needed.
+
+## Bridges
+
+On a network that blocks Tor, the way in is a bridge: a relay that is not
+in the public list, usually reached through a pluggable transport that
+disguises the connection.
+
+```rust
+let bridges = Bridges {
+    // Lines as Tor hands them out, one bridge each.
+    lines: Bridges::lines_from_text(&text_from_the_user),
+    // The programs that speak the transports those lines name.
+    transports: vec![TransportProgram {
+        protocols: vec!["obfs4".into(), "webtunnel".into()],
+        path: "/path/to/lyrebird".into(),
+        arguments: vec![],
+    }],
+};
+```
+
+- **Bridges are the only way in.** With bridges set, Tor connects through
+  them or not at all. It does not go around a bridge it cannot reach.
+- **Checked before anything starts.** Every line must be a bridge, every
+  transport a line names must have a program, and every program must exist.
+  Tor itself would be content with one usable bridge and drop the rest
+  quietly; here a half-wrong setting is an error.
+- **Transports are separate programs.** Tor does not speak obfs4, Snowflake
+  or WebTunnel itself. It starts a program that does when a bridge needs
+  it. The Tor Project's `lyrebird` speaks all three; Debian and Ubuntu
+  package the older `obfs4proxy` and `snowflake-client`.
+- **Bridge lines stay out of logs.** They are handed out one person at a
+  time; debug output and error messages do not repeat them.
 
 ## For the rest of Veil
 
@@ -81,9 +114,21 @@ cargo test -p veil_tor --lib -- --include-ignored
 
 # Bootstraps Tor and reaches an onion service; needs the Tor network.
 cargo test -p veil_tor --test network -- --ignored --nocapture
+
+# The same through obfs4 and Snowflake bridges, and a bridge that does not
+# exist; needs the Tor network and the transport programs.
+cargo test -p veil_tor --test bridges -- --ignored --nocapture --test-threads=1
 ```
+
+`../check.sh bridges` runs the last one and keeps a log.
 
 ## Not done yet
 
-- Bridges (obfs4, Snowflake, WebTunnel).
+- WebTunnel is configured like the other two and its bridge lines are
+  understood, but it has not carried a connection: there is no public
+  WebTunnel bridge to test with and no packaged program.
+- Shipping a transport program with the app. On Android in particular,
+  whether an app may start one is the question the concept's fallback to
+  the reference Tor implementation is about.
+- Bridges through the C interface.
 - The Android build is not verified yet. Linux and Windows builds are.

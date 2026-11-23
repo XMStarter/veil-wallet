@@ -5,14 +5,14 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use veil_core::{Core, Nodes, OnionNode};
-use veil_tor::{State, TorConfig, TorService};
+use veil_tor::{Bridges, State, TorConfig, TorService, TransportProgram};
 use veil_wallet::{
     Amount, Direction, Network, SeedPhrase, SendAmount, SyncProgress, Wallet, WalletLibrary,
 };
 use zeroize::Zeroizing;
 
 use crate::args::{Command, Options, USAGE};
-use crate::{nodes, prompt};
+use crate::{nodes, prompt, transports};
 
 /// The only network this tool works on. Stagenet coins have no value.
 const NETWORK: Network = Network::Stagenet;
@@ -56,7 +56,10 @@ pub fn run(options: Options) -> Result<(), Fail> {
         print!("{USAGE}");
         return Ok(());
     }
-    let session = Session::new(options.data_dir, options.wallet_lib)?;
+    let mut session = Session::new(options.data_dir, options.wallet_lib)?;
+    if let Some(file) = options.bridges {
+        session.bridges = read_bridges(&file, options.transports)?;
+    }
     match options.command {
         Command::Help => Ok(()),
         Command::Create => session.create(),
@@ -74,6 +77,8 @@ pub fn run(options: Options) -> Result<(), Fail> {
 struct Session {
     lib: WalletLibrary,
     data_dir: PathBuf,
+    /// How the commands that go online reach Tor.
+    bridges: Bridges,
 }
 
 impl Session {
@@ -87,7 +92,11 @@ impl Session {
         };
         make_private_dir(&data_dir)?;
         let lib = WalletLibrary::load(find_wallet_library(wallet_lib)?)?;
-        Ok(Session { lib, data_dir })
+        Ok(Session {
+            lib,
+            data_dir,
+            bridges: Bridges::none(),
+        })
     }
 
     fn wallet_path(&self) -> PathBuf {
@@ -286,6 +295,7 @@ impl Session {
         let tor = TorService::start(TorConfig {
             state_dir: tor_dir.join("state"),
             cache_dir: tor_dir.join("cache"),
+            bridges: self.bridges.clone(),
         })?;
         let mut core = Core::new(tor, wallet, Nodes::single(first))?;
         wait_for_tor(&core)?;
@@ -342,6 +352,32 @@ fn wait_for_tor(core: &Core) -> Result<(), Fail> {
         }
         std::thread::sleep(Duration::from_millis(300));
     }
+}
+
+/// Reads the bridge file and finds the programs its bridges need.
+fn read_bridges(file: &Path, named: Vec<TransportProgram>) -> Result<Bridges, Fail> {
+    let text = std::fs::read_to_string(file)
+        .map_err(|error| format!("cannot read the bridges in {}: {error}", file.display()))?;
+    let mut bridges = Bridges {
+        lines: Bridges::lines_from_text(&text),
+        transports: Vec::new(),
+    };
+    if bridges.is_empty() {
+        return Err(format!("there are no bridge lines in {}", file.display()).into());
+    }
+    let needed = bridges.transports_needed()?;
+    bridges.transports = transports::programs_for(&needed, named)?;
+    eprintln!(
+        "Using {} bridge{} ({}).",
+        bridges.lines.len(),
+        if bridges.lines.len() == 1 { "" } else { "s" },
+        if needed.is_empty() {
+            "no transport".to_owned()
+        } else {
+            needed.join(", ")
+        }
+    );
+    Ok(bridges)
 }
 
 /// Synchronises and shows progress on the way.

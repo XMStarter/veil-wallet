@@ -10,6 +10,7 @@ mod args;
 mod commands;
 mod nodes;
 mod prompt;
+mod transports;
 
 use std::process::ExitCode;
 
