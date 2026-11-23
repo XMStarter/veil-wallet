@@ -127,12 +127,14 @@ impl Session {
             .into());
         }
         let password = prompt::secret("Password: ")?;
-        Ok(Wallet::open(
-            &self.lib,
-            &self.wallet_path(),
-            &password,
-            NETWORK,
-        )?)
+        let wallet = Wallet::open(&self.lib, &self.wallet_path(), &password, NETWORK)?;
+        if wallet.was_rebuilt_from_keys() {
+            eprintln!(
+                "The wallet's data file could not be read and was set aside. The wallet was \
+                 opened from its keys, which are intact. Run `veil sync` to find its funds again."
+            );
+        }
+        Ok(wallet)
     }
 
     fn create(&self) -> Result<(), Fail> {
@@ -236,19 +238,19 @@ impl Session {
     }
 
     fn sync(&self, named: Vec<OnionNode>) -> Result<(), Fail> {
-        let mut core = self.go_online(named)?;
-        let progress = synchronise(&mut core)?;
+        let (mut core, candidates) = self.go_online(named)?;
+        let progress = synchronise(&mut core, &candidates)?;
         print_balance(core.balance(), progress.wallet_height);
         core.close()?;
         Ok(())
     }
 
     fn send(&self, to: &str, amount: SendAmount, named: Vec<OnionNode>) -> Result<(), Fail> {
-        let mut core = self.go_online(named)?;
+        let (mut core, candidates) = self.go_online(named)?;
         if !core.is_valid_address(to) {
             return Err("that is not a stagenet address".into());
         }
-        synchronise(&mut core)?;
+        synchronise(&mut core, &candidates)?;
 
         let sync_node = core.nodes().sync().clone();
         let broadcast_node = core.nodes().broadcast().clone();
@@ -286,9 +288,12 @@ impl Session {
     }
 
     /// Opens the wallet, starts Tor, waits for it, and finds a node.
-    fn go_online(&self, named: Vec<OnionNode>) -> Result<Core, Fail> {
+    ///
+    /// Returns the core and the nodes it may use, the one it settled on
+    /// first, so that a synchronisation can move on when that one drops.
+    fn go_online(&self, named: Vec<OnionNode>) -> Result<(Core, Vec<OnionNode>), Fail> {
         let wallet = self.open()?;
-        let candidates = nodes::candidates(named);
+        let mut candidates = nodes::candidates(named);
         let first = candidates.first().ok_or("there is no node to try")?.clone();
 
         let tor_dir = self.data_dir.join("tor");
@@ -308,7 +313,10 @@ impl Session {
             core.nodes().sync(),
             asked.elapsed()
         );
-        Ok(core)
+        if let Some(settled) = candidates.iter().position(|c| c == core.nodes().sync()) {
+            candidates.rotate_left(settled);
+        }
+        Ok((core, candidates))
     }
 }
 
@@ -381,12 +389,14 @@ fn read_bridges(file: &Path, named: Vec<TransportProgram>) -> Result<Bridges, Fa
 }
 
 /// Synchronises and shows progress on the way.
-fn synchronise(core: &mut Core) -> Result<SyncProgress, Fail> {
+/// Synchronises through the first of `candidates` that carries it through.
+fn synchronise(core: &mut Core, candidates: &[OnionNode]) -> Result<SyncProgress, Fail> {
     let on_terminal = io::stderr().is_terminal();
     let started = Instant::now();
+    let first = core.nodes().sync().clone();
     let mut reports = 0u32;
     eprintln!("Synchronising...");
-    let outcome = core.sync_with_progress(&mut |progress: SyncProgress| {
+    let outcome = core.sync_with_any(candidates, &mut |progress: SyncProgress| {
         reports += 1;
         let line = format!(
             "Scanned to block {} of {} ({} left)",
@@ -406,6 +416,12 @@ fn synchronise(core: &mut Core) -> Result<SyncProgress, Fail> {
         eprintln!();
     }
     let progress = outcome?;
+    if core.nodes().sync() != &first {
+        eprintln!(
+            "Node {first} stopped answering; finished through {}.",
+            core.nodes().sync()
+        );
+    }
     eprintln!(
         "Synchronised to block {} ({:.0?}).",
         progress.wallet_height,

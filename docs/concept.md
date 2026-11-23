@@ -41,8 +41,9 @@ if, at build time, Arti cannot run bridges on Android.
   running, the wallet does not work. It never falls back to a direct
   connection.
 - **Onion nodes only.** The app ships with a list of vetted `.onion` Monero
-  nodes and picks one at random on each start. The user can set their own
-  node, which is the most private option.
+  nodes and picks one at random on each start. If that node stops answering
+  in the middle of a synchronisation, another one from the list continues
+  it. The user can set their own node, which is the most private option.
 - **Local scanning.** Blocks are downloaded and scanned on the device. The
   view key never leaves it. Veil does not use light-wallet servers, because
   they require the view key.
@@ -75,6 +76,11 @@ if, at build time, Arti cannot run bridges on Android.
   screen with the fee and the total before anything is sent.
 - The address is shown in groups of four characters with the beginning and
   the end highlighted, so it is easy to compare with the original.
+- If the connection is lost while a transaction is being handed to the
+  node, the wallet does not know whether it went out. It says so, and asks
+  the user to wait for the next synchronisation, which shows the
+  transaction if it did. It never reports such a send as failed, because a
+  second send could then pay twice.
 - When choosing which coins to spend, the wallet prefers coins that arrived
   at a single subaddress. If coins from different addresses must be combined,
   it warns the user, because combining them can link those addresses.
@@ -90,6 +96,9 @@ if, at build time, Arti cannot run bridges on Android.
 - **Restoring.** Both Polyseed (16 words) and the classic Monero phrase
   (25 words) are accepted. For the classic phrase the app asks for an
   approximate creation date.
+- **Damaged files.** The keys are in a file of their own that is written
+  once. If the file that holds the wallet's view of the chain is damaged,
+  the wallet opens from the keys and scans the chain again.
 - **Encryption.** The wallet file is encrypted with the user's password. On
   Android, biometric unlock is available through the hardware-backed key
   store.

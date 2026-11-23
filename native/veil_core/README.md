@@ -25,6 +25,23 @@ is the only way the rest of the app reaches a wallet.
 `sync_with_progress` reports about once a second how far scanning has come,
 so that an interface can show a long first sync moving.
 
+## When a connection is lost
+
+- **In the middle of a synchronisation.** While it downloads blocks, the
+  wallet library asks again by itself three times. If the node stays away,
+  or the connection is lost at another point, `sync` fails with the wallet's
+  `NodeUnreachable`; if it was Tor that dropped, with `TorNotReady`, so that
+  an interface can say which. The balance stays the one from the last
+  synchronisation that finished, and the next one continues the scan.
+- **With other nodes to try.** `sync_with_any` takes the candidates in the
+  caller's order and moves to the next when a node cannot be reached, is
+  not usable, or stops answering part way. It stops at once when Tor is no
+  longer ready.
+- **In the middle of a send.** `commit` fails with the wallet's
+  `SendOutcomeUnknown`: the node may have the transaction. The interface
+  must not offer to send again before the next synchronisation, which shows
+  the transaction in the history if it went out.
+
 ## Use
 
 ```rust
@@ -54,15 +71,19 @@ node block until the node has answered.
 | What | Needs | Run with |
 |---|---|---|
 | Node names; Tor not ready; the wallet asks for its node by name through the sync listener only; no listeners, no connection; a web server is not a node | The wallet library for all but the first. No network: Tor is replaced by `veil_tor`'s stand-in. | `../check.sh offline` |
+| A connection cut in the middle of a synchronisation, with the node still there, with the node gone, and with Tor gone: what is reported, that the next node is tried, and that the wallet is unharmed. The node is a fake that knows its version and height and has no blocks | The wallet library. No network. | `../check.sh offline` |
 | A wallet behind the stand-in on a private chain: synchronises through one listener, sends through the other, and stays silent in between | The wallet library and a Monero daemon | `../check.sh regtest` |
+| On a private chain: a download cut once is retried; a node that disappears is reported and another node finishes; a send whose answer is lost is reported as unknown and turns up in the history, paid once | The wallet library and a Monero daemon | `../check.sh regtest` |
 | A new wallet synchronises with a public onion node over the real Tor network | The wallet library and the Tor network | `../check.sh tor` |
 
-The last two run on a machine you control and never in hosted CI; on a CI
+The ones that need a daemon or the Tor network run on a machine you control and never in hosted CI; on a CI
 runner they fail before starting anything.
 
 ## Not done yet
 
-- A vetted node list for the app. `settle_on_nodes` goes through
-  candidates in the caller's order; what the candidates are, and moving on
-  when a node stops answering in the middle of a sync, are still open.
+- A vetted node list for the app. `settle_on_nodes` and `sync_with_any` go
+  through candidates in the caller's order; what the candidates are is
+  still open.
+- Keeping a transaction whose outcome is unknown, to show it as "maybe
+  sent" and to send the same one again instead of a new one.
 - A C interface for the app.

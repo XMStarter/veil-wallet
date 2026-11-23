@@ -61,7 +61,11 @@ that cannot lose the user's funds.
   - `veil_core`: joins the two. The app reaches a wallet only through it;
     it points the wallet at Tor's listeners and nowhere else. Tests replace
     Tor with `veil_tor`'s stand-in (the `stand-in` feature, never in an app
-    build).
+    build), which can also cut a connection at a chosen point. The fake
+    node in its tests is a few lines of test code that answer a node's
+    first questions over loopback. It has no chain and is not `monerod`;
+    those tests run only where the wallet library is built, so not in
+    hosted CI.
   - `veil_cli`: `veil`, the command-line wallet on stagenet. Stagenet
     only; do not add another network to it.
   - `wallet_lib`: pinned build script for the wallet library, Veil's
@@ -111,8 +115,15 @@ way, after three fixes those runs found (never unloading the library,
 UTF-8 paths, and not trusting the library alone about an existing wallet)
 and after the antivirus was told to allow the DLL and `monerod.exe`. That
 completes step 1 of the build plan, the core without a user interface.
-Next is step 2, reliability tests. Not done: the app. See the build plan
-in `docs/concept.md`.
+Step 2, reliability tests, is written and not yet accepted. Its tests
+without a network pass in a cloud session: a process killed while saving,
+a damaged data file, and a connection cut in the middle of a
+synchronisation. Its tests on a private chain have never run and wait for
+the owner's acceptance run: a cut download, a node that disappears, a send
+whose answer is lost, and a restore past long runs of unused addresses.
+The table of what is tested where is in `docs/development.md`,
+"Reliability tests". Not done: the app. See the build plan in
+`docs/concept.md`.
 
 ## Environment notes
 
@@ -130,6 +141,9 @@ in `docs/concept.md`.
 - What a cloud session can reach depends on its environment's network
   settings, which the owner can change. The rule above about Tor and the
   daemon holds either way.
+- The wallet library encrypts its connection to a node (TLS) when the node
+  offers it, and `monerod` does. A test cannot recognise a request to a
+  real node by its text; the stand-in's cuts count bytes for that reason.
 - The wallet library can be built in a cloud session from source with
   `native/wallet_lib/build.sh` (about half an hour; install the packages
   listed at the top of the script first). Building it is fine; `monerod`

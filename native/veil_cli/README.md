@@ -40,13 +40,22 @@ cargo run -p veil_cli -- create
 
 Without `--node`, the tool tries the public stagenet onion nodes listed in
 [`src/nodes.rs`](src/nodes.rs) in random order, synchronises with the first
-one that answers, and sends through the next. That list comes from a public
+one that answers, and sends through the next. If that node stops answering
+in the middle of a synchronisation, the next one continues it. That list comes from a public
 directory; nobody vetted it, and most of it belongs to one operator. It is
 there so that the tool works out of the box, and it is not the list the app
 will ship.
 
 `--node host.onion:port` names a node; give it twice to send through a
-different node than the one synchronised with.
+different node than the one synchronised with. Only named nodes are used
+then.
+
+If the wallet's data file cannot be read, the tool says so, opens the wallet
+from its keys, and keeps the unreadable file next to it.
+
+If the connection is lost while a transaction is being sent, the tool says
+that it may have gone out. Run `veil sync` and look at `veil history`
+before sending again.
 
 ## Bridges
 
@@ -88,5 +97,3 @@ The last two run on a machine you control and never in hosted CI.
   address of the same wallet through a different node than the one
   synchronised with, and the transaction was in the next block.
 - Remembering bridge settings between runs.
-- Moving on to another node when one stops answering in the middle of a
-  sync.

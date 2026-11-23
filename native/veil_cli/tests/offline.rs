@@ -132,6 +132,49 @@ fn the_password_guards_the_wallet() {
 }
 
 #[test]
+fn a_damaged_data_file_is_said_and_the_wallet_still_opens() {
+    if !have_wallet_library() {
+        return;
+    }
+    let dir = TempDir::new("damaged");
+    let wallet = dir.path("w");
+    let created = veil(&wallet, &["create"], &[PASSWORD, PASSWORD]);
+    assert!(created.ok(), "{}", created.stderr);
+    let phrase = phrase_in(&created);
+    let address = address_in(&created);
+
+    // The file that is rewritten on every save, next to the keys file.
+    let keys_file = std::fs::read_dir(&wallet)
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+        .find(|path| path.extension().is_some_and(|ext| ext == "keys"))
+        .expect("the wallet has a keys file");
+    let data_file = keys_file.with_extension("");
+    let intact = std::fs::read(&data_file).unwrap();
+    std::fs::write(&data_file, &intact[..intact.len() / 2]).unwrap();
+
+    let seed = veil(&wallet, &["seed"], &[PASSWORD]);
+    assert!(seed.ok(), "{}", seed.stderr);
+    assert_eq!(seed.stdout.trim(), phrase);
+    assert!(
+        seed.stderr.contains("could not be read") && seed.stderr.contains("veil sync"),
+        "{}",
+        seed.stderr
+    );
+
+    // Said once: the wallet was saved again and is whole.
+    let shown = veil(&wallet, &["address"], &[PASSWORD]);
+    assert!(shown.ok(), "{}", shown.stderr);
+    assert_eq!(shown.stdout.trim(), address);
+    assert!(
+        !shown.stderr.contains("could not be read"),
+        "{}",
+        shown.stderr
+    );
+}
+
+#[test]
 fn a_wallet_is_never_overwritten_and_a_missing_one_is_said_to_be_missing() {
     if !have_wallet_library() {
         return;

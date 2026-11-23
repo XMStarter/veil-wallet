@@ -48,8 +48,8 @@ machine. The log of that run is the evidence that the step is done.
 
 | Level | What it runs | Where |
 |---|---|---|
-| `offline` | Format, lint, and every test that needs no network. Uses the wallet library when it has been built. | Anywhere, hosted CI included |
-| `regtest` | The wallet on a private chain, alone and behind a stand-in for Tor. Starts a Monero daemon. | The owner's machine |
+| `offline` | Format, lint, and every test that needs no network, the reliability tests against stand-ins among them. Uses the wallet library when it has been built. | Anywhere, hosted CI included |
+| `regtest` | The wallet on a private chain, alone and behind a stand-in for Tor, with and without lost connections. Starts a Monero daemon. | The owner's machine |
 | `tor` | The tests that start the real Tor client, a connection to an onion service, and a new wallet synchronising with a public node. | The owner's machine |
 | `stagenet` | The command-line tool: a new wallet synchronises with a public stagenet node through Tor. | The owner's machine |
 | `bridges` | Tor through obfs4 and Snowflake bridges, a bridge that does not exist, and the tool synchronising through bridges. | The owner's machine |
@@ -112,9 +112,31 @@ Microsoft's toolchain; this run compiles it with the GNU one, because that
 is the one that can be used from Linux. The wallet library is the same DLL
 for both.
 
-Reliability tests cover the failures that lose money or confuse users: Tor
-dropping mid-sync, the node changing, the process being killed during a
-write, and restoring a wallet whose payments went to many subaddresses.
+### Reliability tests
+
+They cover the failures that lose money or confuse users. Each is tested
+without a network first, and those that need real blocks are repeated on a
+private chain.
+
+| Failure | What must hold | Where it is tested |
+|---|---|---|
+| The process is killed while the wallet is being saved | The wallet opens afterwards and is the same wallet | `veil_wallet/tests/crash.rs`, in `offline`: a process that saves in a loop is killed at a different moment each round |
+| The wallet's data file is damaged: emptied, cut short, or overwritten | The wallet opens from its keys file, which is written once and not touched again; the damaged file is kept; a synchronisation finds the funds again | `veil_wallet/tests/offline.rs`, in `offline`; with funds, in `regtest` |
+| The connection is lost in the middle of a synchronisation | The failure is reported, as the node's or as Tor's; the balance is the last one that was complete; the wallet stays usable | `veil_core` against a fake node, in `offline`; on a private chain in `regtest` |
+| The node stops answering for good | Another node continues the synchronisation and finds what the first did not deliver | `veil_core`: that the next node is asked, in `offline`; that it finishes, in `regtest` |
+| The connection is lost while a transaction is handed to the node | The send is reported as neither done nor failed; the next synchronisation shows it, and the payee is paid once | `veil_core`, in `regtest` |
+| Payments went to addresses far apart | A wallet restored from the phrase finds all of them and continues after the last | `veil_wallet/tests/regtest.rs`, in `regtest` |
+
+Connections are lost on purpose by `veil_tor`'s stand-in for Tor, which
+can close one at a chosen point. The fake node in `veil_core`'s tests is a
+few lines that answer a node's first questions and have no blocks; it is
+not a Monero node and starts no daemon.
+
+Not covered: a power cut. The wallet library replaces the data file by
+writing a new one and renaming it, which a killed process cannot break,
+but it does not ask the system to put the new file on the disk first.
+After a power cut the file may be damaged; the wallet then opens from its
+keys as described above.
 
 ## Hosted CI and the hosting account
 
