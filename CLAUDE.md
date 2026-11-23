@@ -103,15 +103,16 @@ passed at all five levels. Tor connected through obfs4 and through
 Snowflake, did not connect when its only bridge did not exist, and the
 tool synchronised a wallet through obfs4 bridges, about three and a half
 times slower than directly. WebTunnel is configured like the other two but
-cannot be tried yet. Step 1.5, the wallet library for Windows:
+cannot be tried yet. Step 1.5, the wallet library for Windows, is done:
 `wallet_lib/build.sh --windows` cross-builds the DLL and `monerod.exe`, and
 `./check.sh --windows` runs the checks as Windows programs. On the owner's
-machine the `offline`, `tor` and `stagenet` levels pass that way, which
-took three fixes found by those runs (never unloading the library, UTF-8
-paths, and not trusting the library alone about an existing wallet). The
-`regtest` level does not run there yet: starting `monerod.exe` is denied,
-most likely by the antivirus, so sending has not been exercised on
-Windows. Not done: the app. See the build plan in `docs/concept.md`.
+machine the `offline`, `regtest`, `tor` and `stagenet` levels pass that
+way, after three fixes those runs found (never unloading the library,
+UTF-8 paths, and not trusting the library alone about an existing wallet)
+and after the antivirus was told to allow the DLL and `monerod.exe`. That
+completes step 1 of the build plan, the core without a user interface.
+Next is step 2, reliability tests. Not done: the app. See the build plan
+in `docs/concept.md`.
 
 ## Environment notes
 

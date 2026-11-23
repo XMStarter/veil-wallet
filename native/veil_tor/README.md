@@ -136,4 +136,5 @@ cargo test -p veil_tor --test bridges -- --ignored --nocapture --test-threads=1
   whether an app may start one is the question the concept's fallback to
   the reference Tor implementation is about.
 - Bridges through the C interface.
-- The Android build is not verified yet. Linux and Windows builds are.
+- The Android build is not verified yet. Linux and Windows are: the tests
+  that start Tor and reach an onion service pass on both.
