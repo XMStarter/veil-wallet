@@ -85,9 +85,15 @@ that cannot lose the user's funds.
 - `dart/veil_bridge`: the Dart side of the core. It calls the C interface
   in `veil_core/src/ffi.rs`; the state crosses as JSON, pinned by
   `native/veil_core/tests/fixtures`, which both sides test against.
+- `app/`: the app, written with Flutter, for Linux and Windows first. So
+  far a shell: theme, texts in two languages, the start screen. Read
+  `app/README.md` and `docs/design.md` before changing it. Colours,
+  typefaces and sizes come from `app/lib/theme`; texts from the `.arb`
+  files, always in both languages.
 - `docs/`: concept, design, development rules.
 - `.github/workflows`: hosted CI, builds and offline tests only. Pin
-  actions to commit hashes.
+  actions to commit hashes. It installs Flutter with `check.sh flutter`,
+  not with an action.
 
 Before committing, in `native/`: `./check.sh offline` (format, lint, and
 the tests that need no network; with the wallet library built in
@@ -151,7 +157,13 @@ Dart side (`dart/veil_bridge`). The owner's acceptance run passed at the
 Flutter installed by `./check.sh setup` and the Dart tests calling the
 real library on Linux. The Dart side has not been run against the Windows
 build of the library: there is no Dart for Windows in that setup. Next is
-step 3.3, the app shell, which also brings Flutter to hosted CI. Not done: the app. See the build plan in
+step 3.3, the app shell, which also brings Flutter to hosted CI. It is
+written and not yet accepted: the Flutter project in `app/` with the
+visual language of the design document, English and Russian, the start
+screen, and tests that draw it. In a cloud session it passes its tests,
+builds for Linux, and runs on a virtual display. It has not run on the
+owner's machine or in hosted CI, where the Windows build and the Dart
+side against the Windows library will run for the first time. Not done: the app. See the build plan in
 `docs/concept.md`.
 
 ## Environment notes

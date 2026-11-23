@@ -48,7 +48,7 @@ machine. The log of that run is the evidence that the step is done.
 
 | Level | What it runs | Where |
 |---|---|---|
-| `offline` | Format, lint, and every test that needs no network, the reliability tests against stand-ins among them. Uses the wallet library when it has been built, and runs the Dart side's tests when Flutter is installed. | Anywhere, hosted CI included |
+| `offline` | Format, lint, and every test that needs no network, the reliability tests against stand-ins among them. Uses the wallet library when it has been built. With Flutter installed it also runs the tests of the Dart side and of the app, and builds the app. | Anywhere, hosted CI included |
 | `regtest` | The wallet on a private chain, alone and behind a stand-in for Tor, with and without lost connections. Starts a Monero daemon. | The owner's machine |
 | `tor` | The tests that start the real Tor client, a connection to an onion service, and a new wallet synchronising with a public node. | The owner's machine |
 | `stagenet` | The command-line tool: a new wallet synchronises with a public stagenet node through Tor. | The owner's machine |
@@ -57,7 +57,8 @@ machine. The log of that run is the evidence that the step is done.
 `./check.sh setup` prepares a Debian or Ubuntu machine once: system
 packages, among them the transport programs for bridges, Rust, the
 wallet library with the daemon, built from source into `~/veil-wallet-lib`
-(about half an hour), and Flutter, which brings Dart, into `~/veil-flutter`.
+(about half an hour), the libraries the app's Linux build needs, and
+Flutter, which brings Dart, into `~/veil-flutter`.
 Flutter is one pinned version, checked against its published checksum, and
 its tools are told not to report usage. Run it again when the
 patches in `native/wallet_lib/patches` change; it rebuilds only what
@@ -162,10 +163,15 @@ experience.
 
 **Allowed in a workflow**
 
-- Formatting, linting, and compiling for Linux, Windows, and Android.
+- Formatting, linting, and compiling for Linux, Windows, and Android, the
+  app included.
 - Tests that touch nothing outside the runner. Loopback connections are
   fine.
-- Downloading dependencies from the package registries.
+- Downloading dependencies from the package registries, the system
+  libraries a build needs from the distribution, and the one pinned
+  version of Flutter from its publisher, checked against its checksum.
+  The first build with Flutter fetches the matching engine files from the
+  same publisher.
 
 **Never in a workflow, on GitHub's runners or on a self-hosted one**
 
@@ -186,7 +192,9 @@ out of hosted CI until the owner decides otherwise.
 
 - Triggers are `pull_request` and `workflow_dispatch` only. No `push`, no
   `schedule`.
-- A job runs `check.sh offline` and no other level.
+- A job runs `check.sh offline` and no other level. Before it, it may run
+  `check.sh flutter`, which installs the pinned Flutter and does nothing
+  else.
 - Actions are pinned to commit hashes and runner images to a version.
 - `permissions` stays at `contents: read`.
 
@@ -227,6 +235,7 @@ Run every command from `native/`.
 | `native/wallet_lib` | Pinned build of the Monero wallet library, Veil's patches to it, and the bindings generator | `native/wallet_lib/build.sh <dir> --with-daemon` |
 | `native/veil_test_guard` | Makes the tests that start Tor or a daemon fail at once on a CI runner | `cargo test -p veil_test_guard` |
 | `dart/veil_bridge` | The Dart side of the core: starts a session in the native library and reads its state | `dart test` there, after `cargo build -p veil_core` |
+| `app` | The app, written with Flutter: so far the start screen in the app's visual language | `flutter analyze` and `flutter test` there |
 
 Before committing: `./check.sh offline`.
 

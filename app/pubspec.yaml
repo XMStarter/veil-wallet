@@ -1,0 +1,42 @@
+name: veil
+description: "Veil, a Monero wallet that reaches the network only through Tor."
+publish_to: none
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # The interface ships in English and Russian.
+  flutter_localizations:
+    sdk: flutter
+  intl: any
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  # Writes lib/l10n/app_localizations*.dart from the .arb files.
+  generate: true
+
+  assets:
+    - assets/brand/veil-logo.jpg
+
+  # Bundled with the app; nothing is fetched at runtime. Each is one
+  # variable font file under the SIL Open Font License; the licence texts
+  # lie next to them.
+  fonts:
+    - family: Cormorant Garamond
+      fonts:
+        - asset: fonts/CormorantGaramond.ttf
+    - family: Jost
+      fonts:
+        - asset: fonts/Jost.ttf
+    - family: JetBrains Mono
+      fonts:
+        - asset: fonts/JetBrainsMono.ttf

@@ -4,7 +4,7 @@ The visual language comes from the logo: a profile under a veil, drawn in
 charcoal on a milk-white ground, with two thin threads (navy and crimson) and
 a small gold crown.
 
-![Veil logo](../assets/brand/veil-logo.jpg)
+![Veil logo](../app/assets/brand/veil-logo.jpg)
 
 ## Principles
 
@@ -84,6 +84,7 @@ language and falls back to English.
 
 ## To do
 
-- A vector version of the logo. The repository currently has a raster image.
+- A vector version of the logo. The repository currently has a raster image,
+  whose white background shows as a faint box on the start screen.
 - A simplified mark for the app icon. The full illustration does not read at
   icon size.

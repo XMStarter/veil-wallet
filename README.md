@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/brand/veil-logo.jpg" width="440" alt="Veil — privacy crypto wallet">
+  <img src="app/assets/brand/veil-logo.jpg" width="440" alt="Veil — privacy crypto wallet">
 </p>
 
 # Veil

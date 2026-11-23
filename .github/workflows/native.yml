@@ -1,12 +1,14 @@
 name: native
 
-# Builds the native code and runs the tests that need nothing outside the
-# runner. Nothing here connects to the Tor network or starts a Monero
-# daemon; see docs/development.md.
+# Builds the native code and the app and runs the tests that need nothing
+# outside the runner. Nothing here connects to the Tor network or starts a
+# Monero daemon; see docs/development.md.
 on:
   pull_request:
     paths:
       - "native/**"
+      - "dart/**"
+      - "app/**"
       - ".github/workflows/native.yml"
   workflow_dispatch:
 
@@ -29,7 +31,7 @@ jobs:
       matrix:
         os: [ubuntu-24.04, windows-2025]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 40
+    timeout-minutes: 60
     env:
       # aws-lc-sys assembles with NASM on Windows. Where the runner has no
       # NASM, use the assembled objects that ship inside the crate instead
@@ -46,8 +48,22 @@ jobs:
           key: native-${{ runner.os }}-${{ hashFiles('native/Cargo.lock', 'native/rust-toolchain.toml') }}
       - name: Install the pinned toolchain
         run: rustup show
-      # The same command a developer runs before committing. The script
-      # refuses every level but `offline` on a CI runner.
-      - name: Format, lint, and offline tests
+      # What Flutter needs to build a desktop app on Linux, from the
+      # distribution's own packages.
+      - name: Install the libraries the app's Linux build needs
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang ninja-build libgtk-3-dev liblzma-dev
+      # One version, named in check.sh, downloaded from its publisher and
+      # checked against its published checksum. Its usage reporting is
+      # switched off before anything else is run.
+      - name: Install the pinned Flutter
+        shell: bash
+        run: bash check.sh flutter
+      # The same command a developer runs before committing: the native
+      # code, the Dart side of the core, and the app with a build for this
+      # system. The script refuses every level but these two on a CI runner.
+      - name: Format, lint, offline tests, and the app's build
         shell: bash
         run: bash check.sh offline
