@@ -78,16 +78,19 @@ cloud session runs.
 ## Status
 
 Done: the Tor component, and the wallet core (create, restore, receive on
-fresh addresses, send) tested on a private chain. Not done: the piece that
-connects the two and the command-line tool on stagenet, bridges, the app.
-See the build plan in `docs/concept.md`. Next is step 1.1: the check script
-and the first hosted CI run. Hosted CI has not run in this repository yet.
+fresh addresses, send) tested on a private chain. Step 1.1 of the build plan
+is done too: the check script, hosted CI passing on Linux and Windows, and
+the owner's acceptance run passing at the `offline`, `regtest`, and `tor`
+levels. Not done: the piece that connects the wallet to Tor (step 1.2,
+next), the command-line tool on stagenet, bridges, the wallet library for
+Windows, the app. See the build plan in `docs/concept.md`.
 
 ## Environment notes
 
 - Tests on a private chain, over Tor, and on stagenet run on the owner's
-  machine: Windows, inside WSL2 until the wallet library builds for Windows.
-  The owner runs them and sends the log.
+  machine: Windows, inside WSL2 (Ubuntu 24.04) until the wallet library
+  builds for Windows. The owner runs them and sends the log. Tor connects
+  from that machine without bridges, so bridges stay at step 1.4.
 - What a cloud session can reach depends on its environment's network
   settings, which the owner can change. The rule above about Tor and the
   daemon holds either way.
