@@ -27,6 +27,7 @@ In this order when they conflict:
 | Layer | Choice | Why |
 |---|---|---|
 | Cryptography and transactions | The official Monero `wallet2` library, called through the `monero_c` FFI wrapper | Veil writes no cryptography of its own. Its transactions look the same as those of the official wallet. |
+| Core | A Rust library that owns the Tor client and the wallet | The rules that protect the user (Tor only, fresh addresses, exact amounts) live in one memory-safe place that the interface cannot bypass. |
 | Tor | Arti, the Rust implementation of Tor, embedded in the app process | No separate Tor app is needed. The code is memory-safe. |
 | Bridges | obfs4, Snowflake, WebTunnel | Tor is blocked in a number of countries. Without bridges the wallet cannot connect there. |
 | User interface | Flutter: Android, Windows, and Linux from one codebase | The Flutter and `monero_c` combination is already used by other Monero wallets. |
@@ -109,11 +110,29 @@ See [design.md](design.md) for the visual language.
 
 ## Build plan
 
+Each step is written with tests that need no network, and ends with an
+acceptance run on the owner's machine before the next step starts. What may
+run where is set out in [development.md](development.md).
+
 1. **Core without a user interface.** `wallet2` plus Tor as a command-line
    tool on the Monero stagenet: create, restore, sync over `.onion`, send.
+   1. *Checks in one command.* A script with the levels `offline`,
+      `regtest`, `tor`, and `stagenet` that writes a log. The levels that
+      touch a network refuse to start inside hosted CI. First hosted CI run,
+      on Linux and Windows.
+   2. *Wallet through Tor.* The piece that points the wallet library at the
+      Tor component's SOCKS listeners and fails closed without them. Tested
+      against a stand-in proxy first, then on a private chain and over Tor.
+   3. *Command-line tool* on stagenet.
+   4. *Bridges:* obfs4, Snowflake, WebTunnel. This moves ahead of step 1.2 if
+      the owner's machine cannot reach Tor without them.
+   5. *Wallet library for Windows.* Until it exists, wallet tests on Windows
+      run inside WSL2. It has to be done before step 3.
 2. **Reliability tests.** Automated tests for restoring, and for behaviour
    when Tor drops, the node changes, or the process is killed in the middle
-   of a write. The wallet file is saved atomically.
+   of a write. The wallet file is saved atomically. The scenarios run
+   against stand-ins without a network, and are repeated on the real network
+   on the owner's machine.
 3. **User interface** on top of the finished core, desktop first.
 4. **Android.** Background sync through a foreground service, battery
    restrictions, a build without Google services.
@@ -123,7 +142,8 @@ See [design.md](design.md) for the visual language.
 
 ## Known limitations
 
-- **Sync over Tor is slow.** A new wallet syncs in minutes. Restoring an old
+- **Sync over Tor is slow.** A new wallet's first sync covers about a month
+  of blocks, as a safety margin around its creation date. Restoring an old
   wallet can take hours.
 - **A remote node cannot steal funds,** but it can delay transactions and try
   to feed the wallet distorted data. Choosing randomly among several nodes
@@ -139,9 +159,9 @@ See [design.md](design.md) for the visual language.
 - **Recovery phrase format.** Polyseed (16 words) is planned for new wallets.
   The alternative is the classic 25-word phrase, which every Monero wallet
   understands but which requires a creation date when restoring.
-- **Tor implementation.** Arti is planned. This depends on Arti supporting
-  bridges on Android at build time.
-- **Monero protocol upgrade.** The status of the FCMP++ and Carrot upgrade,
-  which changes key derivation and transaction structure, must be checked
-  before the core work starts, along with its support in `wallet2` and
-  `monero_c`.
+- **Tor implementation.** Arti is used and works on Linux and Windows.
+  Bridges and the Android build are still to be verified.
+- **Monero protocol upgrade.** Veil builds on Monero 0.18.5, the current
+  release line. The FCMP++ and Carrot upgrade, which changes key derivation
+  and transaction structure, has not been released; the wallet library will
+  have to be updated when it is.

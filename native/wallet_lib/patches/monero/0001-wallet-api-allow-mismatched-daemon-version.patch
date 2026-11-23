@@ -1,0 +1,40 @@
+diff --git a/src/wallet/api/wallet.h b/src/wallet/api/wallet.h
+index c16c7c8..913a744 100644
+--- a/src/wallet/api/wallet.h
++++ b/src/wallet/api/wallet.h
+@@ -124,6 +124,7 @@ public:
+     ConnectionStatus connected() const override;
+     void setTrustedDaemon(bool arg) override;
+     bool trustedDaemon() const override;
++    void setAllowMismatchedDaemonVersion(bool allow_mismatch) override;
+     bool setProxy(const std::string &address) override;
+     uint64_t balance(uint32_t accountIndex = 0) const override;
+     uint64_t unlockedBalance(uint32_t accountIndex = 0) const override;
+diff --git a/src/wallet/api/wallet2_api.h b/src/wallet/api/wallet2_api.h
+index 3df48f1..f662c9d 100644
+--- a/src/wallet/api/wallet2_api.h
++++ b/src/wallet/api/wallet2_api.h
+@@ -674,6 +674,7 @@ struct Wallet
+     virtual ConnectionStatus connected() const = 0;
+     virtual void setTrustedDaemon(bool arg) = 0;
+     virtual bool trustedDaemon() const = 0;
++    virtual void setAllowMismatchedDaemonVersion(bool allow_mismatch) = 0;
+     virtual bool setProxy(const std::string &address) = 0;
+     virtual uint64_t balance(uint32_t accountIndex = 0) const = 0;
+     uint64_t balanceAll() const {
+diff --git a/src/wallet/api/wallet.cpp b/src/wallet/api/wallet.cpp
+index a6ef695..6f242b6 100644
+--- a/src/wallet/api/wallet.cpp
++++ b/src/wallet/api/wallet.cpp
+@@ -2957,6 +2962,11 @@ bool WalletImpl::trustedDaemon() const
+     return m_wallet->is_trusted_daemon();
+ }
+ 
++void WalletImpl::setAllowMismatchedDaemonVersion(bool allow_mismatch)
++{
++    m_wallet->allow_mismatched_daemon_version(allow_mismatch);
++}
++
+ bool WalletImpl::setProxy(const std::string &address)
+ {
+     return m_wallet->set_proxy(address);

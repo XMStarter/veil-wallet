@@ -1,0 +1,974 @@
+//! A Monero wallet: create, restore, receive, send.
+
+use std::collections::BTreeSet;
+use std::ffi::{c_int, c_void};
+use std::path::{Path, PathBuf};
+
+use crate::sys::{self, c_string, SecretCString, WalletLibrary};
+use crate::{Amount, Error, SeedKind, SeedPhrase};
+
+/// How many addresses may be issued in a row without any of them receiving a
+/// payment.
+///
+/// A wallet restored from its phrase only looks a limited distance past the
+/// last address it knows was used (200 in the wallet library). Staying far
+/// below that keeps every payment findable after a restore.
+pub const MAX_UNUSED_ADDRESSES: u32 = 20;
+
+/// Veil keeps everything in the wallet's first account.
+const ACCOUNT: u32 = 0;
+/// Rounds of the wallet library's key derivation for the file password.
+/// One is the library's default and what other wallets use.
+const KDF_ROUNDS: u64 = 1;
+/// Language of newly generated recovery phrases.
+const SEED_LANGUAGE: &str = "English";
+/// Zero lets the wallet library choose the ring size the network requires.
+const RING_SIZE_AUTO: u32 = 0;
+const LIST_SEPARATOR: &str = ",";
+
+/// Which Monero network a wallet belongs to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Network {
+    Mainnet,
+    Testnet,
+    Stagenet,
+}
+
+impl Network {
+    fn id(self) -> c_int {
+        match self {
+            Network::Mainnet => sys::NETWORK_MAINNET,
+            Network::Testnet => sys::NETWORK_TESTNET,
+            Network::Stagenet => sys::NETWORK_STAGENET,
+        }
+    }
+}
+
+/// The Monero node a wallet synchronises with.
+///
+/// The only node an app build can name is an onion service reached through a
+/// local SOCKS proxy, which is Veil's embedded Tor client.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Node {
+    Onion {
+        /// The node's `.onion` hostname.
+        host: String,
+        /// The node's RPC port.
+        port: u16,
+        /// Port of the local SOCKS proxy on `127.0.0.1`.
+        socks_port: u16,
+    },
+    /// A regtest daemon on this machine, reached directly. Exists only for
+    /// tests; app builds do not contain it.
+    #[cfg(feature = "regtest")]
+    LocalRegtest { port: u16 },
+}
+
+/// Spendable and total funds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Balance {
+    /// Everything the wallet has received and not spent.
+    pub total: Amount,
+    /// The part of `total` that can be spent now. Incoming funds unlock after
+    /// ten confirmations.
+    pub unlocked: Amount,
+}
+
+/// How far synchronisation has come.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SyncProgress {
+    /// Height the wallet has scanned to.
+    pub wallet_height: u64,
+    /// Height of the node's chain.
+    pub node_height: u64,
+}
+
+impl SyncProgress {
+    pub fn blocks_left(&self) -> u64 {
+        self.node_height.saturating_sub(self.wallet_height)
+    }
+}
+
+/// An address to give to a payer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReceiveAddress {
+    /// Position of the address in the wallet, starting at 1.
+    pub index: u32,
+    pub address: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Direction {
+    Incoming,
+    Outgoing,
+}
+
+/// One entry of the wallet's history.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Transfer {
+    pub txid: String,
+    pub direction: Direction,
+    pub amount: Amount,
+    /// Network fee. Zero for incoming transfers.
+    pub fee: Amount,
+    /// Zero while the transaction is not in a block.
+    pub block_height: u64,
+    pub confirmations: u64,
+    /// Unix time in seconds.
+    pub timestamp: u64,
+    pub pending: bool,
+    pub failed: bool,
+    /// Receiving addresses involved, by index. Empty for outgoing transfers.
+    pub address_indices: Vec<u32>,
+}
+
+/// How much to send.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SendAmount {
+    /// Exactly this much. The fee is added on top.
+    Exact(Amount),
+    /// The whole unlocked balance. The fee is taken out of it.
+    Everything,
+}
+
+/// An open wallet.
+pub struct Wallet {
+    lib: WalletLibrary,
+    manager: *mut c_void,
+    wallet: *mut c_void,
+    network: Network,
+    path: PathBuf,
+}
+
+// SAFETY: the wallet library's objects are not tied to the thread that
+// created them. `Wallet` is not `Sync`, so only one thread uses it at a time.
+unsafe impl Send for Wallet {}
+
+impl Wallet {
+    /// Creates a new wallet and returns it with its recovery phrase.
+    ///
+    /// The phrase is a 16-word Polyseed. It is the only backup of the wallet
+    /// and must be shown to the user.
+    pub fn create(
+        lib: &WalletLibrary,
+        path: &Path,
+        password: &str,
+        network: Network,
+    ) -> Result<(Wallet, SeedPhrase), Error> {
+        let language = c_string(SEED_LANGUAGE, "seed language")?;
+        // SAFETY: valid NUL-terminated argument; the result is a string the
+        // library allocated for us.
+        let words = unsafe {
+            let raw = lib.api.MONERO_Wallet_createPolyseed(language.as_ptr());
+            lib.take_secret(raw)
+        };
+        if words.is_empty() {
+            return Err(Error::Wallet(
+                "the wallet library did not produce a recovery phrase".into(),
+            ));
+        }
+        let phrase = SeedPhrase::parse(&words)?;
+        let wallet = Self::from_polyseed(lib, path, password, network, &phrase, true)?;
+        Ok((wallet, phrase))
+    }
+
+    /// Restores a wallet from its recovery phrase.
+    ///
+    /// `restore_height` is where scanning starts for a 25-word phrase; zero
+    /// scans the whole chain. A 16-word phrase carries its own creation date
+    /// and ignores it.
+    pub fn restore(
+        lib: &WalletLibrary,
+        path: &Path,
+        password: &str,
+        network: Network,
+        phrase: &SeedPhrase,
+        restore_height: u64,
+    ) -> Result<Wallet, Error> {
+        match phrase.kind() {
+            SeedKind::Polyseed => Self::from_polyseed(lib, path, password, network, phrase, false),
+            SeedKind::Legacy => {
+                let (manager, c_path) = Self::prepare_new(lib, path)?;
+                let password = SecretCString::new(password, "password")?;
+                let words = SecretCString::new(phrase.as_str(), "recovery phrase")?;
+                let offset = c_string("", "seed offset")?;
+                // SAFETY: every pointer is a valid NUL-terminated string that
+                // outlives the call; `manager` comes from the library.
+                let wallet = unsafe {
+                    lib.api.MONERO_WalletManager_recoveryWallet(
+                        manager,
+                        c_path.as_ptr(),
+                        password.as_ptr(),
+                        words.as_ptr(),
+                        network.id(),
+                        restore_height,
+                        KDF_ROUNDS,
+                        offset.as_ptr(),
+                    )
+                };
+                Self::adopt(lib, manager, wallet, network, path)
+            }
+        }
+    }
+
+    /// Opens an existing wallet file.
+    pub fn open(
+        lib: &WalletLibrary,
+        path: &Path,
+        password: &str,
+        network: Network,
+    ) -> Result<Wallet, Error> {
+        let manager = Self::manager(lib)?;
+        let c_path = c_string(path_text(path)?, "wallet path")?;
+        let password = SecretCString::new(password, "password")?;
+        // SAFETY: valid NUL-terminated strings; `manager` comes from the
+        // library.
+        let wallet = unsafe {
+            lib.api.MONERO_WalletManager_openWallet(
+                manager,
+                c_path.as_ptr(),
+                password.as_ptr(),
+                network.id(),
+            )
+        };
+        Self::adopt(lib, manager, wallet, network, path)
+    }
+
+    fn from_polyseed(
+        lib: &WalletLibrary,
+        path: &Path,
+        password: &str,
+        network: Network,
+        phrase: &SeedPhrase,
+        new_wallet: bool,
+    ) -> Result<Wallet, Error> {
+        let (manager, c_path) = Self::prepare_new(lib, path)?;
+        let password = SecretCString::new(password, "password")?;
+        let words = SecretCString::new(phrase.as_str(), "recovery phrase")?;
+        let passphrase = c_string("", "seed passphrase")?;
+        // SAFETY: every pointer is a valid NUL-terminated string that
+        // outlives the call; `manager` comes from the library.
+        let wallet = unsafe {
+            lib.api.MONERO_WalletManager_createWalletFromPolyseed(
+                manager,
+                c_path.as_ptr(),
+                password.as_ptr(),
+                network.id(),
+                words.as_ptr(),
+                passphrase.as_ptr(),
+                new_wallet,
+                0,
+                KDF_ROUNDS,
+            )
+        };
+        Self::adopt(lib, manager, wallet, network, path)
+    }
+
+    fn manager(lib: &WalletLibrary) -> Result<*mut c_void, Error> {
+        // SAFETY: no arguments; returns the library's wallet manager.
+        let manager = unsafe { lib.api.MONERO_WalletManagerFactory_getWalletManager() };
+        if manager.is_null() {
+            return Err(Error::Wallet(
+                "the wallet library has no wallet manager".into(),
+            ));
+        }
+        Ok(manager)
+    }
+
+    /// Common start of creating a wallet file: refuses to overwrite one.
+    fn prepare_new(
+        lib: &WalletLibrary,
+        path: &Path,
+    ) -> Result<(*mut c_void, std::ffi::CString), Error> {
+        let manager = Self::manager(lib)?;
+        let c_path = c_string(path_text(path)?, "wallet path")?;
+        // SAFETY: valid manager and NUL-terminated path.
+        let exists = unsafe {
+            lib.api
+                .MONERO_WalletManager_walletExists(manager, c_path.as_ptr())
+        };
+        if exists {
+            return Err(Error::WalletExists(path.to_path_buf()));
+        }
+        Ok((manager, c_path))
+    }
+
+    /// Turns a pointer returned by the wallet manager into a `Wallet`, or
+    /// into the library's error.
+    fn adopt(
+        lib: &WalletLibrary,
+        manager: *mut c_void,
+        wallet: *mut c_void,
+        network: Network,
+        path: &Path,
+    ) -> Result<Wallet, Error> {
+        if wallet.is_null() {
+            // SAFETY: valid manager; the result is a library-owned string.
+            let message =
+                unsafe { lib.take_string(lib.api.MONERO_WalletManager_errorString(manager)) };
+            return Err(Error::Wallet(non_empty(
+                message,
+                "the wallet could not be opened",
+            )));
+        }
+        let wallet = Wallet {
+            lib: lib.clone(),
+            manager,
+            wallet,
+            network,
+            path: path.to_path_buf(),
+        };
+        // The manager returns an object even when opening failed; the error
+        // is on the object. Dropping `wallet` on the error path closes it.
+        wallet.check()?;
+        Ok(wallet)
+    }
+
+    /// Returns the library's error for the last operation, if there is one.
+    fn check(&self) -> Result<(), Error> {
+        // SAFETY: `self.wallet` is a live wallet object.
+        let status = unsafe { self.lib.api.MONERO_Wallet_status(self.wallet) };
+        if status == sys::STATUS_OK {
+            return Ok(());
+        }
+        // SAFETY: live wallet object; the result is a library-owned string.
+        let message = unsafe {
+            self.lib
+                .take_string(self.lib.api.MONERO_Wallet_errorString(self.wallet))
+        };
+        Err(Error::Wallet(non_empty(
+            message,
+            "the wallet library reported an error",
+        )))
+    }
+
+    pub fn network(&self) -> Network {
+        self.network
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// The wallet's recovery phrase, in the format it was created with.
+    pub fn seed_phrase(&self) -> Result<SeedPhrase, Error> {
+        let empty = c_string("", "seed passphrase")?;
+        // SAFETY: live wallet object and valid strings; results are
+        // library-owned strings.
+        let (polyseed, legacy) = unsafe {
+            let polyseed = self.lib.take_secret(
+                self.lib
+                    .api
+                    .MONERO_Wallet_getPolyseed(self.wallet, empty.as_ptr()),
+            );
+            let legacy = self
+                .lib
+                .take_secret(self.lib.api.MONERO_Wallet_seed(self.wallet, empty.as_ptr()));
+            (polyseed, legacy)
+        };
+        if !polyseed.trim().is_empty() {
+            return SeedPhrase::parse(&polyseed);
+        }
+        if !legacy.trim().is_empty() {
+            return SeedPhrase::parse(&legacy);
+        }
+        Err(Error::Wallet(
+            "this wallet has no recovery phrase".to_string(),
+        ))
+    }
+
+    /// The wallet's keys as a classic 25-word Monero phrase.
+    ///
+    /// Every Monero wallet can restore from this format, including ones that
+    /// do not know Polyseed. Unlike the 16-word phrase it does not carry the
+    /// creation date, so restoring from it needs a restore height.
+    pub fn legacy_seed_phrase(&self) -> Result<SeedPhrase, Error> {
+        let empty = c_string("", "seed offset")?;
+        // SAFETY: live wallet object and valid string; the result is a
+        // library-owned string.
+        let legacy = unsafe {
+            self.lib
+                .take_secret(self.lib.api.MONERO_Wallet_seed(self.wallet, empty.as_ptr()))
+        };
+        self.check()?;
+        SeedPhrase::parse(&legacy)
+    }
+
+    /// The wallet's primary address. Veil never shows it; tests use it to
+    /// fund a private chain, whose daemon cannot credit a subaddress.
+    #[cfg(feature = "regtest")]
+    pub fn primary_address(&self) -> Result<String, Error> {
+        self.address_at(0).map(|a| a.address)
+    }
+
+    /// Whether `address` is a valid address on this wallet's network.
+    pub fn is_valid_address(&self, address: &str) -> bool {
+        let Ok(address) = c_string(address.trim(), "address") else {
+            return false;
+        };
+        // SAFETY: valid NUL-terminated string.
+        unsafe {
+            self.lib
+                .api
+                .MONERO_Wallet_addressValid(address.as_ptr(), self.network.id())
+        }
+    }
+
+    /// Points the wallet at a node. Does not contact it yet.
+    pub fn connect(&mut self, node: &Node) -> Result<(), Error> {
+        let (daemon, proxy) = match node {
+            Node::Onion {
+                host,
+                port,
+                socks_port,
+            } => {
+                let host = host.trim().to_ascii_lowercase();
+                if !is_onion_host(&host) {
+                    return Err(Error::NodeNotOnion);
+                }
+                (
+                    format!("http://{host}:{port}"),
+                    format!("127.0.0.1:{socks_port}"),
+                )
+            }
+            #[cfg(feature = "regtest")]
+            Node::LocalRegtest { port } => (format!("http://127.0.0.1:{port}"), String::new()),
+        };
+
+        // When a node is set, the wallet library moves the scan start of a
+        // wallet it considers new to the node's current height. It considers
+        // a wallet new whenever nothing has been scanned yet, which is also
+        // true of a restored wallet that was closed before its first sync,
+        // and of a new wallet whose address was paid before it first went
+        // online. Both would then skip the blocks that hold their funds.
+        // Marking the wallet as recovering keeps the stored start height: the
+        // creation date for a new wallet, the phrase's date or the chosen
+        // height for a restored one.
+        // SAFETY: live wallet object.
+        unsafe {
+            self.lib
+                .api
+                .MONERO_Wallet_setRecoveringFromSeed(self.wallet, true)
+        };
+
+        let daemon = c_string(&daemon, "node address")?;
+        let proxy = c_string(&proxy, "proxy address")?;
+        let empty = c_string("", "node login")?;
+        // SAFETY: live wallet object and valid strings.
+        let accepted = unsafe {
+            self.lib.api.MONERO_Wallet_init(
+                self.wallet,
+                daemon.as_ptr(),
+                0,
+                empty.as_ptr(),
+                empty.as_ptr(),
+                // No TLS: an onion connection is already encrypted and
+                // authenticated end to end, and the test daemon is local.
+                false,
+                false,
+                proxy.as_ptr(),
+            )
+        };
+        if !accepted {
+            self.check()?;
+            return Err(Error::Wallet("the node address was not accepted".into()));
+        }
+        // A remote node is never trusted: the wallet verifies what it is told
+        // and does not ask the node anything that reveals its outputs.
+        // SAFETY: live wallet object.
+        unsafe {
+            self.lib
+                .api
+                .MONERO_Wallet_setTrustedDaemon(self.wallet, false)
+        };
+
+        #[cfg(feature = "regtest")]
+        if matches!(node, Node::LocalRegtest { .. }) {
+            // A regtest chain activates every protocol version from its
+            // first block, which a wallet on a public network rejects.
+            // SAFETY: live wallet object.
+            unsafe {
+                self.lib
+                    .api
+                    .MONERO_Wallet_setAllowMismatchedDaemonVersion(self.wallet, true)
+            };
+        }
+        Ok(())
+    }
+
+    /// The height scanning starts from. A new wallet starts about a month
+    /// before its creation, to be safe against clock and block-time drift.
+    pub fn restore_height(&self) -> u64 {
+        // SAFETY: live wallet object.
+        unsafe {
+            self.lib
+                .api
+                .MONERO_Wallet_getRefreshFromBlockHeight(self.wallet)
+        }
+    }
+
+    /// Changes where scanning starts. Lower it to find older payments.
+    pub fn set_restore_height(&mut self, height: u64) {
+        // SAFETY: live wallet object.
+        unsafe {
+            self.lib
+                .api
+                .MONERO_Wallet_setRefreshFromBlockHeight(self.wallet, height)
+        }
+    }
+
+    /// Downloads and scans new blocks. Blocks until the wallet has caught up
+    /// with the node or an error occurs.
+    ///
+    /// Fails if the node cannot be reached or is itself still synchronising.
+    /// The wallet library would skip the scan in both cases and report
+    /// success, which would show a stale balance as if it were current.
+    pub fn refresh(&mut self) -> Result<SyncProgress, Error> {
+        // SAFETY: live wallet object.
+        let connection = unsafe { self.lib.api.MONERO_Wallet_connected(self.wallet) };
+        match connection {
+            sys::CONNECTION_CONNECTED => {}
+            sys::CONNECTION_DISCONNECTED => return Err(Error::NodeUnreachable),
+            _ => return Err(Error::NodeIncompatible),
+        }
+        // SAFETY: live wallet object.
+        let (height, target) = unsafe {
+            (
+                self.lib
+                    .api
+                    .MONERO_Wallet_daemonBlockChainHeight(self.wallet),
+                self.lib
+                    .api
+                    .MONERO_Wallet_daemonBlockChainTargetHeight(self.wallet),
+            )
+        };
+        self.check()?;
+        // A height of one is a chain with nothing but its first block, which
+        // the library also treats as not ready.
+        if height < target || height <= 1 {
+            return Err(Error::NodeSyncing { height, target });
+        }
+
+        let before = self.sync_progress().wallet_height;
+        // SAFETY: live wallet object.
+        let refreshed = unsafe { self.lib.api.MONERO_Wallet_refresh(self.wallet) };
+        self.check()?;
+        if !refreshed {
+            return Err(Error::Wallet("synchronisation failed".into()));
+        }
+        let progress = self.sync_progress();
+        // Success with blocks still missing and none scanned means the
+        // library skipped the scan. Never report that as up to date.
+        if progress.blocks_left() > 0 && progress.wallet_height <= before {
+            return Err(Error::Wallet(
+                "synchronisation made no progress".to_string(),
+            ));
+        }
+        Ok(progress)
+    }
+
+    pub fn sync_progress(&self) -> SyncProgress {
+        // SAFETY: live wallet object.
+        unsafe {
+            SyncProgress {
+                wallet_height: self.lib.api.MONERO_Wallet_blockChainHeight(self.wallet),
+                node_height: self
+                    .lib
+                    .api
+                    .MONERO_Wallet_daemonBlockChainHeight(self.wallet),
+            }
+        }
+    }
+
+    pub fn balance(&self) -> Balance {
+        // SAFETY: live wallet object.
+        unsafe {
+            Balance {
+                total: Amount::from_atomic(
+                    self.lib.api.MONERO_Wallet_balance(self.wallet, ACCOUNT),
+                ),
+                unlocked: Amount::from_atomic(
+                    self.lib
+                        .api
+                        .MONERO_Wallet_unlockedBalance(self.wallet, ACCOUNT),
+                ),
+            }
+        }
+    }
+
+    /// The address to show on the Receive screen.
+    ///
+    /// This is the most recently issued address, as long as nothing has been
+    /// received on it. Once it has been paid, a new one is issued. The
+    /// wallet's primary address is never returned.
+    pub fn receive_address(&mut self) -> Result<ReceiveAddress, Error> {
+        let highest_used = self.highest_used_address()?;
+        let latest = self.address_count() - 1;
+        if latest >= 1 && highest_used.is_none_or(|used| latest > used) {
+            return self.address_at(latest);
+        }
+        self.issue_address()
+    }
+
+    /// Issues an additional address although the current one is unused, for
+    /// a user who wants to give different payers different addresses.
+    ///
+    /// Refused once [`MAX_UNUSED_ADDRESSES`] addresses in a row are unused.
+    pub fn new_receive_address(&mut self) -> Result<ReceiveAddress, Error> {
+        let highest_used = self.highest_used_address()?.unwrap_or(0);
+        let latest = self.address_count() - 1;
+        let unused = latest.saturating_sub(highest_used);
+        if unused >= MAX_UNUSED_ADDRESSES {
+            return Err(Error::TooManyUnusedAddresses { unused });
+        }
+        self.issue_address()
+    }
+
+    /// Number of addresses in the account, counting the primary address at
+    /// index zero. Always at least one.
+    fn address_count(&self) -> u32 {
+        // SAFETY: live wallet object.
+        let count = unsafe {
+            self.lib
+                .api
+                .MONERO_Wallet_numSubaddresses(self.wallet, ACCOUNT)
+        };
+        u32::try_from(count).unwrap_or(u32::MAX).max(1)
+    }
+
+    fn issue_address(&mut self) -> Result<ReceiveAddress, Error> {
+        let label = c_string("", "address label")?;
+        let index = self.address_count();
+        // SAFETY: live wallet object and valid string.
+        unsafe {
+            self.lib
+                .api
+                .MONERO_Wallet_addSubaddress(self.wallet, ACCOUNT, label.as_ptr())
+        };
+        self.check()?;
+        if self.address_count() != index + 1 {
+            return Err(Error::Wallet("a new address could not be created".into()));
+        }
+        self.address_at(index)
+    }
+
+    fn address_at(&self, index: u32) -> Result<ReceiveAddress, Error> {
+        // SAFETY: live wallet object; the result is a library-owned string.
+        let address = unsafe {
+            self.lib.take_string(self.lib.api.MONERO_Wallet_address(
+                self.wallet,
+                u64::from(ACCOUNT),
+                u64::from(index),
+            ))
+        };
+        if address.is_empty() {
+            return Err(Error::Wallet("the address could not be read".into()));
+        }
+        Ok(ReceiveAddress { index, address })
+    }
+
+    /// The highest address index that has received anything, confirmed or
+    /// not.
+    fn highest_used_address(&mut self) -> Result<Option<u32>, Error> {
+        let used: BTreeSet<u32> = self
+            .history()?
+            .into_iter()
+            .filter(|t| t.direction == Direction::Incoming && !t.failed)
+            .flat_map(|t| t.address_indices)
+            .collect();
+        Ok(used.into_iter().next_back())
+    }
+
+    /// The wallet's transfers, oldest first.
+    pub fn history(&mut self) -> Result<Vec<Transfer>, Error> {
+        let separator = c_string(LIST_SEPARATOR, "separator")?;
+        // SAFETY: live wallet object. The history object and the entries it
+        // hands out belong to the wallet and stay valid until the next
+        // history refresh, which happens only here.
+        unsafe {
+            let api = &self.lib.api;
+            let history = api.MONERO_Wallet_history(self.wallet);
+            if history.is_null() {
+                return Err(Error::Wallet("the history could not be read".into()));
+            }
+            api.MONERO_TransactionHistory_refresh(history);
+            let count = api.MONERO_TransactionHistory_count(history).max(0);
+
+            let mut transfers = Vec::with_capacity(count as usize);
+            for position in 0..count {
+                let info = api.MONERO_TransactionHistory_transaction(history, position);
+                if info.is_null() {
+                    continue;
+                }
+                let direction = if api.MONERO_TransactionInfo_direction(info) == sys::DIRECTION_IN {
+                    Direction::Incoming
+                } else {
+                    Direction::Outgoing
+                };
+                let in_account = api.MONERO_TransactionInfo_subaddrAccount(info) == ACCOUNT;
+                let indices = self
+                    .lib
+                    .take_string(api.MONERO_TransactionInfo_subaddrIndex(info, separator.as_ptr()));
+                let address_indices = if direction == Direction::Incoming && in_account {
+                    indices
+                        .split(LIST_SEPARATOR)
+                        .filter_map(|part| part.trim().parse::<u32>().ok())
+                        .collect()
+                } else {
+                    Vec::new()
+                };
+                transfers.push(Transfer {
+                    txid: self.lib.take_string(api.MONERO_TransactionInfo_hash(info)),
+                    direction,
+                    amount: Amount::from_atomic(api.MONERO_TransactionInfo_amount(info)),
+                    fee: Amount::from_atomic(api.MONERO_TransactionInfo_fee(info)),
+                    block_height: api.MONERO_TransactionInfo_blockHeight(info),
+                    confirmations: api.MONERO_TransactionInfo_confirmations(info),
+                    timestamp: api.MONERO_TransactionInfo_timestamp(info),
+                    pending: api.MONERO_TransactionInfo_isPending(info),
+                    failed: api.MONERO_TransactionInfo_isFailed(info),
+                    address_indices,
+                });
+            }
+            transfers.sort_by_key(|t| (t.block_height == 0, t.block_height, t.timestamp));
+            Ok(transfers)
+        }
+    }
+
+    /// Builds and signs a transaction without sending it, so the user can
+    /// review the fee first.
+    pub fn prepare_send(&mut self, to: &str, amount: SendAmount) -> Result<PendingSend<'_>, Error> {
+        let to = to.trim();
+        if !self.is_valid_address(to) {
+            return Err(Error::InvalidAddress);
+        }
+        // The wallet library reads an amount of zero as "send everything".
+        // That meaning is only ever used on purpose.
+        let units = match amount {
+            SendAmount::Exact(amount) if amount.is_zero() => return Err(Error::ZeroAmount),
+            SendAmount::Exact(amount) => amount.as_atomic(),
+            SendAmount::Everything => 0,
+        };
+
+        let address = c_string(to, "address")?;
+        let empty = c_string("", "payment id")?;
+        let separator = c_string(LIST_SEPARATOR, "separator")?;
+        // SAFETY: live wallet object and valid strings.
+        let pending = unsafe {
+            self.lib.api.MONERO_Wallet_createTransaction(
+                self.wallet,
+                address.as_ptr(),
+                empty.as_ptr(),
+                units,
+                RING_SIZE_AUTO,
+                sys::PRIORITY_DEFAULT,
+                ACCOUNT,
+                empty.as_ptr(),
+                separator.as_ptr(),
+            )
+        };
+        if pending.is_null() {
+            self.check()?;
+            return Err(Error::Wallet("the transaction could not be built".into()));
+        }
+
+        // SAFETY: `pending` is a live pending-transaction object.
+        unsafe {
+            let api = &self.lib.api;
+            if api.MONERO_PendingTransaction_status(pending) != sys::STATUS_OK {
+                let message = self
+                    .lib
+                    .take_string(api.MONERO_PendingTransaction_errorString(pending));
+                return Err(Error::Wallet(non_empty(
+                    message,
+                    "the transaction could not be built",
+                )));
+            }
+            // Read the ids now: the library forgets them once the
+            // transaction has been broadcast.
+            let ids = self
+                .lib
+                .take_string(api.MONERO_PendingTransaction_txid(pending, separator.as_ptr()));
+            let txids: Vec<String> = ids
+                .split(LIST_SEPARATOR)
+                .map(str::trim)
+                .filter(|id| !id.is_empty())
+                .map(str::to_owned)
+                .collect();
+            if txids.is_empty() {
+                return Err(Error::Wallet("the transaction has no id".into()));
+            }
+            Ok(PendingSend {
+                amount: Amount::from_atomic(api.MONERO_PendingTransaction_amount(pending)),
+                fee: Amount::from_atomic(api.MONERO_PendingTransaction_fee(pending)),
+                txids,
+                pending,
+                wallet: self,
+            })
+        }
+    }
+
+    /// Writes the wallet to disk. The wallet library replaces the file
+    /// atomically.
+    pub fn save(&mut self) -> Result<(), Error> {
+        let same_path = c_string("", "wallet path")?;
+        // SAFETY: live wallet object; an empty path means "where it is".
+        let stored = unsafe {
+            self.lib
+                .api
+                .MONERO_Wallet_store(self.wallet, same_path.as_ptr())
+        };
+        if !stored {
+            self.check()?;
+            return Err(Error::Wallet("the wallet could not be saved".into()));
+        }
+        Ok(())
+    }
+
+    /// Saves and closes the wallet. Prefer this to dropping the wallet, which
+    /// also saves but cannot report a failure.
+    pub fn close(mut self) -> Result<(), Error> {
+        self.save()?;
+        self.release(false);
+        Ok(())
+    }
+
+    fn release(&mut self, store: bool) {
+        if self.wallet.is_null() {
+            return;
+        }
+        // SAFETY: live manager and wallet; the wallet pointer is cleared so
+        // it is never used again.
+        unsafe {
+            self.lib
+                .api
+                .MONERO_WalletManager_closeWallet(self.manager, self.wallet, store);
+        }
+        self.wallet = std::ptr::null_mut();
+    }
+}
+
+impl Drop for Wallet {
+    fn drop(&mut self) {
+        self.release(true);
+    }
+}
+
+/// A signed transaction waiting for the user's confirmation.
+///
+/// Nothing has left the device yet. Dropping it abandons the transaction.
+pub struct PendingSend<'w> {
+    wallet: &'w mut Wallet,
+    pending: *mut c_void,
+    amount: Amount,
+    fee: Amount,
+    txids: Vec<String>,
+}
+
+impl PendingSend<'_> {
+    /// What the recipient gets.
+    pub fn amount(&self) -> Amount {
+        self.amount
+    }
+
+    /// The network fee, paid on top of the amount.
+    pub fn fee(&self) -> Amount {
+        self.fee
+    }
+
+    /// Ids of the transactions that carry the payment. More than one only
+    /// when the wallet holds many small inputs.
+    pub fn txids(&self) -> &[String] {
+        &self.txids
+    }
+
+    /// Broadcasts the transaction and returns its transaction ids.
+    pub fn commit(self) -> Result<Vec<String>, Error> {
+        let lib = &self.wallet.lib;
+        let empty = c_string("", "file name")?;
+        // SAFETY: live pending-transaction object and valid string. An empty
+        // file name means "broadcast" rather than "write to a file".
+        unsafe {
+            let api = &lib.api;
+            let sent = api.MONERO_PendingTransaction_commit(self.pending, empty.as_ptr(), false);
+            if !sent || api.MONERO_PendingTransaction_status(self.pending) != sys::STATUS_OK {
+                let message =
+                    lib.take_string(api.MONERO_PendingTransaction_errorString(self.pending));
+                return Err(Error::Wallet(non_empty(
+                    message,
+                    "the transaction could not be sent",
+                )));
+            }
+        }
+        Ok(self.txids)
+    }
+}
+
+fn path_text(path: &Path) -> Result<&str, Error> {
+    path.to_str().ok_or(Error::InvalidArgument {
+        what: "wallet path",
+    })
+}
+
+fn non_empty(message: String, fallback: &str) -> String {
+    if message.trim().is_empty() {
+        fallback.to_owned()
+    } else {
+        message
+    }
+}
+
+/// True for a bare `.onion` hostname: no scheme, port, path, or user info.
+fn is_onion_host(host: &str) -> bool {
+    let Some(name) = host.strip_suffix(".onion") else {
+        return false;
+    };
+    !name.is_empty()
+        && name.split('.').all(|label| {
+            !label.is_empty()
+                && label
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'-')
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn onion_host_must_be_a_bare_onion_name() {
+        let v3 = "2gzyxa5ihm7nsggfxnu52rck2vv4rvmdlkiu3zzui5du4xyclen53wid";
+        assert!(is_onion_host(&format!("{v3}.onion")));
+        for host in [
+            "",
+            ".onion",
+            "onion",
+            "example.com",
+            "node.onion.example.com",
+            "127.0.0.1",
+            "localhost",
+            &format!("http://{v3}.onion"),
+            &format!("{v3}.onion:18081"),
+            &format!("{v3}.onion/path"),
+            &format!("user@{v3}.onion"),
+            &format!("{v3}.onion example.com"),
+        ] {
+            assert!(!is_onion_host(host), "{host:?} must be refused");
+        }
+    }
+
+    #[test]
+    fn sync_progress_counts_blocks_left() {
+        let behind = SyncProgress {
+            wallet_height: 90,
+            node_height: 100,
+        };
+        assert_eq!(behind.blocks_left(), 10);
+        let ahead = SyncProgress {
+            wallet_height: 100,
+            node_height: 90,
+        };
+        assert_eq!(ahead.blocks_left(), 0);
+    }
+}

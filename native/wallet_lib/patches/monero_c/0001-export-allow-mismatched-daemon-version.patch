@@ -1,0 +1,42 @@
+diff --git a/monero_libwallet2_api_c/monero_libwallet2_api_c.exp b/monero_libwallet2_api_c/monero_libwallet2_api_c.exp
+index d7a404e..1928406 100644
+--- a/monero_libwallet2_api_c/monero_libwallet2_api_c.exp
++++ b/monero_libwallet2_api_c/monero_libwallet2_api_c.exp
+@@ -160,6 +160,7 @@ _MONERO_Wallet_connectToDaemon
+ _MONERO_Wallet_connected
+ _MONERO_Wallet_setTrustedDaemon
+ _MONERO_Wallet_trustedDaemon
++_MONERO_Wallet_setAllowMismatchedDaemonVersion
+ _MONERO_Wallet_setProxy
+ _MONERO_Wallet_balance
+ _MONERO_Wallet_unlockedBalance
+diff --git a/monero_libwallet2_api_c/src/main/cpp/monero_wallet2_api_c.cpp b/monero_libwallet2_api_c/src/main/cpp/monero_wallet2_api_c.cpp
+index 7a37dfb..a7ff07e 100644
+--- a/monero_libwallet2_api_c/src/main/cpp/monero_wallet2_api_c.cpp
++++ b/monero_libwallet2_api_c/src/main/cpp/monero_wallet2_api_c.cpp
+@@ -1246,6 +1246,12 @@ void MONERO_Wallet_setTrustedDaemon(void* wallet_ptr, bool arg) {
+     return wallet->setTrustedDaemon(arg);
+     DEBUG_END()
+ }
++void MONERO_Wallet_setAllowMismatchedDaemonVersion(void* wallet_ptr, bool allow_mismatch) {
++    DEBUG_START()
++    Monero::Wallet *wallet = reinterpret_cast<Monero::Wallet*>(wallet_ptr);
++    return wallet->setAllowMismatchedDaemonVersion(allow_mismatch);
++    DEBUG_END()
++}
+ bool MONERO_Wallet_trustedDaemon(void* wallet_ptr) {
+     DEBUG_START()
+     Monero::Wallet *wallet = reinterpret_cast<Monero::Wallet*>(wallet_ptr);
+diff --git a/monero_libwallet2_api_c/src/main/cpp/monero_wallet2_api_c.h b/monero_libwallet2_api_c/src/main/cpp/monero_wallet2_api_c.h
+index eff5c58..4dacf15 100644
+--- a/monero_libwallet2_api_c/src/main/cpp/monero_wallet2_api_c.h
++++ b/monero_libwallet2_api_c/src/main/cpp/monero_wallet2_api_c.h
+@@ -578,6 +578,8 @@ extern ADDAPI int MONERO_Wallet_connected(void* wallet_ptr);
+ extern ADDAPI void MONERO_Wallet_setTrustedDaemon(void* wallet_ptr, bool arg);
+ //     virtual bool trustedDaemon() const = 0;
+ extern ADDAPI bool MONERO_Wallet_trustedDaemon(void* wallet_ptr);
++//     virtual void setAllowMismatchedDaemonVersion(bool allow_mismatch) = 0;
++extern ADDAPI void MONERO_Wallet_setAllowMismatchedDaemonVersion(void* wallet_ptr, bool allow_mismatch);
+ //     virtual bool setProxy(const std::string &address) = 0;
+ extern ADDAPI bool MONERO_Wallet_setProxy(void* wallet_ptr, const char* address);
+ //     virtual uint64_t balance(uint32_t accountIndex = 0) const = 0;
