@@ -1,0 +1,12 @@
+{
+  "@@locale": "ru",
+  "appName": "Veil",
+  "startTagline": "Кошелёк Monero. Всё идёт через Tor.",
+  "startCreate": "Создать кошелёк",
+  "startRestore": "Восстановить по фразе",
+  "startStagenetNotice": "Тестовая сеть. Эта версия не работает с настоящими средствами.",
+  "createTitle": "Новый кошелёк",
+  "restoreTitle": "Восстановление",
+  "notBuiltYet": "Этот экран ещё не сделан.",
+  "back": "Назад"
+}

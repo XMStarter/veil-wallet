@@ -1,0 +1,12 @@
+{
+  "@@locale": "en",
+  "appName": "Veil",
+  "startTagline": "A Monero wallet. Everything goes through Tor.",
+  "startCreate": "Create wallet",
+  "startRestore": "Restore from recovery phrase",
+  "startStagenetNotice": "Test network. This version does not work with real funds.",
+  "createTitle": "New wallet",
+  "restoreTitle": "Restore",
+  "notBuiltYet": "This screen is not built yet.",
+  "back": "Back"
+}
