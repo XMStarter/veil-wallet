@@ -6,6 +6,11 @@ edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[lib]
+# The app loads the core as a shared library on desktop and links it
+# statically where the platform asks for that.
+crate-type = ["lib", "cdylib", "staticlib"]
+
 [features]
 # Lets tests run the core against a regtest daemon. Never enabled in the app.
 regtest = ["veil_wallet/regtest"]
@@ -16,6 +21,8 @@ veil_wallet = { path = "../veil_wallet" }
 thiserror = "2"
 # Wipes the password a session holds until its wallet is open.
 zeroize = "1"
+# Commands and state cross the C interface as JSON.
+serde_json = "1"
 
 [dev-dependencies]
 # The stand-in for Tor is a dev-dependency feature, so it is compiled into

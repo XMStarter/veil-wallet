@@ -84,6 +84,10 @@ pub enum ProblemKind {
     NoNode,
     /// The destination is not an address of this network.
     InvalidAddress,
+    /// The amount is not a number of coins.
+    InvalidAmount,
+    /// A node is not written as `host.onion:port`.
+    InvalidNode,
     /// The amount to send is zero.
     ZeroAmount,
     /// Too many addresses were handed out without any being paid.
@@ -93,6 +97,9 @@ pub enum ProblemKind {
     SendOutcomeUnknown,
     /// The command does not fit what the session is doing.
     NotNow,
+    /// The request could not be read at all: a mistake in the program that
+    /// made it, not something a user did.
+    BadRequest,
     /// Anything else. `detail` says what.
     Other,
 }

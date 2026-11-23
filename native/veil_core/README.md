@@ -51,6 +51,36 @@ synchronisation and every send; while a transaction is under review it
 takes no other command but closing. Closing, or dropping the session,
 saves the wallet and stops Tor.
 
+## From another language: the C interface
+
+The app is written in Dart, so the session is also reachable through a few
+C functions (`src/ffi.rs`). What crosses them is text:
+
+| Function | What it does |
+|---|---|
+| `veil_session_start(config, password, phrase, &problem)` | Starts a session from a JSON configuration; returns a handle at once |
+| `veil_session_revision(handle)` | The state's revision, cheap enough to ask on every frame |
+| `veil_session_state(handle)` | The state as JSON |
+| `veil_session_command(handle, command)` | A command as JSON: `sync`, `new_address`, `prepare_send`, `confirm_send`, `cancel_send` |
+| `veil_session_recovery_phrase(handle)` | The recovery phrase, freed with `veil_secret_free`, which wipes it |
+| `veil_session_close(handle)` | Saves, closes, stops Tor, and returns the last state |
+| `veil_string_free(text)` | Frees any other text the interface returned |
+
+The password and a recovery phrase are arguments of their own and never
+part of the JSON, and the phrase never appears in the state. Amounts cross
+as text, exact to the last digit, so that the other side shows them and
+never calculates with them. A request that cannot be read is refused with a
+problem of the kind `bad_request`; a comma in an amount is a decimal
+separator, as people type it.
+
+Only `stagenet` is accepted as a network, and bridges cannot be given yet.
+
+The state as it crosses the interface is pinned by `tests/fixtures/*.json`.
+The core's tests compare what they produce with those files, and the Dart
+side reads the same files in its tests, so the two cannot drift apart
+unnoticed. `VEIL_WRITE_FIXTURES=1 cargo test -p veil_core --lib ffi` writes
+them again after a change that is meant.
+
 ## When a connection is lost
 
 - **In the middle of a synchronisation.** While it downloads blocks, the
@@ -99,6 +129,7 @@ node block until the node has answered.
 | Node names; Tor not ready; the wallet asks for its node by name through the sync listener only; no listeners, no connection; a web server is not a node | The wallet library for all but the first. No network: Tor is replaced by `veil_tor`'s stand-in. | `../check.sh offline` |
 | A connection cut in the middle of a synchronisation, with the node still there, with the node gone, and with Tor gone: what is reported, that the next node is tried, and that the wallet is unharmed. The node is a fake that knows its version and height and has no blocks | The wallet library. No network. | `../check.sh offline` |
 | The session: a new wallet, the same wallet opened again, a wrong password, a restore, a synchronisation that fails, the timer, the cap on addresses, a send that cannot be built, a damaged data file | The wallet library. No network. | `../check.sh offline` |
+| The C interface: requests read or refused, the state against the fixtures, null handles, a session driven through it from start to close | The wallet library for the last. No network. | `../check.sh offline` |
 | A wallet behind the stand-in on a private chain: synchronises through one listener, sends through the other, and stays silent in between | The wallet library and a Monero daemon | `../check.sh regtest` |
 | The session on a private chain: receives, reviews a send and cancels it, sends, loses the answer to a send and finds it in the history, and shows the same in a new session | The wallet library and a Monero daemon | `../check.sh regtest` |
 | On a private chain: a download cut once is retried; a node that disappears is reported and another node finishes; a send whose answer is lost is reported as unknown and turns up in the history, paid once | The wallet library and a Monero daemon | `../check.sh regtest` |
@@ -117,4 +148,4 @@ runner they fail before starting anything.
 - Stopping a synchronisation that is under way. Closing a session waits
   for it, which on a first synchronisation can be minutes.
 - Changing the password, and the other things the Settings screen needs.
-- A C interface for the app: step 3.2 of the build plan.
+- Bridges through the C interface. The Settings screen will need them.

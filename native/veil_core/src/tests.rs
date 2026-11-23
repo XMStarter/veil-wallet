@@ -412,6 +412,7 @@ fn no_other_node_is_tried_once_tor_has_dropped() {
 }
 
 mod fake_node;
+mod ffi;
 #[cfg(feature = "regtest")]
 mod regtest;
 mod session;
