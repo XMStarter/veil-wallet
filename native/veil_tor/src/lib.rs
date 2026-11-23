@@ -15,6 +15,7 @@
 //! * **Loopback only.** The listeners bind to `127.0.0.1` on a port chosen by
 //!   the operating system.
 
+mod bridges;
 pub mod ffi;
 mod onion;
 mod service;
@@ -22,6 +23,7 @@ mod socks;
 #[cfg(feature = "stand-in")]
 mod stand_in;
 
+pub use bridges::{Bridges, TransportProgram};
 pub use service::{Purpose, State, Status, TorConfig, TorError, TorService};
 #[cfg(feature = "stand-in")]
 pub use stand_in::{Request, StandIn};

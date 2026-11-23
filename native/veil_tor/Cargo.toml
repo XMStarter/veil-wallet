@@ -18,7 +18,9 @@ stand-in = []
 [dependencies]
 # static-sqlite compiles SQLite into the library, so no platform needs a
 # system copy (Windows and Android do not ship one).
-arti-client = { version = "0.48", default-features = false, features = ["tokio", "rustls", "onion-service-client", "compression", "static-sqlite"] }
+# pt-client lets Tor connect through bridges and start the programs that
+# speak their transports (obfs4, Snowflake, WebTunnel).
+arti-client = { version = "0.48", default-features = false, features = ["tokio", "rustls", "onion-service-client", "compression", "static-sqlite", "pt-client"] }
 tor-rtcompat = { version = "0.48", default-features = false, features = ["tokio", "rustls"] }
 # Arti leaves the choice of TLS cryptography to the application.
 # aws-lc-rs is the provider the Arti project recommends.

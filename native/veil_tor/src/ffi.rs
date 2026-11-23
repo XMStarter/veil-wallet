@@ -9,6 +9,7 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;
 use std::ptr;
 
+use crate::bridges::Bridges;
 use crate::service::{Purpose, State, TorConfig, TorService};
 
 /// Opaque handle to a running Tor service.
@@ -48,6 +49,8 @@ pub unsafe extern "C" fn veil_tor_start(
         TorService::start(TorConfig {
             state_dir,
             cache_dir,
+            // Bridges are not reachable through this interface yet.
+            bridges: Bridges::none(),
         })
     });
     match started {

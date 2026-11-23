@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use veil_core::{Core, Nodes, OnionNode};
-use veil_tor::{State, TorConfig, TorService};
+use veil_tor::{Bridges, State, TorConfig, TorService};
 use veil_wallet::{Amount, Network, Wallet, WalletLibrary};
 
 /// Public mainnet nodes, tried in order until two answer. They come from
@@ -85,6 +85,7 @@ fn a_new_wallet_synchronises_with_a_public_node_over_tor() {
     let tor = TorService::start(TorConfig {
         state_dir: root.join("tor-state"),
         cache_dir: root.join("tor-cache"),
+        bridges: Bridges::none(),
     })
     .expect("Tor starts");
     let (wallet, _) = Wallet::create(

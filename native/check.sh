@@ -5,13 +5,14 @@
 #   ./check.sh regtest     the wallet on a private chain (starts a Monero daemon)
 #   ./check.sh tor         the tests that start the real Tor client
 #   ./check.sh stagenet    the command-line tool on stagenet, through Tor
+#   ./check.sh bridges     Tor through obfs4 and Snowflake bridges
 #   ./check.sh setup       once per machine: packages, Rust, the wallet library
 #
 # Several levels can be given at once: ./check.sh offline regtest tor
 #
 # `offline` runs anywhere, hosted CI included. Every other level refuses to
 # start in hosted CI: see docs/development.md, "Hosted CI and the hosting
-# account". `regtest` and `tor` are for the owner's machine.
+# account". They are for the owner's machine.
 #
 # The wallet library is looked for in $VEIL_WALLET_LIB_DIR, by default
 # ~/veil-wallet-lib, which is where `setup` builds it.
@@ -28,7 +29,7 @@ wallet_lib="$lib_dir/out/libmonero_wallet2_api_c.so"
 monerod="$lib_dir/out/monerod"
 
 usage() {
-  sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 # True on a CI runner. The same test as native/veil_test_guard.
@@ -127,6 +128,22 @@ level_stagenet() {
   step cargo test -p veil_cli --locked --test stagenet -- --include-ignored --nocapture
 }
 
+level_bridges() {
+  require_wallet_lib || return 1
+  local program
+  for program in obfs4proxy snowflake-client; do
+    if ! command -v "$program" >/dev/null; then
+      echo "error: $program is not installed. Run ./check.sh setup." >&2
+      return 1
+    fi
+  done
+  # Tor through obfs4 and through Snowflake, a bridge that does not exist,
+  # then the command-line tool synchronising a wallet through bridges. One
+  # test at a time: each starts its own Tor client.
+  step cargo test -p veil_tor --locked --test bridges -- --include-ignored --nocapture --test-threads=1 &&
+    step cargo test -p veil_cli --locked --test bridges -- --include-ignored --nocapture
+}
+
 level_setup() {
   if ! command -v apt-get >/dev/null; then
     echo "error: setup knows Debian and Ubuntu only (on Windows: run it inside WSL2)." >&2
@@ -135,7 +152,7 @@ level_setup() {
   local packages="git curl ca-certificates build-essential cmake ninja-build pkg-config
     libssl-dev libzmq3-dev libunbound-dev libsodium-dev libboost-all-dev
     libhidapi-dev libusb-1.0-0-dev libudev-dev libreadline-dev libexpat1-dev
-    libpgm-dev libnorm-dev"
+    libpgm-dev libnorm-dev obfs4proxy snowflake-client"
   local package missing=""
   for package in $packages; do
     if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"; then
@@ -198,7 +215,7 @@ fi
 for level in "$@"; do
   case "$level" in
     offline) ;;
-    regtest | tor | stagenet | setup)
+    regtest | tor | stagenet | bridges | setup)
       if in_hosted_ci; then
         echo "refused: '$level' does not run in hosted CI. Only 'offline' does." >&2
         echo "See docs/development.md, \"Hosted CI and the hosting account\"." >&2

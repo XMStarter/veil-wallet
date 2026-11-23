@@ -21,6 +21,7 @@ use futures::StreamExt;
 use tokio::sync::watch;
 use tor_rtcompat::PreferredRuntime;
 
+use crate::bridges::Bridges;
 use crate::socks::{self, ConnectFailure, Connector};
 
 /// Where Tor keeps its files. Both directories must be private to the app.
@@ -30,6 +31,9 @@ pub struct TorConfig {
     pub state_dir: PathBuf,
     /// Cached directory information. Safe to delete; Tor downloads it again.
     pub cache_dir: PathBuf,
+    /// Bridges to connect through, for a network that blocks Tor.
+    /// [`Bridges::none`] connects directly.
+    pub bridges: Bridges,
 }
 
 /// What a SOCKS listener is used for. Each purpose has its own listener and
@@ -80,6 +84,15 @@ pub enum TorError {
     Client(String),
     #[error("cannot open a local listener: {0}")]
     Listener(io::Error),
+    /// A bridge line cannot be read. The line itself is not repeated here.
+    #[error("bridge line {number} is not a bridge: {reason}")]
+    Bridge { number: usize, reason: String },
+    #[error("there is no program for the {transport} transport that a bridge needs")]
+    TransportMissing { transport: String },
+    #[error("the transport program {path} does not exist")]
+    TransportProgram { path: PathBuf },
+    #[error("{name} is not the name of a transport")]
+    TransportName { name: String },
 }
 
 /// A running embedded Tor client with its loopback SOCKS listeners.
@@ -108,6 +121,15 @@ impl Shared {
 impl TorService {
     /// Starts Tor in the background and binds the SOCKS listeners.
     pub fn start(config: TorConfig) -> Result<TorService, TorError> {
+        // Checked first: a wrong bridge setting stops everything before a
+        // directory is made or a thread started.
+        let mut builder =
+            TorClientConfigBuilder::from_directories(&config.state_dir, &config.cache_dir);
+        config.bridges.apply(&mut builder)?;
+        let tor_config: TorClientConfig = builder
+            .build()
+            .map_err(|e| TorError::Config(e.to_string()))?;
+
         prepare_private_dir(&config.state_dir)?;
         prepare_private_dir(&config.cache_dir)?;
 
@@ -121,11 +143,6 @@ impl TorService {
             .enable_all()
             .build()
             .map_err(TorError::Runtime)?;
-
-        let tor_config: TorClientConfig =
-            TorClientConfigBuilder::from_directories(&config.state_dir, &config.cache_dir)
-                .build()
-                .map_err(|e| TorError::Config(e.to_string()))?;
 
         let shared = Arc::new(Shared {
             state: AtomicU8::new(State::Bootstrapping as u8),
@@ -351,6 +368,7 @@ mod tests {
         let config = TorConfig {
             state_dir: root.join("state"),
             cache_dir: root.join("cache"),
+            bridges: Bridges::none(),
         };
         (root, config)
     }

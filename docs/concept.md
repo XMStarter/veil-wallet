@@ -160,7 +160,10 @@ run where is set out in [development.md](development.md).
   The alternative is the classic 25-word phrase, which every Monero wallet
   understands but which requires a creation date when restoring.
 - **Tor implementation.** Arti is used and works on Linux and Windows.
-  Bridges and the Android build are still to be verified.
+  Bridges work through it on Linux for obfs4 and Snowflake; WebTunnel is
+  set up the same way but has not been tried. A transport is a separate
+  program that Tor starts, and whether an app can ship and start one on
+  Android is still to be verified, as is the Android build.
 - **Monero protocol upgrade.** Veil builds on Monero 0.18.5, the current
   release line. The FCMP++ and Carrot upgrade, which changes key derivation
   and transaction structure, has not been released; the wallet library will
