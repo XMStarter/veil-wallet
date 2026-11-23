@@ -117,19 +117,19 @@ way, after three fixes those runs found (never unloading the library,
 UTF-8 paths, and not trusting the library alone about an existing wallet)
 and after the antivirus was told to allow the DLL and `monerod.exe`. That
 completes step 1 of the build plan, the core without a user interface.
-Step 2, reliability tests, is written and not yet accepted. On the owner's
-machine, as Linux and as Windows programs, these pass: a process killed
-while saving, a damaged data file, a connection cut in the middle of a
-synchronisation against a fake node, and on a private chain a restore past
-long runs of unused addresses and a wallet rebuilt from its keys. The
-private-chain scenario of lost connections has not passed yet. As a
-Windows program it got as far as a cut download being retried and a
-vanished node being reported, then failed on a mistake in the test (a
-start height set by the test is forgotten when a wallet is closed); as a
-Linux program its daemon did not come up, for a reason the log did not
-show. Both are changed and wait for the next run; the part about a send
-whose answer is lost has never run. The table of what is tested where is
-in `docs/development.md`, "Reliability tests". Not done: the app. See the build plan in
+Step 2, reliability tests, is done: the owner's acceptance run passed as
+Linux and as Windows programs. Tested there: a process killed while
+saving, a damaged data file (the wallet opens from its keys), a
+connection cut in the middle of a synchronisation (retried, reported, or
+taken over by another node), a send whose answer is lost (reported as
+unknown, found in the history, paid once), and a restore past long runs
+of unused addresses. The same run closed what step 1.5 had left open: the
+`bridges` level after the library was rebuilt, and the `tor` level as
+Windows programs. In the first run of this step one of two test daemons
+did not come up on Linux; the cause was never seen, it has not happened
+again, and the daemon helper now reports it if it does. The table of what
+is tested where is in `docs/development.md`, "Reliability tests". Next is
+step 3, the user interface. Not done: the app. See the build plan in
 `docs/concept.md`.
 
 ## Environment notes

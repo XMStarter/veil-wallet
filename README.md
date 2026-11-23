@@ -12,7 +12,9 @@ fresh address.
 > **Status: pre-alpha.** The embedded Tor component, the wallet core, and
 > the piece that joins them exist and are tested on a private test chain. A
 > command-line tool creates, restores, synchronises, and sends on the Monero
-> stagenet through Tor. There is no app yet. Do not use anything here with
+> stagenet through Tor. Tests cover a killed process, a damaged wallet
+> file, and connections lost in the middle of a synchronisation or a send.
+> There is no app yet. Do not use anything here with
 > real funds. Read the [disclaimer](DISCLAIMER.md).
 
 ## Priorities
