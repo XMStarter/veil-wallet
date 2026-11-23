@@ -340,3 +340,143 @@ fn only_onion_nodes_are_accepted() {
     };
     wallet.connect(&onion).unwrap();
 }
+
+/// Lists a wallet folder's file names, sorted.
+fn files_in(dir: &std::path::Path) -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(dir)
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    names
+}
+
+#[test]
+fn a_wallet_whose_data_file_is_damaged_opens_from_its_keys() {
+    let Some(lib) = wallet_library() else { return };
+    type Damage = fn(&[u8]) -> Vec<u8>;
+    let damages: [(&str, Damage); 3] = [
+        ("emptied", |_| Vec::new()),
+        ("cut in half", |bytes| bytes[..bytes.len() / 2].to_vec()),
+        ("overwritten", |bytes| vec![0x5a; bytes.len()]),
+    ];
+    for (what, damage) in damages {
+        let dir = TempDir::new("damaged");
+        let path = dir.file("w");
+        let (mut wallet, phrase) = Wallet::create(&lib, &path, PASSWORD, Network::Mainnet).unwrap();
+        let address = wallet.receive_address().unwrap();
+        let start = wallet.restore_height();
+        assert!(!wallet.was_rebuilt_from_keys());
+        wallet.close().unwrap();
+
+        let intact = std::fs::read(&path).unwrap();
+        let damaged = damage(&intact);
+        std::fs::write(&path, &damaged).unwrap();
+
+        // A wrong password still opens nothing, and moves nothing.
+        assert!(Wallet::open(&lib, &path, "not the password", Network::Mainnet).is_err());
+        assert_eq!(files_in(path.parent().unwrap()), ["w", "w.keys"], "{what}");
+        assert_eq!(std::fs::read(&path).unwrap(), damaged, "{what}");
+
+        // The right one opens the same wallet, and says how.
+        let mut wallet = Wallet::open(&lib, &path, PASSWORD, Network::Mainnet)
+            .unwrap_or_else(|error| panic!("{what}: the wallet does not open: {error}"));
+        assert!(wallet.was_rebuilt_from_keys(), "{what}");
+        assert_eq!(wallet.seed_phrase().unwrap().as_str(), phrase.as_str());
+        assert_eq!(wallet.restore_height(), start, "{what}");
+        assert_eq!(wallet.receive_address().unwrap(), address, "{what}");
+        // The file that could not be read is kept, not deleted.
+        let aside = path.with_file_name("w.unreadable-1");
+        assert_eq!(std::fs::read(&aside).unwrap(), damaged, "{what}");
+        wallet.close().unwrap();
+
+        // From then on it is an ordinary wallet again. Nothing else was
+        // set aside; the library may have left a copy of its own of the
+        // file it could not read, ending in `.unportable`.
+        let wallet = Wallet::open(&lib, &path, PASSWORD, Network::Mainnet).unwrap();
+        assert!(!wallet.was_rebuilt_from_keys(), "{what}");
+        let files: Vec<String> = files_in(path.parent().unwrap())
+            .into_iter()
+            .filter(|name| name != "w.unportable")
+            .collect();
+        assert_eq!(files, ["w", "w.keys", "w.unreadable-1"], "{what}");
+    }
+}
+
+#[test]
+fn a_wallet_without_its_keys_file_does_not_open_and_nothing_is_moved() {
+    let Some(lib) = wallet_library() else { return };
+    let dir = TempDir::new("no-keys");
+    let path = dir.file("w");
+    let (wallet, _) = Wallet::create(&lib, &path, PASSWORD, Network::Mainnet).unwrap();
+    wallet.close().unwrap();
+    std::fs::remove_file(path.with_file_name("w.keys")).unwrap();
+
+    assert!(Wallet::open(&lib, &path, PASSWORD, Network::Mainnet).is_err());
+    assert_eq!(files_in(path.parent().unwrap()), ["w"]);
+}
+
+/// Where scanning starts decides whether old payments are found, so it has
+/// to survive the wallet being closed.
+#[test]
+fn the_start_height_given_at_creation_or_restore_is_kept_on_disk() {
+    let Some(lib) = wallet_library() else { return };
+    let dir = TempDir::new("start-height");
+    let reopened_height = |name: &str| {
+        Wallet::open(&lib, &dir.file(name), PASSWORD, Network::Mainnet)
+            .unwrap()
+            .restore_height()
+    };
+
+    // A new wallet: about a month before today.
+    let (new, phrase) = Wallet::create(&lib, &dir.file("new"), PASSWORD, Network::Mainnet).unwrap();
+    let created_at = new.restore_height();
+    assert!(created_at > 3_000_000, "{created_at}");
+    let legacy = new.legacy_seed_phrase().unwrap();
+    new.close().unwrap();
+    assert_eq!(reopened_height("new"), created_at);
+
+    // Restored from the sixteen words: the date inside the phrase.
+    let from_date = Wallet::restore(
+        &lib,
+        &dir.file("16"),
+        PASSWORD,
+        Network::Mainnet,
+        &phrase,
+        0,
+    )
+    .unwrap();
+    let dated = from_date.restore_height();
+    assert!(dated > 3_000_000 && dated <= created_at, "{dated}");
+    from_date.close().unwrap();
+    assert_eq!(reopened_height("16"), dated);
+
+    // Restored with a height the user chose. It applies to the twenty-five
+    // words; the sixteen keep their own date.
+    for (name, phrase, expected) in [
+        ("16-chosen", &phrase, dated),
+        ("25-chosen", &legacy, 1_234_567),
+    ] {
+        let chosen = Wallet::restore(
+            &lib,
+            &dir.file(name),
+            PASSWORD,
+            Network::Mainnet,
+            phrase,
+            1_234_567,
+        )
+        .unwrap();
+        assert_eq!(chosen.restore_height(), expected, "{name}");
+        chosen.close().unwrap();
+        assert_eq!(reopened_height(name), expected, "{name}");
+    }
+
+    // Changed afterwards: for as long as the wallet is open, and no longer.
+    // The library keeps this height in the keys file, which it writes once.
+    let mut changed = Wallet::open(&lib, &dir.file("new"), PASSWORD, Network::Mainnet).unwrap();
+    changed.set_restore_height(2_000_000);
+    assert_eq!(changed.restore_height(), 2_000_000);
+    changed.close().unwrap();
+    assert_eq!(reopened_height("new"), created_at);
+}

@@ -12,7 +12,10 @@ use std::path::Path;
 
 use common::{wallet_library, TempDir};
 use veil_test_guard::RegtestDaemon;
-use veil_wallet::{Amount, Direction, Error, Network, Node, SendAmount, Wallet, WalletLibrary};
+use veil_wallet::{
+    Amount, Direction, Error, Network, Node, SendAmount, Wallet, WalletLibrary,
+    MAX_UNUSED_ADDRESSES,
+};
 
 const PASSWORD: &str = "regtest";
 /// The first outputs on a new chain unlock after 60 blocks; the extra blocks
@@ -229,4 +232,108 @@ fn receive_on_fresh_addresses_send_and_restore() {
         let mut again = Wallet::open(&lib, &dir.file("alice"), PASSWORD, Network::Mainnet).unwrap();
         again.receive_address().unwrap().address
     });
+}
+
+/// Issues addresses until no more are allowed and returns the last one.
+fn last_address_allowed(wallet: &mut Wallet) -> veil_wallet::ReceiveAddress {
+    let mut last = wallet.receive_address().unwrap();
+    loop {
+        match wallet.new_receive_address() {
+            Ok(next) => last = next,
+            Err(Error::TooManyUnusedAddresses { unused }) => {
+                assert_eq!(unused, MAX_UNUSED_ADDRESSES);
+                return last;
+            }
+            Err(other) => panic!("issuing an address failed: {other}"),
+        }
+    }
+}
+
+/// A restore finds payments however far apart their addresses are.
+///
+/// The user hands out as many addresses as the wallet allows without any
+/// being paid, and only the last one is paid; then does the same again. A
+/// wallet restored from the phrase knows none of these addresses in
+/// advance. It has to find both payments, and continue after them.
+#[test]
+fn a_restore_finds_payments_past_long_runs_of_unused_addresses() {
+    veil_test_guard::refuse_in_hosted_ci("starting a Monero daemon");
+    let Some(lib) = wallet_library() else { return };
+    let Some(daemon) = RegtestDaemon::start() else {
+        return;
+    };
+    let dir = TempDir::new("regtest-gap");
+
+    let mut funder = new_wallet(&lib, &dir.file("funder"), &daemon);
+    let funder_address = funder.primary_address().unwrap();
+    daemon.add_blocks(INITIAL_BLOCKS, &funder_address);
+    sync(&mut funder, &daemon);
+
+    let mut user = new_wallet(&lib, &dir.file("user"), &daemon);
+    sync(&mut user, &daemon);
+
+    // The first run: addresses 1 to 20, the last one paid.
+    let first = last_address_allowed(&mut user);
+    assert_eq!(first.index, MAX_UNUSED_ADDRESSES);
+    send(&mut funder, &first.address, SendAmount::Exact(xmr("2")));
+    daemon.add_blocks(UNLOCK_BLOCKS + 1, &funder_address);
+    sync(&mut user, &daemon);
+    assert_eq!(user.balance().total, xmr("2"));
+
+    // The second run starts after the paid address: 21 to 40.
+    let second = last_address_allowed(&mut user);
+    assert_eq!(second.index, 2 * MAX_UNUSED_ADDRESSES);
+    sync(&mut funder, &daemon);
+    send(&mut funder, &second.address, SendAmount::Exact(xmr("3")));
+    daemon.add_blocks(UNLOCK_BLOCKS + 1, &funder_address);
+    sync(&mut user, &daemon);
+    assert_eq!(user.balance().total, xmr("5"));
+    let next = user.receive_address().unwrap();
+    assert_eq!(next.index, 2 * MAX_UNUSED_ADDRESSES + 1);
+
+    let phrase = user.seed_phrase().unwrap();
+    user.close().unwrap();
+
+    let mut restored = Wallet::restore(
+        &lib,
+        &dir.file("user-restored"),
+        PASSWORD,
+        Network::Mainnet,
+        &phrase,
+        0,
+    )
+    .unwrap();
+    restored.set_restore_height(0);
+    sync(&mut restored, &daemon);
+    assert_eq!(restored.balance().total, xmr("5"));
+    assert_eq!(restored.balance().unlocked, xmr("5"));
+    let incoming: Vec<(u32, Amount)> = restored
+        .history()
+        .unwrap()
+        .into_iter()
+        .filter(|t| t.direction == Direction::Incoming)
+        .flat_map(|t| t.address_indices.into_iter().map(move |i| (i, t.amount)))
+        .collect();
+    assert_eq!(
+        incoming,
+        vec![(first.index, xmr("2")), (second.index, xmr("3"))],
+        "each payment is found at the address it was sent to"
+    );
+    // It goes on after the last paid address and never hands out an
+    // address that was already given to someone.
+    assert_eq!(restored.receive_address().unwrap(), next);
+
+    // The original wallet's data file is damaged. The wallet opens from
+    // its keys, empty, and a synchronisation finds everything again.
+    let data_file = dir.file("user");
+    let intact = std::fs::read(&data_file).unwrap();
+    std::fs::write(&data_file, &intact[..intact.len() / 2]).unwrap();
+    let mut rebuilt = Wallet::open(&lib, &data_file, PASSWORD, Network::Mainnet).unwrap();
+    assert!(rebuilt.was_rebuilt_from_keys());
+    assert_eq!(rebuilt.balance().total, Amount::ZERO);
+    // As for every wallet on this private chain: scan from its first block.
+    rebuilt.set_restore_height(0);
+    sync(&mut rebuilt, &daemon);
+    assert_eq!(rebuilt.balance().total, xmr("5"));
+    assert_eq!(rebuilt.receive_address().unwrap(), next);
 }

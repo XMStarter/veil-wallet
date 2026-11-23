@@ -122,17 +122,7 @@ impl Core {
 
     /// Fails unless Tor can carry traffic right now.
     fn require_tor(&self) -> Result<(), CoreError> {
-        let status = self.transport.status();
-        match status.state {
-            State::Ready => Ok(()),
-            State::Bootstrapping => Err(CoreError::TorNotReady {
-                percent: status.percent,
-                message: status.message,
-            }),
-            State::Failed => Err(CoreError::TorFailed {
-                message: status.message,
-            }),
-        }
+        require_tor(self.transport.as_ref())
     }
 
     /// State of the Tor client, for display.
@@ -151,6 +141,23 @@ impl Core {
         self.point_wallet_at_nodes()
     }
 
+    /// The nodes to use when the candidate at `position` synchronises: the
+    /// candidate after it, wrapping around, broadcasts. With no second onion
+    /// service among the candidates that one node does both.
+    fn nodes_from(candidates: &[OnionNode], position: usize) -> Result<Nodes, CoreError> {
+        let sync = &candidates[position];
+        let broadcast = candidates
+            .iter()
+            .cycle()
+            .skip(position + 1)
+            .take(candidates.len())
+            .find(|other| other.host() != sync.host());
+        match broadcast {
+            Some(broadcast) => Nodes::separate(sync.clone(), broadcast.clone()),
+            None => Ok(Nodes::single(sync.clone())),
+        }
+    }
+
     /// Goes through `candidates` in order and settles on the first node
     /// that answers and has the whole chain. Returns that node's height.
     ///
@@ -159,30 +166,17 @@ impl Core {
     /// The caller decides the order, which is how a node gets picked at
     /// random.
     pub fn settle_on_nodes(&mut self, candidates: &[OnionNode]) -> Result<u64, CoreError> {
-        self.require_tor()?;
         let mut last = veil_wallet::Error::NodeUnreachable;
-        for (position, sync) in candidates.iter().enumerate() {
-            let broadcast = candidates
-                .iter()
-                .cycle()
-                .skip(position + 1)
-                .take(candidates.len())
-                .find(|other| other.host() != sync.host());
-            let nodes = match broadcast {
-                Some(broadcast) => Nodes::separate(sync.clone(), broadcast.clone())?,
-                None => Nodes::single(sync.clone()),
-            };
-            self.set_nodes(nodes)?;
+        for position in 0..candidates.len() {
+            self.require_tor()?;
+            self.set_nodes(Self::nodes_from(candidates, position)?)?;
             match self.wallet.node_height() {
                 Ok(height) => return Ok(height),
-                Err(
-                    error @ (veil_wallet::Error::NodeUnreachable
-                    | veil_wallet::Error::NodeIncompatible
-                    | veil_wallet::Error::NodeSyncing { .. }),
-                ) => last = error,
+                Err(error) if is_the_nodes_fault(&error) => last = error,
                 Err(other) => return Err(other.into()),
             }
         }
+        self.require_tor()?;
         Err(CoreError::NoNodeAnswered {
             tried: candidates.len(),
             last,
@@ -192,14 +186,22 @@ impl Core {
     /// Asks the sync node for the height of its chain. Scans nothing.
     pub fn node_height(&mut self) -> Result<u64, CoreError> {
         self.require_tor()?;
-        Ok(self.wallet.node_height()?)
+        let transport = self.transport.as_ref();
+        self.wallet
+            .node_height()
+            .map_err(|error| node_failure(transport, error))
     }
 
     /// Downloads and scans new blocks until the wallet has caught up with
     /// the sync node.
+    ///
+    /// If the connection is lost on the way, this fails with the wallet's
+    /// [`NodeUnreachable`](veil_wallet::Error::NodeUnreachable), or with
+    /// [`CoreError::TorNotReady`] when it was Tor that dropped. What was
+    /// scanned until then is kept, and the next synchronisation continues
+    /// from there.
     pub fn sync(&mut self) -> Result<SyncProgress, CoreError> {
-        self.require_tor()?;
-        Ok(self.wallet.refresh()?)
+        self.sync_with_progress(&mut |_| {})
     }
 
     /// Like [`Core::sync`], and calls `report` about once a second with how
@@ -209,7 +211,41 @@ impl Core {
         report: &mut (dyn FnMut(SyncProgress) + Send),
     ) -> Result<SyncProgress, CoreError> {
         self.require_tor()?;
-        Ok(self.wallet.refresh_with_progress(report)?)
+        let transport = self.transport.as_ref();
+        self.wallet
+            .refresh_with_progress(report)
+            .map_err(|error| node_failure(transport, error))
+    }
+
+    /// Synchronises through the first of `candidates` that carries the
+    /// synchronisation to its end, with progress reports as in
+    /// [`Core::sync_with_progress`].
+    ///
+    /// A node that cannot be reached, is not usable, or stops answering part
+    /// way is left for the next candidate, which continues where the scan
+    /// stopped. Nodes are chosen as in [`Core::settle_on_nodes`], and the
+    /// core stays on the node that finished. If Tor itself drops, no further
+    /// node is tried and the outcome is [`CoreError::TorNotReady`].
+    pub fn sync_with_any(
+        &mut self,
+        candidates: &[OnionNode],
+        report: &mut (dyn FnMut(SyncProgress) + Send),
+    ) -> Result<SyncProgress, CoreError> {
+        let mut last = veil_wallet::Error::NodeUnreachable;
+        for position in 0..candidates.len() {
+            self.require_tor()?;
+            self.set_nodes(Self::nodes_from(candidates, position)?)?;
+            match self.wallet.refresh_with_progress(report) {
+                Ok(progress) => return Ok(progress),
+                Err(error) if is_the_nodes_fault(&error) => last = error,
+                Err(other) => return Err(other.into()),
+            }
+        }
+        self.require_tor()?;
+        Err(CoreError::NoNodeAnswered {
+            tried: candidates.len(),
+            last,
+        })
     }
 
     /// How far the last synchronisation got. Contacts nothing.
@@ -256,7 +292,16 @@ impl Core {
         amount: SendAmount,
     ) -> Result<PendingSend<'_>, CoreError> {
         self.require_tor()?;
-        Ok(self.wallet.prepare_send(to, amount)?)
+        let transport = self.transport.as_ref();
+        self.wallet
+            .prepare_send(to, amount)
+            .map_err(|error| node_failure(transport, error))
+    }
+
+    /// Whether the wallet was opened from its keys alone because its data
+    /// file could not be read. See [`Wallet::was_rebuilt_from_keys`].
+    pub fn was_rebuilt_from_keys(&self) -> bool {
+        self.wallet.was_rebuilt_from_keys()
     }
 
     /// The height scanning starts from.
@@ -264,7 +309,8 @@ impl Core {
         self.wallet.restore_height()
     }
 
-    /// Changes where scanning starts. Lower it to find older payments.
+    /// Changes where scanning starts, until the wallet is closed. See
+    /// [`Wallet::set_restore_height`]: the change is not written to disk.
     pub fn set_restore_height(&mut self, height: u64) {
         self.wallet.set_restore_height(height);
     }
@@ -303,6 +349,43 @@ impl Core {
     pub fn forget_node_state(&mut self) -> Result<(), CoreError> {
         self.point_wallet_at_nodes()
     }
+}
+
+/// Fails unless Tor can carry traffic right now.
+fn require_tor(transport: &dyn Transport) -> Result<(), CoreError> {
+    let status = transport.status();
+    match status.state {
+        State::Ready => Ok(()),
+        State::Bootstrapping => Err(CoreError::TorNotReady {
+            percent: status.percent,
+            message: status.message,
+        }),
+        State::Failed => Err(CoreError::TorFailed {
+            message: status.message,
+        }),
+    }
+}
+
+/// What to report when the wallet failed to get something from a node. If
+/// Tor has stopped being ready, that is the reason, and the node is not to
+/// blame.
+fn node_failure(transport: &dyn Transport, error: veil_wallet::Error) -> CoreError {
+    if matches!(error, veil_wallet::Error::NodeUnreachable) {
+        if let Err(tor) = require_tor(transport) {
+            return tor;
+        }
+    }
+    error.into()
+}
+
+/// Whether `error` is a reason to try another node.
+fn is_the_nodes_fault(error: &veil_wallet::Error) -> bool {
+    matches!(
+        error,
+        veil_wallet::Error::NodeUnreachable
+            | veil_wallet::Error::NodeIncompatible
+            | veil_wallet::Error::NodeSyncing { .. }
+    )
 }
 
 #[cfg(test)]

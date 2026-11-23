@@ -61,7 +61,11 @@ that cannot lose the user's funds.
   - `veil_core`: joins the two. The app reaches a wallet only through it;
     it points the wallet at Tor's listeners and nowhere else. Tests replace
     Tor with `veil_tor`'s stand-in (the `stand-in` feature, never in an app
-    build).
+    build), which can also cut a connection at a chosen point. The fake
+    node in its tests is a few lines of test code that answer a node's
+    first questions over loopback. It has no chain and is not `monerod`;
+    those tests run only where the wallet library is built, so not in
+    hosted CI.
   - `veil_cli`: `veil`, the command-line wallet on stagenet. Stagenet
     only; do not add another network to it.
   - `wallet_lib`: pinned build script for the wallet library, Veil's
@@ -69,9 +73,12 @@ that cannot lose the user's funds.
     `build.sh` again and regenerate the bindings.
   - `veil_test_guard`: called first by every test that starts Tor or a
     daemon; fails the test on a CI runner. A new test of that kind calls it
-    too.
+    too. It also starts the daemon for tests, one at a time, and when the
+    daemon does not come up it says how it ended and shows the end of its
+    log.
   - `check.sh`: the checks by level (`offline`, `regtest`, `tor`,
-    `stagenet`, `bridges`) with a log; `setup` prepares a machine. With
+    `stagenet`, `bridges`) with a log; `setup` prepares a machine;
+    `daemons` is a diagnosis of the test daemon, not a check. With
     `--windows` in front, the levels are built for Windows on Linux and run
     as Windows programs through WSL.
 - `docs/`: concept, design, development rules.
@@ -111,8 +118,24 @@ way, after three fixes those runs found (never unloading the library,
 UTF-8 paths, and not trusting the library alone about an existing wallet)
 and after the antivirus was told to allow the DLL and `monerod.exe`. That
 completes step 1 of the build plan, the core without a user interface.
-Next is step 2, reliability tests. Not done: the app. See the build plan
-in `docs/concept.md`.
+Step 2, reliability tests, is done: the owner's acceptance run passed as
+Linux and as Windows programs. Tested there: a process killed while
+saving, a damaged data file (the wallet opens from its keys), a
+connection cut in the middle of a synchronisation (retried, reported, or
+taken over by another node), a send whose answer is lost (reported as
+unknown, found in the history, paid once), and a restore past long runs
+of unused addresses. The same run closed what step 1.5 had left open: the
+`bridges` level after the library was rebuilt, and the `tor` level as
+Windows programs. In the first run of this step one of two test daemons
+did not come up on Linux. The cause was never seen. `./check.sh daemons`
+then started eighty daemons in pairs there, with and without loopback
+ports being taken around them: all came up, the slowest in 4.2 seconds
+against a limit of sixty, so neither a race for ports nor a slow start
+showed. It has not happened again, and the daemon helper reports it if it
+does. The table of what
+is tested where is in `docs/development.md`, "Reliability tests". Next is
+step 3, the user interface. Not done: the app. See the build plan in
+`docs/concept.md`.
 
 ## Environment notes
 
@@ -130,6 +153,9 @@ in `docs/concept.md`.
 - What a cloud session can reach depends on its environment's network
   settings, which the owner can change. The rule above about Tor and the
   daemon holds either way.
+- The wallet library encrypts its connection to a node (TLS) when the node
+  offers it, and `monerod` does. A test cannot recognise a request to a
+  real node by its text; the stand-in's cuts count bytes for that reason.
 - The wallet library can be built in a cloud session from source with
   `native/wallet_lib/build.sh` (about half an hour; install the packages
   listed at the top of the script first). Building it is fine; `monerod`

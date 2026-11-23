@@ -8,10 +8,12 @@ use std::net::TcpListener;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use veil_tor::{Purpose, StandIn, State};
+use veil_tor::{AfterCut, CutPoint, Purpose, StandIn, State};
 use veil_wallet::{Error, Network, Wallet, WalletLibrary};
 
 use crate::{Core, CoreError, Nodes, OnionNode};
+
+use fake_node::FakeNode;
 
 const PASSWORD: &str = "correct horse battery staple";
 const SYNC_HOST: &str = "2gzyxa5ihm7nsggfxnu52rck2vv4rvmdlkiu3zzui5du4xyclen53wid.onion";
@@ -247,5 +249,168 @@ fn nodes_are_tried_in_order_until_one_answers() {
     assert!(stand_in.requests().is_empty());
 }
 
+/// How far past the wallet's own start the fake nodes' chain reaches.
+const BLOCKS_AHEAD: u64 = 5000;
+/// Where a connection is cut: well past the short answers about version
+/// and height, and a quarter of the way into the answer to the wallet's
+/// first request for blocks.
+const MID_BLOCKS: CutPoint = CutPoint::AfterReplyBytes(fake_node::BLOCKS_REPLY_BYTES / 4);
+
+fn asked_for_blocks(node: &FakeNode) -> bool {
+    node.asked().iter().any(|path| path.ends_with(".bin"))
+}
+
+#[test]
+fn a_connection_lost_mid_sync_is_reported_and_leaves_the_wallet_as_it_was() {
+    let Some(lib) = wallet_library() else { return };
+    let dir = TempDir::new("cut");
+    let stand_in = StandIn::start().unwrap();
+    let mut core = core_on(&lib, &dir, &stand_in);
+    let node = FakeNode::start(core.restore_height() + BLOCKS_AHEAD);
+    stand_in.route(SYNC_HOST, SYNC_PORT, node.port());
+
+    let address = core.receive_address().unwrap();
+    let phrase = core.seed_phrase().unwrap();
+    let start = core.restore_height();
+
+    // The node is there and reports its chain.
+    assert_eq!(core.node_height().unwrap(), start + BLOCKS_AHEAD);
+
+    // The connection goes away while blocks are arriving; the node itself
+    // stays reachable.
+    stand_in.cut_once(SYNC_HOST, SYNC_PORT, MID_BLOCKS, AfterCut::NodeReachable);
+    let outcome = core.sync();
+    assert!(
+        matches!(outcome, Err(CoreError::Wallet(Error::NodeUnreachable))),
+        "{outcome:?}"
+    );
+    assert_eq!(stand_in.cuts(), 1, "asked: {:?}", node.asked());
+
+    // No block is counted as scanned (the wallet's own height moves no
+    // further than the block it starts scanning from), and the wallet
+    // still works.
+    let scanned = core.sync_progress().wallet_height;
+    assert!(scanned <= start, "{scanned} is past the start, {start}");
+    assert!(core.balance().total.is_zero());
+    assert_eq!(core.receive_address().unwrap(), address);
+    assert_eq!(core.node_height().unwrap(), start + BLOCKS_AHEAD);
+
+    // It closes cleanly and opens as the same wallet.
+    core.close().unwrap();
+    let wallet = Wallet::open(&lib, &dir.file("w"), PASSWORD, Network::Mainnet).unwrap();
+    let mut core = Core::with_transport(Box::new(stand_in.clone()), wallet, nodes()).unwrap();
+    assert_eq!(core.seed_phrase().unwrap().as_str(), phrase.as_str());
+    assert_eq!(core.receive_address().unwrap(), address);
+    assert_eq!(core.restore_height(), start);
+    assert_eq!(core.sync_progress().wallet_height, scanned);
+}
+
+#[test]
+fn tor_dropping_mid_sync_is_reported_as_tor_and_not_as_the_node() {
+    let Some(lib) = wallet_library() else { return };
+    let dir = TempDir::new("tor-drops");
+    let stand_in = StandIn::start().unwrap();
+    let mut core = core_on(&lib, &dir, &stand_in);
+    let node = FakeNode::start(core.restore_height() + BLOCKS_AHEAD);
+    stand_in.route(SYNC_HOST, SYNC_PORT, node.port());
+
+    stand_in.cut_once(SYNC_HOST, SYNC_PORT, MID_BLOCKS, AfterCut::TorNotReady);
+    let outcome = core.sync();
+    assert!(
+        matches!(outcome, Err(CoreError::TorNotReady { .. })),
+        "{outcome:?}"
+    );
+    assert_eq!(stand_in.cuts(), 1, "asked: {:?}", node.asked());
+
+    // Until Tor is back, nothing more is asked of any node.
+    stand_in.clear_requests();
+    assert!(matches!(core.sync(), Err(CoreError::TorNotReady { .. })));
+    assert!(matches!(
+        core.node_height(),
+        Err(CoreError::TorNotReady { .. })
+    ));
+    assert!(stand_in.requests().is_empty(), "{:?}", stand_in.requests());
+
+    // When it is, the same wallet goes on to ask the node again.
+    stand_in.set_ready(true);
+    assert!(core.node_height().is_ok());
+}
+
+#[test]
+fn a_node_that_drops_mid_sync_is_left_for_the_next_one() {
+    let Some(lib) = wallet_library() else { return };
+    let dir = TempDir::new("next-node");
+    let stand_in = StandIn::start().unwrap();
+    let mut core = core_on(&lib, &dir, &stand_in);
+    let height = core.restore_height() + BLOCKS_AHEAD;
+    let first = FakeNode::start(height);
+    let second = FakeNode::start(height);
+    stand_in.route(SYNC_HOST, SYNC_PORT, first.port());
+    stand_in.route(BROADCAST_HOST, BROADCAST_PORT, second.port());
+    let candidates = [
+        OnionNode::new(SYNC_HOST, SYNC_PORT).unwrap(),
+        OnionNode::new(BROADCAST_HOST, BROADCAST_PORT).unwrap(),
+    ];
+
+    // The first node disappears while it is sending blocks. The second is
+    // asked for them next, through the sync listener like the first. It is
+    // a fake as well and has no blocks to give, so in the end no node has
+    // answered; a synchronisation that finishes on the second node is
+    // tested on a private chain.
+    stand_in.cut_once(SYNC_HOST, SYNC_PORT, MID_BLOCKS, AfterCut::NodeGone);
+    let outcome = core.sync_with_any(&candidates, &mut |_| {});
+    assert!(
+        matches!(
+            outcome,
+            Err(CoreError::NoNodeAnswered {
+                tried: 2,
+                last: Error::NodeUnreachable
+            })
+        ),
+        "{outcome:?}"
+    );
+    assert_eq!(stand_in.cuts(), 1);
+    assert!(asked_for_blocks(&first), "{:?}", first.asked());
+    assert!(asked_for_blocks(&second), "{:?}", second.asked());
+    assert_eq!(core.nodes().sync(), &candidates[1]);
+    assert_eq!(core.nodes().broadcast(), &candidates[0]);
+    assert!(stand_in
+        .requests()
+        .iter()
+        .all(|request| request.purpose == Purpose::Sync));
+}
+
+#[test]
+fn no_other_node_is_tried_once_tor_has_dropped() {
+    let Some(lib) = wallet_library() else { return };
+    let dir = TempDir::new("tor-drops-any");
+    let stand_in = StandIn::start().unwrap();
+    let mut core = core_on(&lib, &dir, &stand_in);
+    let height = core.restore_height() + BLOCKS_AHEAD;
+    let first = FakeNode::start(height);
+    let second = FakeNode::start(height);
+    stand_in.route(SYNC_HOST, SYNC_PORT, first.port());
+    stand_in.route(BROADCAST_HOST, BROADCAST_PORT, second.port());
+
+    stand_in.cut_once(SYNC_HOST, SYNC_PORT, MID_BLOCKS, AfterCut::TorNotReady);
+    let outcome = core.sync_with_any(
+        &[
+            OnionNode::new(SYNC_HOST, SYNC_PORT).unwrap(),
+            OnionNode::new(BROADCAST_HOST, BROADCAST_PORT).unwrap(),
+        ],
+        &mut |_| {},
+    );
+    assert!(
+        matches!(outcome, Err(CoreError::TorNotReady { .. })),
+        "{outcome:?}"
+    );
+    assert!(second.asked().is_empty(), "{:?}", second.asked());
+    assert!(stand_in
+        .requests()
+        .iter()
+        .all(|request| request.host == SYNC_HOST));
+}
+
+mod fake_node;
 #[cfg(feature = "regtest")]
 mod regtest;

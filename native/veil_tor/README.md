@@ -91,6 +91,14 @@ rules, leading to ports on this machine instead of into Tor. Tests use it to
 run code that needs Tor without a network, and to read which onion names
 were asked for and through which listener. No app build enables it.
 
+The stand-in can also lose a connection on purpose (`cut_once`): part way
+through what the node sends, or after a request has reached the node and
+before the answer comes back. Afterwards the node is reachable again, gone,
+or Tor itself is no longer ready. This is how the rest of Veil is tested
+against a connection that drops in the middle of a synchronisation or of a
+send. A cut is placed by counting bytes, not by recognising a request: the
+wallet library encrypts what it says to a real node.
+
 ## Use through the C interface
 
 The crate also builds as a shared and a static library. See
