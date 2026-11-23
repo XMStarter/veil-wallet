@@ -9,9 +9,9 @@ four things: create a wallet, restore a wallet, receive, and send. All network
 traffic goes through a built-in Tor client, and every incoming payment gets a
 fresh address.
 
-> **Status: pre-alpha.** This repository currently holds the concept and
-> design documents. There is no working wallet yet. Do not use anything here
-> with real funds. Read the [disclaimer](DISCLAIMER.md).
+> **Status: pre-alpha.** The embedded Tor component exists; the wallet core
+> and the app do not. There is no working wallet yet. Do not use anything
+> here with real funds. Read the [disclaimer](DISCLAIMER.md).
 
 ## Priorities
 

@@ -40,8 +40,24 @@ that cannot lose the user's funds.
 - The project is licensed under MIT. Keep [DISCLAIMER.md](DISCLAIMER.md)
   linked from the README.
 
+## Layout
+
+- `native/veil_tor`: embedded Tor client (Rust, Arti) with loopback SOCKS
+  listeners and a C interface. Run `cargo fmt --check`,
+  `cargo clippy --all-targets -- -D warnings` and `cargo test` there before
+  committing. Tests that start a Tor client are ignored by default; its
+  README says how to run them.
+- `docs/`: concept, design, development rules.
+
 ## Status
 
-The repository holds the concept and design documents. Code has not been
-started. The next step is the core without a user interface, described in
-the build plan in `docs/concept.md`.
+The Tor component exists and passes its tests. Bridges are not done.
+The next step is the wallet core on top of the Monero wallet library, then
+the command-line tool that ties wallet and Tor together on stagenet. See the
+build plan in `docs/concept.md`.
+
+## Environment notes
+
+- Cloud sessions cannot reach the Tor network, `downloads.getmonero.org`, or
+  GitHub release downloads of other repositories. Anything that needs them
+  runs on a machine the project controls.

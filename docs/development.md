@@ -40,6 +40,12 @@ Reliability tests cover the failures that lose money or confuse users: Tor
 dropping mid-sync, the node changing, the process being killed during a
 write, and restoring a wallet whose payments went to many subaddresses.
 
+## Components
+
+| Path | What it is | Check it with |
+|---|---|---|
+| `native/veil_tor` | Embedded Tor client and loopback SOCKS listeners (Rust) | `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` |
+
 ## Releases
 
 - Builds are reproducible: anyone can rebuild a release and get the same

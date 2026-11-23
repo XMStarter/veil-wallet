@@ -1,0 +1,23 @@
+[package]
+name = "veil_tor"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Embedded Tor client for the Veil wallet: Arti plus a loopback SOCKS listener"
+publish = false
+
+[lib]
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[dependencies]
+# static-sqlite compiles SQLite into the library, so no platform needs a
+# system copy (Windows and Android do not ship one).
+arti-client = { version = "0.48", default-features = false, features = ["tokio", "rustls", "onion-service-client", "compression", "static-sqlite"] }
+tor-rtcompat = { version = "0.48", default-features = false, features = ["tokio", "rustls"] }
+# Arti leaves the choice of TLS cryptography to the application.
+# aws-lc-rs is the provider the Arti project recommends.
+rustls = { version = "0.23", default-features = false, features = ["std", "aws_lc_rs"] }
+tor-socksproto = { version = "0.48", default-features = false, features = ["proxy-handshake"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "sync", "time", "macros"] }
+futures = "0.3"
+thiserror = "2"
