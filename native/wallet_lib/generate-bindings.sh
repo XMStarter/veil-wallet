@@ -24,7 +24,8 @@ functions+='|daemonBlockChainHeight|daemonBlockChainTargetHeight|addressValid|nu
 functions+='|createTransaction|history)'
 functions+='|PendingTransaction_(status|errorString|commit|amount|fee|txid)'
 functions+='|TransactionHistory_(count|transaction|refresh)'
-functions+='|TransactionInfo_(direction|isPending|isFailed|amount|fee|blockHeight|confirmations|hash|timestamp|subaddrIndex|subaddrAccount))'
+functions+='|TransactionInfo_(direction|isPending|isFailed|amount|fee|blockHeight|confirmations|hash|timestamp|subaddrIndex|subaddrAccount)'
+functions+='|cw_getWalletListener|cw_WalletListener_height)'
 
 bindgen "$header" \
   --dynamic-loading MoneroC \

@@ -51,6 +51,14 @@ pub enum CoreError {
     #[error("the node for sending must differ from the node for synchronising")]
     SameNode,
 
+    /// None of the nodes that were tried could be used.
+    #[error("none of the {tried} nodes answered; the last one: {last}")]
+    NoNodeAnswered {
+        tried: usize,
+        /// What the last node tried failed with.
+        last: veil_wallet::Error,
+    },
+
     /// The wallet reported an error.
     #[error(transparent)]
     Wallet(#[from] veil_wallet::Error),
@@ -143,6 +151,44 @@ impl Core {
         self.point_wallet_at_nodes()
     }
 
+    /// Goes through `candidates` in order and settles on the first node
+    /// that answers and has the whole chain. Returns that node's height.
+    ///
+    /// The candidate after it, wrapping around, becomes the broadcast node;
+    /// it is not contacted now. With a single candidate that node does both.
+    /// The caller decides the order, which is how a node gets picked at
+    /// random.
+    pub fn settle_on_nodes(&mut self, candidates: &[OnionNode]) -> Result<u64, CoreError> {
+        self.require_tor()?;
+        let mut last = veil_wallet::Error::NodeUnreachable;
+        for (position, sync) in candidates.iter().enumerate() {
+            let broadcast = candidates
+                .iter()
+                .cycle()
+                .skip(position + 1)
+                .take(candidates.len())
+                .find(|other| other.host() != sync.host());
+            let nodes = match broadcast {
+                Some(broadcast) => Nodes::separate(sync.clone(), broadcast.clone())?,
+                None => Nodes::single(sync.clone()),
+            };
+            self.set_nodes(nodes)?;
+            match self.wallet.node_height() {
+                Ok(height) => return Ok(height),
+                Err(
+                    error @ (veil_wallet::Error::NodeUnreachable
+                    | veil_wallet::Error::NodeIncompatible
+                    | veil_wallet::Error::NodeSyncing { .. }),
+                ) => last = error,
+                Err(other) => return Err(other.into()),
+            }
+        }
+        Err(CoreError::NoNodeAnswered {
+            tried: candidates.len(),
+            last,
+        })
+    }
+
     /// Asks the sync node for the height of its chain. Scans nothing.
     pub fn node_height(&mut self) -> Result<u64, CoreError> {
         self.require_tor()?;
@@ -154,6 +200,16 @@ impl Core {
     pub fn sync(&mut self) -> Result<SyncProgress, CoreError> {
         self.require_tor()?;
         Ok(self.wallet.refresh()?)
+    }
+
+    /// Like [`Core::sync`], and calls `report` about once a second with how
+    /// far scanning has come. `report` runs on another thread.
+    pub fn sync_with_progress(
+        &mut self,
+        report: &mut (dyn FnMut(SyncProgress) + Send),
+    ) -> Result<SyncProgress, CoreError> {
+        self.require_tor()?;
+        Ok(self.wallet.refresh_with_progress(report)?)
     }
 
     /// How far the last synchronisation got. Contacts nothing.

@@ -19,7 +19,11 @@ is the only way the rest of the app reaches a wallet.
   the two are also different nodes, so the node that sees the wallet
   synchronise never sees it spend. `Nodes::single` is for a user's own node.
 - **Nothing happens on its own.** The wallet contacts a node only when the
-  app calls `sync`, `node_height`, `prepare_send`, or commits a transaction.
+  app calls `sync`, `node_height`, `settle_on_nodes`, `prepare_send`, or
+  commits a transaction.
+
+`sync_with_progress` reports about once a second how far scanning has come,
+so that an interface can show a long first sync moving.
 
 ## Use
 
@@ -58,7 +62,7 @@ runner they fail before starting anything.
 
 ## Not done yet
 
-- Choosing nodes: a vetted list, picking at random, moving on when a node
-  stops answering. `set_nodes` is there for it.
+- A vetted node list for the app. `settle_on_nodes` goes through
+  candidates in the caller's order; what the candidates are, and moving on
+  when a node stops answering in the middle of a sync, are still open.
 - A C interface for the app.
-- Progress while a long synchronisation runs.

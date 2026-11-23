@@ -4,7 +4,7 @@
 #   ./check.sh offline     format, lint, and the tests that need no network
 #   ./check.sh regtest     the wallet on a private chain (starts a Monero daemon)
 #   ./check.sh tor         the tests that start the real Tor client
-#   ./check.sh stagenet    not available yet
+#   ./check.sh stagenet    the command-line tool on stagenet, through Tor
 #   ./check.sh setup       once per machine: packages, Rust, the wallet library
 #
 # Several levels can be given at once: ./check.sh offline regtest tor
@@ -120,9 +120,11 @@ level_tor() {
 }
 
 level_stagenet() {
-  echo "error: nothing to run yet. The stagenet level arrives with the" >&2
-  echo "command-line tool, step 1.3 of the build plan in docs/concept.md." >&2
-  return 1
+  require_wallet_lib || return 1
+  # The command-line tool creates a wallet and synchronises it with a public
+  # stagenet node through Tor. A new wallet scans about a month of blocks,
+  # so this takes a while.
+  step cargo test -p veil_cli --locked --test stagenet -- --include-ignored --nocapture
 }
 
 level_setup() {

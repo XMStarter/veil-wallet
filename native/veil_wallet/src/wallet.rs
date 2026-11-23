@@ -3,6 +3,8 @@
 use std::collections::BTreeSet;
 use std::ffi::{c_int, c_void};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 
 use crate::sys::{self, c_string, SecretCString, WalletLibrary};
 use crate::{Amount, Error, SeedKind, SeedPhrase};
@@ -147,7 +149,19 @@ pub struct Wallet {
     /// failed attempt to point it back. Nothing but a broadcast may contact
     /// a node in that state.
     on_sync_node: bool,
+    /// The library's record of the last block it scanned, for reading
+    /// progress while a refresh runs. Belongs to the library.
+    listener: *mut c_void,
 }
+
+/// A pointer the progress thread of [`Wallet::refresh_with_progress`] may
+/// hold.
+struct ListenerPtr(*mut c_void);
+
+// SAFETY: the listener is a plain record that the library writes during a
+// refresh and that is made to be read from another thread meanwhile; the
+// thread holding this never outlives the refresh it watches.
+unsafe impl Send for ListenerPtr {}
 
 // SAFETY: the wallet library's objects are not tied to the thread that
 // created them. `Wallet` is not `Sync`, so only one thread uses it at a time.
@@ -329,6 +343,7 @@ impl Wallet {
             sync_node: None,
             broadcast_node: None,
             on_sync_node: true,
+            listener: std::ptr::null_mut(),
         };
         // The manager returns an object even when opening failed; the error
         // is on the object. Dropping `wallet` on the error path closes it.
@@ -345,6 +360,10 @@ impl Wallet {
                 .api
                 .MONERO_Wallet_setBackgroundRefresh(wallet.wallet, false)
         };
+        let mut wallet = wallet;
+        // SAFETY: live wallet object. The library creates the listener and
+        // attaches it to the wallet; it only records what happens.
+        wallet.listener = unsafe { wallet.lib.api.MONERO_cw_getWalletListener(wallet.wallet) };
         Ok(wallet)
     }
 
@@ -568,11 +587,61 @@ impl Wallet {
     /// The wallet library would skip the scan in both cases and report
     /// success, which would show a stale balance as if it were current.
     pub fn refresh(&mut self) -> Result<SyncProgress, Error> {
-        self.node_height()?;
+        self.refresh_with_progress(&mut |_| {})
+    }
+
+    /// Like [`Wallet::refresh`], and calls `report` about once a second
+    /// with how far scanning has come.
+    ///
+    /// `report` runs on another thread while this one waits for the
+    /// library. The first sync of a wallet can take a long time over Tor;
+    /// this is what lets an interface show that it is moving.
+    pub fn refresh_with_progress(
+        &mut self,
+        report: &mut (dyn FnMut(SyncProgress) + Send),
+    ) -> Result<SyncProgress, Error> {
+        const REPORT_EVERY: Duration = Duration::from_secs(1);
+        const CHECK_EVERY: Duration = Duration::from_millis(50);
+
+        let node_height = self.node_height()?;
 
         let before = self.sync_progress().wallet_height;
-        // SAFETY: live wallet object.
-        let refreshed = unsafe { self.lib.api.MONERO_Wallet_refresh(self.wallet) };
+        let finished = AtomicBool::new(false);
+        let listener = ListenerPtr(self.listener);
+        let api = &self.lib.api;
+        let wallet = self.wallet;
+        let refreshed = std::thread::scope(|scope| {
+            let finished = &finished;
+            scope.spawn(move || {
+                let listener = listener;
+                if listener.0.is_null() {
+                    return;
+                }
+                let mut waited = Duration::ZERO;
+                while !finished.load(Ordering::SeqCst) {
+                    std::thread::sleep(CHECK_EVERY);
+                    waited += CHECK_EVERY;
+                    if waited < REPORT_EVERY {
+                        continue;
+                    }
+                    waited = Duration::ZERO;
+                    // SAFETY: the listener lives as long as the wallet,
+                    // which outlives this scope.
+                    let scanned = unsafe { api.MONERO_cw_WalletListener_height(listener.0) };
+                    // Zero until the first block of this refresh arrives.
+                    if scanned > 0 {
+                        report(SyncProgress {
+                            wallet_height: scanned.min(node_height),
+                            node_height,
+                        });
+                    }
+                }
+            });
+            // SAFETY: live wallet object.
+            let refreshed = unsafe { api.MONERO_Wallet_refresh(wallet) };
+            finished.store(true, Ordering::SeqCst);
+            refreshed
+        });
         self.check()?;
         if !refreshed {
             return Err(Error::Wallet("synchronisation failed".into()));

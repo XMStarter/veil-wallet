@@ -15,7 +15,7 @@ use veil_wallet::{Amount, Direction, Network, Node, SendAmount, Wallet};
 use super::{
     nodes, wallet_library, TempDir, BROADCAST_HOST, BROADCAST_PORT, PASSWORD, SYNC_HOST, SYNC_PORT,
 };
-use crate::Core;
+use crate::{Core, OnionNode};
 
 /// The first outputs on a new chain unlock after 60 blocks; the extra blocks
 /// give the wallet enough outputs on the chain to build rings from.
@@ -62,7 +62,27 @@ fn synchronises_through_one_listener_and_sends_through_the_other() {
     let mut core = Core::with_transport(Box::new(stand_in.clone()), wallet, nodes()).unwrap();
 
     daemon.add_blocks(INITIAL_BLOCKS, &mining_address);
-    sync(&mut core);
+    // Settling on nodes finds the daemon behind the first name and keeps
+    // the second for sending.
+    let height = core
+        .settle_on_nodes(&[
+            OnionNode::new(SYNC_HOST, SYNC_PORT).unwrap(),
+            OnionNode::new(BROADCAST_HOST, BROADCAST_PORT).unwrap(),
+        ])
+        .unwrap();
+    assert!(
+        height > INITIAL_BLOCKS,
+        "the node reports its chain: {height}"
+    );
+    assert_eq!(core.nodes(), &nodes());
+    // Progress reports, if any arrive in so short a scan, never run past
+    // the node's height.
+    let mut reports = Vec::new();
+    let progress = core
+        .sync_with_progress(&mut |progress| reports.push(progress))
+        .unwrap();
+    assert_eq!(progress.blocks_left(), 0);
+    assert!(reports.iter().all(|r| r.wallet_height <= r.node_height));
     let funded = core.balance();
     assert!(!funded.unlocked.is_zero(), "mined funds are spendable");
 
