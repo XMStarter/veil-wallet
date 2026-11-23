@@ -73,7 +73,9 @@ that cannot lose the user's funds.
     `build.sh` again and regenerate the bindings.
   - `veil_test_guard`: called first by every test that starts Tor or a
     daemon; fails the test on a CI runner. A new test of that kind calls it
-    too.
+    too. It also starts the daemon for tests, one at a time, and when the
+    daemon does not come up it says how it ended and shows the end of its
+    log.
   - `check.sh`: the checks by level (`offline`, `regtest`, `tor`,
     `stagenet`, `bridges`) with a log; `setup` prepares a machine. With
     `--windows` in front, the levels are built for Windows on Linux and run
@@ -115,14 +117,19 @@ way, after three fixes those runs found (never unloading the library,
 UTF-8 paths, and not trusting the library alone about an existing wallet)
 and after the antivirus was told to allow the DLL and `monerod.exe`. That
 completes step 1 of the build plan, the core without a user interface.
-Step 2, reliability tests, is written and not yet accepted. Its tests
-without a network pass in a cloud session: a process killed while saving,
-a damaged data file, and a connection cut in the middle of a
-synchronisation. Its tests on a private chain have never run and wait for
-the owner's acceptance run: a cut download, a node that disappears, a send
-whose answer is lost, and a restore past long runs of unused addresses.
-The table of what is tested where is in `docs/development.md`,
-"Reliability tests". Not done: the app. See the build plan in
+Step 2, reliability tests, is written and not yet accepted. On the owner's
+machine, as Linux and as Windows programs, these pass: a process killed
+while saving, a damaged data file, a connection cut in the middle of a
+synchronisation against a fake node, and on a private chain a restore past
+long runs of unused addresses and a wallet rebuilt from its keys. The
+private-chain scenario of lost connections has not passed yet. As a
+Windows program it got as far as a cut download being retried and a
+vanished node being reported, then failed on a mistake in the test (a
+start height set by the test is forgotten when a wallet is closed); as a
+Linux program its daemon did not come up, for a reason the log did not
+show. Both are changed and wait for the next run; the part about a send
+whose answer is lost has never run. The table of what is tested where is
+in `docs/development.md`, "Reliability tests". Not done: the app. See the build plan in
 `docs/concept.md`.
 
 ## Environment notes

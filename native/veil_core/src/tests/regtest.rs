@@ -289,6 +289,10 @@ fn lost_connections_lose_no_funds_and_hide_no_send() {
     // user gave up for the day.
     core.close().unwrap();
     let mut wallet = Wallet::open(&lib, &dir.file("user"), PASSWORD, Network::Mainnet).unwrap();
+    // Both settings last only while a wallet is open. Without the first,
+    // the wallet would go back to the start height it was created with,
+    // near the public chain's height, and skip this chain's blocks.
+    wallet.set_restore_height(0);
     wallet.accept_regtest_chain();
     let mut core = Core::with_transport(Box::new(stand_in.clone()), wallet, nodes()).unwrap();
     assert_eq!(core.balance().total, first);

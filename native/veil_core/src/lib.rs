@@ -309,7 +309,8 @@ impl Core {
         self.wallet.restore_height()
     }
 
-    /// Changes where scanning starts. Lower it to find older payments.
+    /// Changes where scanning starts, until the wallet is closed. See
+    /// [`Wallet::set_restore_height`]: the change is not written to disk.
     pub fn set_restore_height(&mut self, height: u64) {
         self.wallet.set_restore_height(height);
     }

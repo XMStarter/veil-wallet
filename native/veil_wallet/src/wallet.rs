@@ -645,7 +645,12 @@ impl Wallet {
         }
     }
 
-    /// Changes where scanning starts. Lower it to find older payments.
+    /// Changes where scanning starts, until the wallet is closed.
+    ///
+    /// The change is not written to disk: the library keeps this height in
+    /// the keys file, which it writes once. A wallet opened again starts
+    /// from the height it was created or restored with. A start height
+    /// that has to last is given to [`Wallet::restore`].
     pub fn set_restore_height(&mut self, height: u64) {
         // SAFETY: live wallet object.
         unsafe {

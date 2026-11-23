@@ -416,3 +416,67 @@ fn a_wallet_without_its_keys_file_does_not_open_and_nothing_is_moved() {
     assert!(Wallet::open(&lib, &path, PASSWORD, Network::Mainnet).is_err());
     assert_eq!(files_in(path.parent().unwrap()), ["w"]);
 }
+
+/// Where scanning starts decides whether old payments are found, so it has
+/// to survive the wallet being closed.
+#[test]
+fn the_start_height_given_at_creation_or_restore_is_kept_on_disk() {
+    let Some(lib) = wallet_library() else { return };
+    let dir = TempDir::new("start-height");
+    let reopened_height = |name: &str| {
+        Wallet::open(&lib, &dir.file(name), PASSWORD, Network::Mainnet)
+            .unwrap()
+            .restore_height()
+    };
+
+    // A new wallet: about a month before today.
+    let (new, phrase) = Wallet::create(&lib, &dir.file("new"), PASSWORD, Network::Mainnet).unwrap();
+    let created_at = new.restore_height();
+    assert!(created_at > 3_000_000, "{created_at}");
+    let legacy = new.legacy_seed_phrase().unwrap();
+    new.close().unwrap();
+    assert_eq!(reopened_height("new"), created_at);
+
+    // Restored from the sixteen words: the date inside the phrase.
+    let from_date = Wallet::restore(
+        &lib,
+        &dir.file("16"),
+        PASSWORD,
+        Network::Mainnet,
+        &phrase,
+        0,
+    )
+    .unwrap();
+    let dated = from_date.restore_height();
+    assert!(dated > 3_000_000 && dated <= created_at, "{dated}");
+    from_date.close().unwrap();
+    assert_eq!(reopened_height("16"), dated);
+
+    // Restored with a height the user chose. It applies to the twenty-five
+    // words; the sixteen keep their own date.
+    for (name, phrase, expected) in [
+        ("16-chosen", &phrase, dated),
+        ("25-chosen", &legacy, 1_234_567),
+    ] {
+        let chosen = Wallet::restore(
+            &lib,
+            &dir.file(name),
+            PASSWORD,
+            Network::Mainnet,
+            phrase,
+            1_234_567,
+        )
+        .unwrap();
+        assert_eq!(chosen.restore_height(), expected, "{name}");
+        chosen.close().unwrap();
+        assert_eq!(reopened_height(name), expected, "{name}");
+    }
+
+    // Changed afterwards: for as long as the wallet is open, and no longer.
+    // The library keeps this height in the keys file, which it writes once.
+    let mut changed = Wallet::open(&lib, &dir.file("new"), PASSWORD, Network::Mainnet).unwrap();
+    changed.set_restore_height(2_000_000);
+    assert_eq!(changed.restore_height(), 2_000_000);
+    changed.close().unwrap();
+    assert_eq!(reopened_height("new"), created_at);
+}

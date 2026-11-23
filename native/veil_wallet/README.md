@@ -46,6 +46,7 @@ Found while testing against the real library. Each has a test.
 | On Windows, a wallet in a folder whose name is not ASCII is not recognised as existing | Before creating or restoring, the system is asked as well as the library, and either answer refuses; a Veil patch makes the library read paths as UTF-8 |
 | Unloading the library after a wallet was opened waits for ever on Windows: its clean-up joins threads that cannot finish while it runs | The library is loaded once and never unloaded |
 | A wallet whose data file is damaged does not open at all, although its keys file is intact | `open` sets the unreadable file aside and opens the wallet from its keys; `was_rebuilt_from_keys` says so, and the next synchronisation finds the funds again |
+| A start height changed after the wallet was made is forgotten when the wallet is closed: it lives in the keys file, which is written once | Documented on `set_restore_height`, and nothing in Veil depends on it: the height that counts is given at creation or restore, and a test checks that it is still there after reopening. Tests on a private chain set it again each time they open a wallet |
 | A connection lost while a transaction is handed over is reported like a node that was never reached, though the node may have the transaction | `commit` fails with `SendOutcomeUnknown`, which says to synchronise and check the history before sending again. The wallet records nothing; the next synchronisation shows the transaction if it went out |
 | A connection lost in the middle of a refresh is reported as a line of text | `refresh` fails with `NodeUnreachable`, the same as for a node that never answered. While blocks are being downloaded the library first asks again three times by itself, so a single lost connection there is not an error at all |
 | Building or sending a transaction switches on a thread that synchronises the wallet every ten seconds through whichever node is set | Every wallet is opened with that thread switched off (a Veil patch to the library); the regtest scenario in `veil_core` checks that nothing is contacted |
@@ -95,6 +96,9 @@ variables and keeps a log.
   incoming entry. That is how the library reports it; the balance is right.
   The interface will have to say "to yourself".
 
+- Changing the start height of an existing wallet so that it lasts, for a
+  user who restored with too late a date. It needs the library to rewrite
+  the keys file, and a rescan.
 - Warning when a payment has to combine coins from different addresses.
 - Choosing the restore height from a date.
 - Background sync with progress reporting.
