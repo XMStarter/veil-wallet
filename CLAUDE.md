@@ -134,7 +134,8 @@ against a limit of sixty, so neither a race for ports nor a slow start
 showed. It has not happened again, and the daemon helper reports it if it
 does. The table of what
 is tested where is in `docs/development.md`, "Reliability tests". Next is
-step 3, the user interface. Not done: the app. See the build plan in
+step 3, the user interface, in the eight parts listed in the build plan;
+none is started. Not done: the app. See the build plan in
 `docs/concept.md`.
 
 ## Environment notes

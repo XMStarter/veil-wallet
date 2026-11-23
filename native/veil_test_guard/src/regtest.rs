@@ -84,6 +84,9 @@ impl RegtestDaemon {
 
     /// Starts the daemon on the given ports and waits until it answers.
     fn start_on(binary: &OsStr, rpc_port: u16, p2p_port: u16) -> Result<RegtestDaemon, String> {
+        // Checked here as well as in `start`: nothing is ever run with a
+        // daemon's command line on a CI runner, whatever the program is.
+        refuse_in_hosted_ci("starting a Monero daemon");
         let data_dir =
             std::env::temp_dir().join(format!("veil-monerod-{}-{rpc_port}", std::process::id()));
         let _ = std::fs::remove_dir_all(&data_dir);
@@ -248,6 +251,11 @@ mod tests {
     /// does not know the daemon's options and ends at once.
     #[test]
     fn a_program_that_ends_at_once_is_reported_with_how_it_ended() {
+        // Not on a CI runner: the program gets a daemon's command line, and
+        // hosted CI runs nothing that looks like a daemon.
+        if crate::ci_marker(|name| std::env::var_os(name)).is_some() {
+            return;
+        }
         let this_program = std::env::current_exe().unwrap();
         let failure = match RegtestDaemon::start_once(this_program.as_os_str()) {
             Err(failure) => failure,
