@@ -21,6 +21,8 @@ const SYNC_HOST: &str = "2gzyxa5ihm7nsggfxnu52rck2vv4rvmdlkiu3zzui5du4xyclen53wi
 const BROADCAST_HOST: &str = "duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion";
 const SYNC_PORT: u16 = 18081;
 const BROADCAST_PORT: u16 = 18089;
+/// A third onion name, for a candidate that is neither.
+const THIRD_HOST: &str = "vww6ybal4bd7szmgncyruucpgfkqahzddi37ktceo3ah7ngmcopnpyyd.onion";
 
 fn nodes() -> Nodes {
     Nodes::separate(
@@ -304,6 +306,106 @@ fn a_connection_lost_mid_sync_is_reported_and_leaves_the_wallet_as_it_was() {
     assert_eq!(core.receive_address().unwrap(), address);
     assert_eq!(core.restore_height(), start);
     assert_eq!(core.sync_progress().wallet_height, scanned);
+}
+
+#[test]
+fn a_transaction_would_go_to_the_first_node_that_answers() {
+    let Some(lib) = wallet_library() else { return };
+    let dir = TempDir::new("broadcast-route");
+    let stand_in = StandIn::start().unwrap();
+    let mut core = core_on(&lib, &dir, &stand_in);
+    let sync = OnionNode::new(SYNC_HOST, SYNC_PORT).unwrap();
+    let broadcast = OnionNode::new(BROADCAST_HOST, BROADCAST_PORT).unwrap();
+    let third = OnionNode::new(THIRD_HOST, 18089).unwrap();
+    let candidates = [sync.clone(), broadcast.clone(), third.clone()];
+
+    // The order to try them in: the broadcast node in place, the other
+    // candidates, and the node synchronised with last. A node the last
+    // send went through comes before all of them.
+    let names = |core: &Core, preferred: Option<&OnionNode>| -> Vec<OnionNode> {
+        core.broadcast_route(&candidates, preferred)
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect()
+    };
+    assert_eq!(
+        names(&core, None),
+        [broadcast.clone(), third.clone(), sync.clone()]
+    );
+    assert_eq!(
+        names(&core, Some(&third)),
+        [third.clone(), broadcast.clone(), sync.clone()]
+    );
+
+    // Every node on the way is asked through the broadcast listener, in
+    // that order, until one answers.
+    let asked = |stand_in: &StandIn| -> Vec<String> {
+        let requests = stand_in.requests();
+        assert!(
+            requests.iter().all(|r| r.purpose == Purpose::Broadcast),
+            "{requests:?}"
+        );
+        let mut hosts: Vec<String> = requests.into_iter().map(|r| r.host).collect();
+        hosts.dedup();
+        hosts
+    };
+    let node = FakeNode::start(core.restore_height() + BLOCKS_AHEAD);
+
+    // Nobody is there: no node, and nothing to hand a transaction to.
+    stand_in.clear_requests();
+    assert_eq!(core.broadcast_node_that_answers(&candidates).unwrap(), None);
+    assert_eq!(asked(&stand_in), [BROADCAST_HOST, THIRD_HOST, SYNC_HOST]);
+
+    // The broadcast node is down and the next candidate is not: that one.
+    stand_in.route(THIRD_HOST, 18089, node.port());
+    stand_in.clear_requests();
+    assert_eq!(
+        core.broadcast_node_that_answers(&candidates).unwrap(),
+        Some(third.clone())
+    );
+    assert_eq!(asked(&stand_in), [BROADCAST_HOST, THIRD_HOST]);
+
+    // Only the node synchronised with is left: then that one, through the
+    // broadcast listener all the same, rather than no node at all.
+    stand_in.unroute(THIRD_HOST, 18089);
+    stand_in.route(SYNC_HOST, SYNC_PORT, node.port());
+    stand_in.clear_requests();
+    assert_eq!(
+        core.broadcast_node_that_answers(&candidates).unwrap(),
+        Some(sync.clone())
+    );
+    assert_eq!(asked(&stand_in), [BROADCAST_HOST, THIRD_HOST, SYNC_HOST]);
+
+    // The broadcast node is there: nobody else is asked.
+    stand_in.route(BROADCAST_HOST, BROADCAST_PORT, node.port());
+    stand_in.clear_requests();
+    assert_eq!(
+        core.broadcast_node_that_answers(&candidates).unwrap(),
+        Some(broadcast.clone())
+    );
+    assert_eq!(asked(&stand_in), [BROADCAST_HOST]);
+
+    // Asking leaves the wallet where it was: it synchronises with its
+    // sync node, through the sync listener.
+    assert_eq!(core.nodes(), &nodes());
+    stand_in.clear_requests();
+    assert!(core.node_height().is_ok());
+    let requests = stand_in.requests();
+    assert!(
+        requests
+            .iter()
+            .all(|r| r.purpose == Purpose::Sync && r.host == SYNC_HOST),
+        "{requests:?}"
+    );
+
+    // And without Tor nobody is asked anything.
+    stand_in.set_ready(false);
+    stand_in.clear_requests();
+    assert!(matches!(
+        core.broadcast_node_that_answers(&candidates),
+        Err(CoreError::TorNotReady { .. })
+    ));
+    assert!(stand_in.requests().is_empty());
 }
 
 #[test]

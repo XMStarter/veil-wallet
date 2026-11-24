@@ -168,6 +168,13 @@ them again after a change that is meant.
   scanned, and remembers in its `SyncAttempt` which nodes have failed, so
   that calling it again continues where it was and an attempt that is
   stopped again and again still comes to an end.
+- **Before a send.** A session hands a transaction to the first node of
+  `Core::broadcast_route` that answers when asked whether it is there:
+  the node the last send went through, the broadcast node in place, the
+  other candidates, and last the sync node itself, all through the
+  broadcast listener. A node that is down is given nothing. If none
+  answers, the send fails with `NoNode`: nothing was sent, and it can be
+  tried again.
 - **In the middle of a send.** `commit` fails with the wallet's
   `SendOutcomeUnknown`: the node may have the transaction. A session
   keeps the transaction's ids and looks for them in the history after

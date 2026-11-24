@@ -351,7 +351,9 @@ impl Core {
     /// review the fee first. Asks the sync node for what a transaction needs.
     ///
     /// [`PendingSend::commit`] then hands the transaction to the broadcast
-    /// node through the broadcast listener. If Tor has stopped in the
+    /// node through the broadcast listener, and
+    /// [`PendingSend::commit_through`] to the first node of
+    /// [`Core::broadcast_route`] that answers. If Tor has stopped in the
     /// meantime, that listener refuses the connection and the commit fails;
     /// nothing leaves any other way.
     pub fn prepare_send(
@@ -364,6 +366,64 @@ impl Core {
         self.wallet
             .prepare_send(to, amount)
             .map_err(|error| node_failure(transport, error))
+    }
+
+    /// The nodes a transaction may be handed to, in the order to try
+    /// them, each behind the broadcast listener: for
+    /// [`PendingSend::commit_through`], which hands the transaction to
+    /// the first that answers.
+    ///
+    /// `preferred` comes first, if there is one: the node the last send
+    /// of the session went through. Then the broadcast node in place,
+    /// then every other candidate that is another service than the sync
+    /// node. The sync node itself comes last: if nothing else answers,
+    /// the transaction goes through it, on a circuit of its own, rather
+    /// than not at all. A node synchronised with can tell that somebody
+    /// spends, which is what the separate node is there to prevent, but
+    /// a payment that cannot be sent is the worse failure.
+    pub fn broadcast_route(
+        &self,
+        candidates: &[OnionNode],
+        preferred: Option<&OnionNode>,
+    ) -> Vec<(OnionNode, Node)> {
+        let sync = self.nodes.sync();
+        let mut route: Vec<OnionNode> = Vec::new();
+        let others = preferred
+            .into_iter()
+            .chain(std::iter::once(self.nodes.broadcast()))
+            .chain(candidates)
+            .filter(|node| node.host() != sync.host());
+        for node in others.chain(std::iter::once(sync)) {
+            if !route.contains(node) {
+                route.push(node.clone());
+            }
+        }
+        let socks_port = self.transport.socks_port(Purpose::Broadcast);
+        route
+            .into_iter()
+            .map(|node| {
+                let behind = Node::Onion {
+                    host: node.host().to_owned(),
+                    port: node.port(),
+                    socks_port,
+                };
+                (node, behind)
+            })
+            .collect()
+    }
+
+    /// Which node of [`Core::broadcast_route`] a transaction would be
+    /// handed to right now: the first that answers through the broadcast
+    /// listener. `None` if none does. Sends nothing.
+    pub fn broadcast_node_that_answers(
+        &mut self,
+        candidates: &[OnionNode],
+    ) -> Result<Option<OnionNode>, CoreError> {
+        self.require_tor()?;
+        let (names, nodes): (Vec<OnionNode>, Vec<Node>) =
+            self.broadcast_route(candidates, None).into_iter().unzip();
+        let found = self.wallet.first_that_answers(&nodes)?;
+        Ok(found.map(|position| names[position].clone()))
     }
 
     /// Whether the wallet was opened from its keys alone because its data

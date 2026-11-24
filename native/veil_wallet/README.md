@@ -27,6 +27,10 @@ See [`../wallet_lib`](../wallet_lib) for the library itself.
   separate, explicit choice; an amount of zero is an error.
 - **Review before sending.** `prepare_send` builds and signs a transaction
   and reports its fee. Nothing is broadcast until `commit`.
+- **A node is asked before it is given a transaction.**
+  `PendingSend::commit_through` takes the nodes to try in order and hands
+  the transaction to the first that answers. If none does, it fails with
+  `NoNodeToSendThrough`, and nothing has left the device.
 - **One payment, one transaction.** A payment that the library would
   split into several transactions is refused with `SeveralTransactions`.
   The library sends such transactions one after another and stops at the

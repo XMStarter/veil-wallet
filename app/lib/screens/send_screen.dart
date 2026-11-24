@@ -200,8 +200,15 @@ class _SendScreenState extends State<SendScreen> {
                   _refused = null;
                 }),
         ),
+        // A send that failed for a reason of this kind, a node that is not
+        // there or a refusal, has not gone out, and that is said: the user
+        // has just pressed Send and has to know where the money is.
         if (problem != null && !aboutAddress && !aboutAmount)
-          ProblemText(problemWords(text, problem)),
+          ProblemText(
+            send.phase == SendPhase.failed && _refused == null
+                ? '${problemWords(text, problem)} ${text.sendNothingSent}'
+                : problemWords(text, problem),
+          ),
         if (preparing) ...[
           const SizedBox(height: 16),
           const LinearProgressIndicator(),

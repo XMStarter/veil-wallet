@@ -806,9 +806,16 @@ mod on_a_private_chain {
     /// and the confirmations that unlock received funds.
     const INITIAL_BLOCKS: u64 = 130;
     const UNLOCK_BLOCKS: u64 = 10;
-    /// More than the wallet sends to open an exchange with a node, less
-    /// than a transaction.
-    const MID_TRANSACTION: CutPoint = CutPoint::AfterRequestBytes(2500);
+    /// More than the wallet sends to open an exchange with a node and to
+    /// ask whether it is there, which it does before it hands a
+    /// transaction over; less than those and a transaction together.
+    const MID_TRANSACTION: CutPoint = CutPoint::AfterRequestBytes(2800);
+
+    /// The same place, for a cut that stops the transaction there: what
+    /// came before it, the opening of the exchange and the question
+    /// whether the node is there, has arrived, and the transaction has
+    /// not.
+    const CUT_OFF_MID_TRANSACTION: CutPoint = CutPoint::BeforeMoreRequestBytes(2800);
 
     /// A session whose wallet scans from the first block of the private
     /// chain and accepts that chain's rules, each time it is opened.
@@ -1281,8 +1288,11 @@ mod on_a_private_chain {
         assert_eq!(outgoing(&state), 2);
 
         // --- A send that never reaches the node -------------------------------
-        // The wallet library says the same for it as for a lost answer, so
-        // it is reported the same way: unknown.
+        // The node says that it is there, and the connection is cut while
+        // the transaction is on its way to it: part of it arrives, which
+        // is nothing a node can use. The wallet library says the same for
+        // it as for a lost answer, so it is reported the same way:
+        // unknown.
         session.prepare_send(&payee_address, SendAmount::Exact(amount));
         let state = wait(&session, |state| {
             matches!(state.send, SendState::Review { .. } | SendState::Failed(_))
@@ -1292,7 +1302,12 @@ mod on_a_private_chain {
             "the transaction was not built: {:?}",
             state.send
         );
-        stand_in.unroute(BROADCAST_HOST, BROADCAST_PORT);
+        stand_in.cut_once(
+            BROADCAST_HOST,
+            BROADCAST_PORT,
+            CUT_OFF_MID_TRANSACTION,
+            AfterCut::NodeReachable,
+        );
         session.confirm_send();
         let state = wait(&session, |state| {
             !matches!(state.send, SendState::Review { .. } | SendState::Sending)
@@ -1300,7 +1315,7 @@ mod on_a_private_chain {
         let SendState::OutcomeUnknown { txids: never, .. } = state.send.clone() else {
             panic!("the send was not reported as unknown: {:?}", state.send);
         };
-        stand_in.route(BROADCAST_HOST, BROADCAST_PORT, daemon.rpc_port());
+        assert_eq!(stand_in.cuts(), 2, "the transaction was not cut off");
 
         // The wallet has written that down already, not only in memory: a
         // copy of its data file as it is on disk now is what a killed app
@@ -1363,6 +1378,14 @@ mod on_a_private_chain {
         let SendState::Review { fee: third_fee, .. } = state.send else {
             panic!("the transaction was not built: {:?}", state.send);
         };
+        // This time the node for sending is down, as public nodes often
+        // are. It is asked whether it is there before anything is handed
+        // to it, does not answer, and the transaction goes to the next
+        // node that does: here the one synchronised with, there being no
+        // third, through the broadcast listener all the same. Sent, and
+        // nothing unknown about it.
+        stand_in.unroute(BROADCAST_HOST, BROADCAST_PORT);
+        stand_in.clear_requests();
         session.confirm_send();
         let state = wait(&session, |state| {
             !matches!(state.send, SendState::Review { .. } | SendState::Sending)
@@ -1372,6 +1395,15 @@ mod on_a_private_chain {
             "the transaction was not sent: {:?}",
             state.send
         );
+        let mut asked: Vec<String> = stand_in
+            .requests()
+            .into_iter()
+            .filter(|request| request.purpose == Purpose::Broadcast)
+            .map(|request| request.host)
+            .collect();
+        asked.dedup();
+        assert_eq!(asked, [BROADCAST_HOST, SYNC_HOST]);
+        stand_in.route(BROADCAST_HOST, BROADCAST_PORT, daemon.rpc_port());
         daemon.add_blocks(UNLOCK_BLOCKS + 1, &funder_address);
         let state = synchronised(&session);
         let in_the_end = after_second

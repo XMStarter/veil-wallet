@@ -952,6 +952,44 @@ impl Wallet {
         Ok(height)
     }
 
+    /// Points the library at the first of `nodes` that answers when asked
+    /// whether it is there, and returns its position; `None` if none
+    /// does. Nothing of the wallet is said to any of them.
+    ///
+    /// The wallet is left off its sync node, on the node that answered or
+    /// on the last one asked: the caller returns it with
+    /// [`Wallet::return_to_sync_node`].
+    fn point_at_first_that_answers(&mut self, nodes: &[Node]) -> Result<Option<usize>, Error> {
+        self.on_sync_node = false;
+        for (position, node) in nodes.iter().enumerate() {
+            self.point_at(node)?;
+            // SAFETY: live wallet object.
+            let connection = unsafe { self.lib.api.MONERO_Wallet_connected(self.wallet) };
+            if connection == sys::CONNECTION_CONNECTED {
+                return Ok(Some(position));
+            }
+        }
+        Ok(None)
+    }
+
+    /// The position of the first of `nodes` that answers when asked
+    /// whether it is there; `None` if none does. The wallet is pointed
+    /// back at its sync node afterwards.
+    ///
+    /// This is the question [`PendingSend::commit_through`] asks before it
+    /// hands a transaction over, on its own for a caller that wants to
+    /// know beforehand.
+    pub fn first_that_answers(&mut self, nodes: &[Node]) -> Result<Option<usize>, Error> {
+        for node in nodes {
+            node_addresses(node)?;
+        }
+        let found = self.point_at_first_that_answers(nodes);
+        let back = self.return_to_sync_node();
+        let found = found?;
+        back?;
+        Ok(found)
+    }
+
     /// Makes sure the library is pointed at the sync node before anything
     /// but a broadcast contacts a node.
     fn return_to_sync_node(&mut self) -> Result<(), Error> {
@@ -1351,6 +1389,41 @@ impl PendingSend<'_> {
         let _ = wallet.return_to_sync_node();
         sent?;
         Ok(txids)
+    }
+
+    /// Broadcasts the transaction through the first of `nodes` that
+    /// answers, and returns its transaction ids with the position of that
+    /// node.
+    ///
+    /// Each node is first asked whether it is there, and the transaction
+    /// is handed to the first that says so. A node that is down is passed
+    /// over without having been given anything. If none answers, this
+    /// fails with [`Error::NoNodeToSendThrough`]: the transaction has not
+    /// left the device, which is a failure that can be said out loud and
+    /// tried again. Once a node has answered and the transaction is on
+    /// its way to it, a lost connection is
+    /// [`Error::SendOutcomeUnknown`] as in [`PendingSend::commit`], and
+    /// no further node is tried: a second hand-over could not be told
+    /// from a second payment.
+    ///
+    /// The wallet is pointed back at the sync node afterwards, whatever
+    /// the outcome.
+    pub fn commit_through(self, nodes: &[Node]) -> Result<(Vec<String>, usize), Error> {
+        let PendingSend {
+            wallet,
+            pending,
+            txids,
+            ..
+        } = self;
+        let sent = wallet
+            .point_at_first_that_answers(nodes)
+            .and_then(|found| match found {
+                Some(position) => Self::broadcast(wallet, pending).map(|()| position),
+                None => Err(Error::NoNodeToSendThrough { tried: nodes.len() }),
+            });
+        // As in `commit`: a failure to switch back is not this send's.
+        let _ = wallet.return_to_sync_node();
+        Ok((txids, sent?))
     }
 
     fn broadcast(wallet: &Wallet, pending: *mut c_void) -> Result<(), Error> {

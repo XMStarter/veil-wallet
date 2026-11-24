@@ -138,7 +138,8 @@ private chain.
 | A cancel arrives when the transaction has just been sent | The send stays shown as sent | `veil_core`, in `regtest` |
 | Tor does not start while a wallet is being created | No wallet is left on disk, and the next attempt makes one | `veil_core`, in `offline` |
 | A send is asked for when the last synchronisation failed, or before any | The wallet synchronises first; if it cannot, the send fails for that reason and nothing is built | `veil_core`, in `offline` |
-| A transaction never reaches the node | It is reported the same way, as unknown; a synchronisation that does not show it settles it without calling it failed, and a new send goes out once | `veil_core`, in `regtest` |
+| A transaction is cut off on its way to a node that had answered | It is reported the same way, as unknown; a synchronisation that does not show it settles it without calling it failed, and a new send goes out once | `veil_core`, in `regtest` |
+| The node a transaction would go to is down | It is asked first whether it is there and given nothing; the transaction goes to the next node that answers, the node synchronised with if no other does. If none answers, the send fails as not sent | `veil_core`: which node would be asked and chosen, against fake nodes in `offline`; a payment that goes out that way, in `regtest` |
 | Payments went to addresses far apart | A wallet restored from the phrase finds all of them and continues after the last | `veil_wallet/tests/regtest.rs`, in `regtest` |
 | The app is killed, or the wallet locked, in the middle of a long scan | What was scanned up to the last save is on disk, at most minutes old; locking does not wait for the scan; the next session scans the rest and misses nothing | `veil_core`: that a command and closing stop a synchronisation and that it goes on afterwards, against fake nodes in `offline`; with blocks and a payment over a slowed line, in `regtest` |
 

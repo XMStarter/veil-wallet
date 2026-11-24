@@ -262,6 +262,8 @@ void main() {
     await press(tester, 'Send payment');
     expect(find.text('SEND'), findsOneWidget);
     expect(find.textContaining('the node refused it'), findsOneWidget);
+    // Having pressed Send, the user is told where the money is.
+    expect(find.textContaining('Nothing was sent.'), findsOneWidget);
 
     // Left and opened again, the form does not bring the old refusal back.
     await press(tester, 'Back');

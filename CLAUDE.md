@@ -302,8 +302,26 @@ owner's run passed at the `offline` and `regtest` levels as Linux and as
 Windows programs, the scenario on a private chain included with its two
 new checks: the data file as a kill would leave it knows of the send
 whose outcome is unknown, and a cancel sent right after a confirmation
-leaves the send shown as sent. Not reported from the app yet: the
-auto-lock, and anything of what the review changed. Bridges changed
+leaves the send shown as sent. In the app the owner then got "outcome
+unknown" for an ordinary send, where sends had gone through at step 3.6.
+Nothing on the way of a transaction to its node had changed since then.
+The owner asked each of the four public stagenet nodes with `veil sync
+--node`: two did not answer. The node a transaction goes to was the
+candidate after the one synchronised with, never asked anything before
+the send, so with two of four down about every second session could not
+send, and the library reports a node that is not there like a lost
+answer. Now `PendingSend::commit_through` asks each node of
+`Core::broadcast_route` whether it is there before handing it the
+transaction, passes over those that do not answer, uses the node
+synchronised with if no other answers, and fails as not sent if none
+does. Offline tests show which node is asked and chosen; that a payment
+goes out that way is in the scenario on a private chain, which also has
+a new kind of cut in the stand-in for a transaction that never arrives
+(`BeforeMoreRequestBytes`). Not run on the owner's machine yet. Not
+reported from the app yet: the auto-lock, and anything of what the review
+changed. A synchronisation still starts with the first candidate every
+time, so a first node that is down costs every synchronisation the time
+it takes to find that out. Bridges changed
 in Settings take effect the next time the wallet is opened. Next after
 its acceptance is step 3.8, the app on Windows. Not done: the app. See the build plan in
 `docs/concept.md`.

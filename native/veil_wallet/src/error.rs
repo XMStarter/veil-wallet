@@ -87,6 +87,15 @@ pub enum Error {
     )]
     SeveralTransactions { transactions: usize },
 
+    /// None of the nodes a transaction could be handed to answered when
+    /// asked whether it was there. The transaction was handed to nobody:
+    /// it has not left the device, and sending again cannot pay twice.
+    #[error(
+        "none of the {tried} nodes the transaction could be sent through answered; \
+         nothing was sent"
+    )]
+    NoNodeToSendThrough { tried: usize },
+
     /// The amount to send is zero.
     #[error("the amount must be greater than zero")]
     ZeroAmount,

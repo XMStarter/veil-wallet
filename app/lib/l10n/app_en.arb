@@ -160,6 +160,7 @@
   "sentTitle": "Sent",
   "sentBody": "The payment is on its way. It is in recent activity; its first confirmation takes a few minutes.",
   "sentDone": "Done",
+  "sendNothingSent": "Nothing was sent. You can try again.",
   "unknownTitle": "Not known",
   "unknownBody": "The connection was lost while the payment was being sent. It may have gone out, or not. The wallet is looking for it: if it went out, this turns into “Sent” by itself, usually within a few minutes. Until then nothing else can be sent, so that nobody is paid twice.",
   "unknownSettled": "The payment has not shown up, although the wallet has synchronised since. Most likely it never went out. You can send it again. If the first one arrives after all, the recipient will have been paid twice.",

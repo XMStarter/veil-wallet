@@ -90,6 +90,14 @@ if, at build time, Arti cannot run bridges on Android.
   its amount if it names one. (Scanning comes with the phone.)
 - The address is shown in groups of four characters with the beginning and
   the end highlighted, so it is easy to compare with the original.
+- Before a transaction is handed to a node, the node is asked whether it
+  is there. Public nodes are often down; one that does not answer is
+  passed over, having been given nothing, and the next one is asked. If
+  the only node that answers is the one the wallet synchronises with,
+  the transaction goes through that one, on a Tor circuit of its own:
+  a payment that cannot be sent is worse than a node that can guess that
+  somebody spends. If no node answers at all, nothing was sent, and the
+  wallet says so plainly; that can be tried again without any risk.
 - If the connection is lost while a transaction is being handed to the
   node, the wallet does not know whether it went out. It says so, and
   looks for the transaction after every synchronisation, in blocks and

@@ -148,9 +148,10 @@ impl From<veil_wallet::Error> for Problem {
             Error::WrongPassword => ProblemKind::WrongPassword,
             Error::WalletExists(_) => ProblemKind::WalletExists,
             Error::SeedWordCount { .. } => ProblemKind::InvalidPhrase,
-            Error::NodeUnreachable | Error::NodeIncompatible | Error::NodeSyncing { .. } => {
-                ProblemKind::NoNode
-            }
+            Error::NodeUnreachable
+            | Error::NodeIncompatible
+            | Error::NodeSyncing { .. }
+            | Error::NoNodeToSendThrough { .. } => ProblemKind::NoNode,
             Error::InvalidAddress => ProblemKind::InvalidAddress,
             Error::ZeroAmount => ProblemKind::ZeroAmount,
             Error::NotEnoughFunds(_) => ProblemKind::NotEnoughFunds,
@@ -706,6 +707,9 @@ fn run(
     let mut waiting_send: Option<(String, SendAmount)> = None;
     // When the synchronisation under way, or the last one, began.
     let mut sync_began = Instant::now();
+    // The node the last send of this session went through: the first to
+    // be asked by the next one.
+    let mut sent_through: Option<OnionNode> = None;
     loop {
         // With a synchronisation owed there is nothing to wait for: take
         // what has arrived and go on with it.
@@ -751,7 +755,15 @@ fn run(
                     held = false;
                     sync_owed = true;
                 } else {
-                    match review(&mut core, &to, amount, shared, inbox) {
+                    match review(
+                        &mut core,
+                        &to,
+                        amount,
+                        shared,
+                        inbox,
+                        &nodes,
+                        &mut sent_through,
+                    ) {
                         AfterReview::Close => break,
                         AfterReview::Continue => {}
                         AfterReview::Unknown(txids) => {
@@ -832,6 +844,7 @@ fn run(
                         interrupted = None;
                         level = false;
                         held = false;
+                        sent_through = None;
                         sync_owed = true;
                     }
                     Err(problem) => shared.update(|state| state.last_problem = Some(problem)),
@@ -887,7 +900,15 @@ fn run(
             if !level {
                 continue;
             }
-            match review(&mut core, &to, amount, shared, inbox) {
+            match review(
+                &mut core,
+                &to,
+                amount,
+                shared,
+                inbox,
+                &nodes,
+                &mut sent_through,
+            ) {
                 AfterReview::Close => break,
                 AfterReview::Continue => {}
                 AfterReview::Unknown(txids) => {
@@ -1331,14 +1352,19 @@ enum AfterReview {
 /// Builds a transaction and holds it until the user confirms or cancels.
 /// While it is held, the session takes no other command but closing. Then
 /// publishes what the wallet knows and saves it.
+///
+/// `candidates` are the session's nodes, and `sent_through` the node the
+/// last send went through, replaced by the one this send goes through.
 fn review(
     core: &mut Core,
     to: &str,
     amount: SendAmount,
     shared: &Shared,
     inbox: &Receiver<Command>,
+    candidates: &[OnionNode],
+    sent_through: &mut Option<OnionNode>,
 ) -> AfterReview {
-    let after = hold_for_review(core, to, amount, shared, inbox);
+    let after = hold_for_review(core, to, amount, shared, inbox, candidates, sent_through);
     if after != AfterReview::Close {
         publish_wallet(core, shared);
         save(core, shared);
@@ -1352,8 +1378,17 @@ fn hold_for_review(
     amount: SendAmount,
     shared: &Shared,
     inbox: &Receiver<Command>,
+    candidates: &[OnionNode],
+    sent_through: &mut Option<OnionNode>,
 ) -> AfterReview {
     shared.update(|state| state.send = SendState::Preparing);
+    // Where the transaction may go once it is confirmed, worked out now:
+    // while it is held, the core is not to be asked anything. No node on
+    // this list is contacted before the user has confirmed.
+    let (route, behind): (Vec<OnionNode>, Vec<_>) = core
+        .broadcast_route(candidates, sent_through.as_ref())
+        .into_iter()
+        .unzip();
     let pending = match core.prepare_send(to, amount) {
         Ok(pending) => pending,
         Err(error) => {
@@ -1390,7 +1425,14 @@ fn hold_for_review(
                 // Kept for the case that the answer is lost: by these the
                 // transaction is recognised if it went out after all.
                 let ids = pending.txids().to_vec();
-                let sent = pending.commit();
+                // Handed to the first node that answers when asked whether
+                // it is there. A node that is down costs a moment and
+                // nothing else; if none is there, nothing was sent, and
+                // that is a failure that can be called one.
+                let sent = pending.commit_through(&behind).map(|(txids, position)| {
+                    *sent_through = Some(route[position].clone());
+                    txids
+                });
                 let unknown = matches!(sent, Err(veil_wallet::Error::SendOutcomeUnknown));
                 // How it went and what it left in the wallet, in one
                 // change: nobody sees "sent" over the balance of before.
