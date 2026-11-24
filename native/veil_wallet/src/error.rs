@@ -45,6 +45,11 @@ pub enum Error {
     #[error("wrong password")]
     WrongPassword,
 
+    /// The wallet is open already: in another window of the app, or in
+    /// another wallet program. Nothing was touched.
+    #[error("the wallet is open in another program; close it there first")]
+    WalletInUse,
+
     /// A wallet file already exists at the target path.
     #[error("a wallet already exists at {0}")]
     WalletExists(PathBuf),

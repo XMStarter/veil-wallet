@@ -337,6 +337,19 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a wallet open in another window says so', (tester) async {
+    final backend = FakeBackend(hasWallet: true, confirmed: true);
+    await pumpApp(tester, 'en', backend: backend);
+    backend.failNext = const Problem(ProblemKind.walletInUse, 'in use');
+    await type(tester, 'Password', testPassword);
+    await press(tester, 'Open wallet');
+    expect(find.textContaining('already open'), findsOneWidget);
+    expect(find.text('Wrong password.'), findsNothing);
+    // Closed there, it opens here.
+    await press(tester, 'Open wallet');
+    expect(find.text('WALLET'), findsOneWidget);
+  });
+
   testWidgets('a phrase that was never checked is not skipped', (tester) async {
     // The wallet's phrase was never checked, and now it cannot be read.
     // The wallet is not opened as if nothing were owed: it is closed, the

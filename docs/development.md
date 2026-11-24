@@ -128,6 +128,28 @@ Microsoft's toolchain; this run compiles it with the GNU one, because that
 is the one that can be used from Linux. The wallet library is the same DLL
 for both.
 
+### The app on Windows
+
+An app for Windows can only be built on Windows, with Microsoft's tools,
+so hosted CI builds it: every run of the workflow keeps the folder with
+`veil.exe`, the core (`veil_core.dll`) and the three libraries of
+Microsoft's C++ runtime the two need, as the file `veil-windows` under
+the run's Artifacts. It has no wallet library, which hosted CI does not
+build. To try it, download that file with the browser (on the pull
+request: Checks, the run named `native`, Artifacts) and, in the Ubuntu
+shell:
+
+```bash
+./windows-app.sh
+```
+
+It takes the newest `veil-windows*.zip` from the Windows Downloads folder,
+unpacks it into `Veil-app` in the Windows user's home, puts the wallet
+library from `./check.sh --windows setup` next to it, and starts it. The
+app runs from a Windows disk, not over the share to WSL, as an installed
+app would. Its wallet is its own, in `%APPDATA%\Veil`; the app started
+inside WSL keeps another.
+
 ### Reliability tests
 
 They cover the failures that lose money or confuse users. Each is tested
@@ -194,6 +216,10 @@ experience.
   version of Flutter from its publisher, checked against its checksum.
   The first build with Flutter fetches the matching engine files from the
   same publisher.
+- Keeping what a job has built with its run, as a file to download from
+  the run's page: the app built for Windows, with the core next to it. It
+  stays on GitHub, for whoever may see the repository, for fourteen days.
+  The wallet library is never in it: hosted CI does not build it.
 
 **Never in a workflow, on GitHub's runners or on a self-hosted one**
 
@@ -272,6 +298,13 @@ Veil's own code is MIT. The Monero wallet library it loads is LGPL-3.0
 (monero_c) and BSD-3-Clause (Monero). It must be shipped as a separate
 shared library with its licence texts and source. Details are in
 [`native/wallet_lib/README.md`](../native/wallet_lib/README.md).
+
+The app built for Windows by hosted CI carries three libraries of
+Microsoft's C++ runtime (`msvcp140.dll`, `vcruntime140.dll`,
+`vcruntime140_1.dll`), copied from the machine that built it, as Flutter's
+instructions for handing an app to somebody say. That build is for trying
+the app, not a release. How a release provides them, with the app or by
+asking for Microsoft's own installer, is decided at the release step.
 
 ## Releases
 

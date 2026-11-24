@@ -146,6 +146,10 @@ if, at build time, Arti cannot run bridges on Android.
   does not go to the public nodes by itself, but waits to be told to
   synchronise or to be given nodes again. A record of a payment whose
   outcome was unknown is lost the same way.
+- **One wallet, one window.** While a wallet is open, a second window of
+  the app, or the command-line tool, does not open it: two programs on
+  the same files would overwrite each other's view of the chain. The
+  second is told that the wallet is open elsewhere.
 - **A wallet that cannot be saved.** If the wallet cannot be written to
   disk, it says so for as long as that lasts, and again when it is
   closed, instead of looking like any other wallet until what it learned

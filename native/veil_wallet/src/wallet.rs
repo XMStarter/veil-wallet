@@ -158,6 +158,53 @@ pub struct Wallet {
     /// The password the wallet was opened with, for [`Wallet::is_password`].
     /// Wiped when the wallet is dropped.
     password: Zeroizing<String>,
+    /// The lock that says this wallet is open: see [`mark_in_use`]. Let go
+    /// when the wallet is dropped, after it has been closed.
+    in_use: Option<std::fs::File>,
+}
+
+/// Marks the wallet at `path` as open, for as long as the file returned is
+/// kept: a lock on a file of its own next to the wallet, which the system
+/// lets go of when this process ends, however it ends.
+///
+/// Two programs on one wallet's files overwrite each other's view of the
+/// chain, and each may spend what the other already has. The library
+/// locks the keys file of a wallet it has opened, but not of one it has
+/// just made, and a second window of the app is all it takes. So Veil
+/// keeps a lock of its own, for every wallet it has open.
+fn mark_in_use(path: &Path) -> Result<std::fs::File, Error> {
+    let name = in_use_name(path);
+    let failed = |error: std::io::Error| {
+        Error::Wallet(format!(
+            "the wallet could not be marked as open ({}): {error}",
+            name.display()
+        ))
+    };
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&name)
+        .map_err(failed)?;
+    match file.try_lock() {
+        Ok(()) => Ok(file),
+        Err(std::fs::TryLockError::WouldBlock) => Err(Error::WalletInUse),
+        Err(std::fs::TryLockError::Error(error)) => Err(failed(error)),
+    }
+}
+
+/// The file whose lock says that the wallet at `path` is open.
+fn in_use_name(path: &Path) -> PathBuf {
+    let mut name = path.as_os_str().to_owned();
+    name.push(".lock");
+    PathBuf::from(name)
+}
+
+/// Lets go of a mark made for a wallet that then could not be made, and
+/// takes its file away again: nothing is left where no wallet is.
+fn unmark(path: &Path, mark: std::fs::File) {
+    drop(mark);
+    let _ = std::fs::remove_file(in_use_name(path));
 }
 
 /// Whether two texts are the same, taking as long for a near miss as for a
@@ -260,7 +307,7 @@ impl Wallet {
         match phrase.kind() {
             SeedKind::Polyseed => Self::from_polyseed(lib, path, password, network, phrase, false),
             SeedKind::Legacy => {
-                let (manager, c_path) = Self::prepare_new(lib, path)?;
+                let (manager, c_path, mark) = Self::prepare_new(lib, path)?;
                 let kept = Zeroizing::new(password.to_owned());
                 let password = SecretCString::new(password, "password")?;
                 let words = SecretCString::new(phrase.as_str(), "recovery phrase")?;
@@ -279,7 +326,11 @@ impl Wallet {
                         offset.as_ptr(),
                     )
                 };
-                Self::adopt(lib, manager, wallet, network, path, kept)
+                Self::made(
+                    Self::adopt(lib, manager, wallet, network, path, kept),
+                    path,
+                    mark,
+                )
             }
         }
     }
@@ -300,8 +351,21 @@ impl Wallet {
         password: &str,
         network: Network,
     ) -> Result<Wallet, Error> {
+        // Marked as open before the library is asked for anything, if
+        // there is a wallet to mark: a place without one gets no file of
+        // ours, and the library says what is missing.
+        let mut keys_file = path.as_os_str().to_owned();
+        keys_file.push(".keys");
+        let mark = if Path::new(&keys_file).is_file() {
+            Some(mark_in_use(path)?)
+        } else {
+            None
+        };
         let first = match Self::open_files(lib, path, password, network) {
-            Ok(wallet) => return Ok(wallet),
+            Ok(mut wallet) => {
+                wallet.in_use = mark;
+                return Ok(wallet);
+            }
             Err(error) => error,
         };
         // A wrong password is by far the usual reason, and no reason to
@@ -309,8 +373,15 @@ impl Wallet {
         if matches!(&first, Error::Wallet(message) if message.contains("invalid password")) {
             return Err(Error::WrongPassword);
         }
-        let mut keys_file = path.as_os_str().to_owned();
-        keys_file.push(".keys");
+        // Open in another wallet program, which does not know of Veil's
+        // own mark: the library holds a lock on the keys file of a wallet
+        // it has opened and says so here. That is no sign of a damaged
+        // data file, and setting the file aside to find out would take it
+        // from under a wallet that is running.
+        if matches!(&first, Error::Wallet(message) if message.contains("opened by another wallet program"))
+        {
+            return Err(Error::WalletInUse);
+        }
         if !path.is_file() || !Path::new(&keys_file).is_file() {
             return Err(first);
         }
@@ -324,6 +395,7 @@ impl Wallet {
         match Self::open_files(lib, path, password, network) {
             Ok(mut wallet) => {
                 wallet.rebuilt_from_keys = true;
+                wallet.in_use = mark;
                 Ok(wallet)
             }
             Err(_) => {
@@ -376,7 +448,7 @@ impl Wallet {
         phrase: &SeedPhrase,
         new_wallet: bool,
     ) -> Result<Wallet, Error> {
-        let (manager, c_path) = Self::prepare_new(lib, path)?;
+        let (manager, c_path, mark) = Self::prepare_new(lib, path)?;
         let kept = Zeroizing::new(password.to_owned());
         let password = SecretCString::new(password, "password")?;
         let words = SecretCString::new(phrase.as_str(), "recovery phrase")?;
@@ -396,7 +468,30 @@ impl Wallet {
                 KDF_ROUNDS,
             )
         };
-        Self::adopt(lib, manager, wallet, network, path, kept)
+        Self::made(
+            Self::adopt(lib, manager, wallet, network, path, kept),
+            path,
+            mark,
+        )
+    }
+
+    /// Gives a wallet that was just made the mark taken for it, or takes
+    /// the mark away again if the wallet could not be made.
+    fn made(
+        wallet: Result<Wallet, Error>,
+        path: &Path,
+        mark: std::fs::File,
+    ) -> Result<Wallet, Error> {
+        match wallet {
+            Ok(mut wallet) => {
+                wallet.in_use = Some(mark);
+                Ok(wallet)
+            }
+            Err(error) => {
+                unmark(path, mark);
+                Err(error)
+            }
+        }
     }
 
     fn manager(lib: &WalletLibrary) -> Result<*mut c_void, Error> {
@@ -410,11 +505,12 @@ impl Wallet {
         Ok(manager)
     }
 
-    /// Common start of creating a wallet file: refuses to overwrite one.
+    /// Common start of creating a wallet file: refuses to overwrite one,
+    /// and marks the place as in use for the wallet about to be made.
     fn prepare_new(
         lib: &WalletLibrary,
         path: &Path,
-    ) -> Result<(*mut c_void, std::ffi::CString), Error> {
+    ) -> Result<(*mut c_void, std::ffi::CString, std::fs::File), Error> {
         let manager = Self::manager(lib)?;
         let c_path = c_string(path_text(path)?, "wallet path")?;
         // Asked twice, of the system and of the library, and either answer
@@ -434,7 +530,8 @@ impl Wallet {
         if exists {
             return Err(Error::WalletExists(path.to_path_buf()));
         }
-        Ok((manager, c_path))
+        let mark = mark_in_use(path)?;
+        Ok((manager, c_path, mark))
     }
 
     /// Turns a pointer returned by the wallet manager into a `Wallet`, or
@@ -468,6 +565,7 @@ impl Wallet {
             listener: std::ptr::null_mut(),
             rebuilt_from_keys: false,
             password,
+            in_use: None,
         };
         // The manager returns an object even when opening failed; the error
         // is on the object. Dropping `wallet` on the error path closes it.

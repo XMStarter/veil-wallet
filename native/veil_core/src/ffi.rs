@@ -227,6 +227,7 @@ fn kind_name(kind: ProblemKind) -> &'static str {
     match kind {
         ProblemKind::WrongPassword => "wrong_password",
         ProblemKind::WalletExists => "wallet_exists",
+        ProblemKind::WalletInUse => "wallet_in_use",
         ProblemKind::InvalidPhrase => "invalid_phrase",
         ProblemKind::TorNotReady => "tor_not_ready",
         ProblemKind::TorFailed => "tor_failed",

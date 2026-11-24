@@ -115,6 +115,13 @@ build/linux/x64/release/bundle/veil
 This is a real wallet on stagenet: it connects to Tor and to public
 stagenet nodes.
 
+On Windows the app is the one hosted CI builds. `native/windows-app.sh`,
+run inside WSL, takes the downloaded `veil-windows.zip`, puts the wallet
+library next to the app, and starts it; see
+[docs/development.md](../docs/development.md), "The app on Windows". The
+app looks for the core and the wallet library in its own folder, next to
+`veil.exe`.
+
 ## Not done yet
 
 - A password or a phrase that has been typed or shown stays in the app's

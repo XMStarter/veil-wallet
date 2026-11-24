@@ -86,6 +86,12 @@ that cannot lose the user's funds.
     step: the latest commits, `check.sh` as Linux and as Windows programs,
     the logs to send, then the app. It starts a daemon, so it is not for
     a cloud session, where only `--no-pull --no-app offline` may be tried.
+  - `windows-app.sh`: for the owner's machine, inside WSL. Takes the app
+    hosted CI built for Windows (`veil-windows.zip`, downloaded from the
+    run's Artifacts), puts the wallet library next to it on a Windows
+    disk, and starts it. It starts Tor, so in a cloud session only its
+    refusals and `--no-start` on made-up folders (`VEIL_WINDOWS_HOME`) may
+    be tried.
 - `dart/veil_bridge`: the Dart side of the core. It calls the C interface
   in `veil_core/src/ffi.rs`; the state crosses as JSON, pinned by
   `native/veil_core/tests/fixtures`, which both sides test against.
@@ -101,7 +107,9 @@ that cannot lose the user's funds.
 - `docs/`: concept, design, development rules.
 - `.github/workflows`: hosted CI, builds and offline tests only. Pin
   actions to commit hashes. It installs Flutter with `check.sh flutter`,
-  not with an action.
+  not with an action. The Windows job keeps the app it built as the
+  artifact `veil-windows`; the owner has to allow a new action in the
+  repository's settings before a workflow may use it.
 
 Before committing, in `native/`: `./check.sh offline` (format, lint, and
 the tests that need no network; with the wallet library built in
@@ -339,8 +347,39 @@ locks again; the default is five minutes). They pass, and they say
 nothing about a real window's clicks and keys. A synchronisation still starts with the first candidate every
 time, so a first node that is down costs every synchronisation the time
 it takes to find that out. Bridges changed
-in Settings take effect the next time the wallet is opened. Next after
-its acceptance is step 3.8, the app on Windows. Not done: the app. See the build plan in
+in Settings take effect the next time the wallet is opened. Step 3.7 was
+merged on the owner's word after hosted CI had passed on Linux and
+Windows. Step 3.8, the app on Windows, is written and not yet accepted.
+Hosted CI, which already built the app for Windows, now makes that build
+complete (`check.sh`: the core as a release build and the three libraries
+of Microsoft's C++ runtime next to `veil.exe`) and keeps it with the run
+as the artifact `veil-windows`; the owner allowed
+`actions/upload-artifact` in the repository's settings for that.
+`native/windows-app.sh` takes the downloaded file on the owner's machine,
+adds the wallet library, and starts the app from a Windows disk. With it:
+a wallet that is open holds a lock of Veil's own (`<wallet>.lock`), and a
+second window, session or `veil` on the same wallet fails with
+`WalletInUse` before anything is started. That was found while reading
+for this step: the library locks the keys file of a wallet it has opened
+but not of one it has just made, so a second window could open a new
+wallet a second time. Tried in a cloud session: the offline level, and
+`windows-app.sh` on made-up folders without starting anything. In hosted
+CI the two new parts of the workflow worked the first time they ran: the
+Windows job took twenty-four minutes, most of it the core's release
+build from nothing, and kept an artifact of nineteen files and twenty
+megabytes. On commit `52720ee` the owner's run passed at the `offline`
+and `regtest` levels as Linux and as Windows programs; as Windows
+programs the offline tests of `veil_wallet` once took two hundred seconds
+where they take seventeen, and seventeen again minutes later, which
+looks like the slow loading over the WSL share seen once before and was
+not looked into. The owner then started the app as a Windows program:
+it opened a wallet, coins sent to it from another wallet arrived, and
+the owner reported that everything works. Which of the things listed
+for that walk were tried was not said; a second window on an open wallet
+and the auto-lock had never been seen with a real wallet before it. The
+two public faucets named at step 1.3 no longer served: one did not work
+and the other was blocked by the owner's antivirus as dangerous, so the
+coins came from the owner's own stagenet wallet. See the build plan in
 `docs/concept.md`.
 
 ## Environment notes

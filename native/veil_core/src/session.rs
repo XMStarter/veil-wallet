@@ -91,6 +91,9 @@ pub enum ProblemKind {
     WrongPassword,
     /// A wallet is already there; nothing was overwritten.
     WalletExists,
+    /// The wallet is open in another window of the app or another
+    /// program. Nothing was touched.
+    WalletInUse,
     /// The recovery phrase is not one: a wrong number of words, or words
     /// that do not belong together.
     InvalidPhrase,
@@ -147,6 +150,7 @@ impl From<veil_wallet::Error> for Problem {
         let kind = match &error {
             Error::WrongPassword => ProblemKind::WrongPassword,
             Error::WalletExists(_) => ProblemKind::WalletExists,
+            Error::WalletInUse => ProblemKind::WalletInUse,
             Error::SeedWordCount { .. } => ProblemKind::InvalidPhrase,
             Error::NodeUnreachable
             | Error::NodeIncompatible

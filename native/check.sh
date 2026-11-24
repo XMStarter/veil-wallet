@@ -339,17 +339,49 @@ app_side() {
   bundle_native_parts
 }
 
-# Puts the core and the wallet library next to the app that was just built
-# for Linux, so that it can be started and open a wallet. Only where the
-# wallet library has been built: not in hosted CI.
+# Puts the core next to the app that was just built, so that the app can be
+# started, and the wallet library too where it has been built.
+#
+# On Linux only where the wallet library has been built: not in hosted CI.
+# On Windows always, see bundle_for_windows.
 bundle_native_parts() {
-  if on_windows || [ -z "${VEIL_WALLET_LIB:-}" ]; then
+  if on_windows; then
+    bundle_for_windows
+    return
+  fi
+  if [ -z "${VEIL_WALLET_LIB:-}" ]; then
     return 0
   fi
   local bundle="$here/../app/build/linux/x64/release/bundle"
   step cargo build -p veil_core --release --locked &&
     step cp "$here/target/release/libveil_core.so" "$VEIL_WALLET_LIB" "$bundle/lib/" &&
     echo "the app with its native parts: $bundle/veil"
+}
+
+# The app built for Windows, made complete as far as this machine can: the
+# folder Flutter has built, the core as a release build, and the three
+# libraries of Microsoft's C++ runtime that the app and the core need.
+# Flutter's own instructions for handing an app to somebody say to put
+# those three next to it, from the system folder of the machine that built
+# it: a Windows without them cannot start the app at all.
+#
+# Hosted CI keeps this folder with its run, and it is what the owner
+# starts. The wallet library is not built in hosted CI; windows-app.sh puts
+# it next to the app on the owner's machine. Where it is at hand it goes in
+# here too.
+bundle_for_windows() {
+  local bundle="$here/../app/build/windows/x64/runner/Release"
+  local system32 runtime
+  system32="$(cygpath -u "${SYSTEMROOT:-C:\\Windows}")/System32"
+  step cargo build -p veil_core --release --locked &&
+    step cp "$here/target/release/veil_core.dll" "$bundle/" || return 1
+  for runtime in msvcp140.dll vcruntime140.dll vcruntime140_1.dll; do
+    step cp "$system32/$runtime" "$bundle/" || return 1
+  done
+  if [ -n "${VEIL_WALLET_LIB:-}" ]; then
+    step cp "$VEIL_WALLET_LIB" "$bundle/" || return 1
+  fi
+  echo "the app for Windows: $bundle"
 }
 
 level_flutter() {

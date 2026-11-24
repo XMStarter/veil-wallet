@@ -12,6 +12,7 @@ String problemWords(AppLocalizations text, Problem problem) {
   return switch (problem.kind) {
     ProblemKind.wrongPassword => text.problemWrongPassword,
     ProblemKind.walletExists => text.problemWalletExists,
+    ProblemKind.walletInUse => text.problemWalletInUse,
     ProblemKind.invalidPhrase => text.problemInvalidPhrase,
     ProblemKind.torFailed => text.problemTorFailed,
     ProblemKind.torNotReady => text.problemTorNotReady,
