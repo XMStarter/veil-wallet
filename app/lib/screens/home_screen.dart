@@ -9,6 +9,7 @@ import '../widgets/notice.dart';
 import '../widgets/veil_button.dart';
 import '../widgets/veil_screen.dart';
 import 'navigation.dart';
+import 'problem_words.dart';
 import 'receive_screen.dart';
 import 'send_screen.dart';
 import 'settings_screen.dart';
@@ -74,9 +75,19 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _lock() async {
     if (_locking) return;
     setState(() => _locking = true);
-    await widget.backend.close();
+    Problem? notSaved;
+    try {
+      notSaved = await widget.backend.close();
+    } catch (error) {
+      // The wallet is closed as far as the app can tell; what went wrong
+      // is said where closing leads, not left as "closing" for ever.
+      notSaved = unforeseen(error);
+    }
     if (!mounted) return;
-    openAlone(context, UnlockScreen(backend: widget.backend));
+    openAlone(
+      context,
+      UnlockScreen(backend: widget.backend, notSaved: notSaved),
+    );
   }
 
   @override
@@ -120,9 +131,27 @@ class _HomeScreenState extends State<HomeScreen> {
                 _balance(text, state),
                 const SizedBox(height: 20),
                 _status(text, state),
+                if (state.notSaved != null) ...[
+                  const SizedBox(height: 16),
+                  Notice(
+                    '${text.homeNotSaved} '
+                    '${text.problemDetail(state.notSaved!.detail)}',
+                    warning: true,
+                  ),
+                ],
                 if (state.rebuiltFromKeys) ...[
                   const SizedBox(height: 16),
                   Notice(text.homeRebuilt, warning: true),
+                  // Nothing has been synchronised yet: the wallet waits
+                  // to be told, or to be given nodes in Settings.
+                  if (state.sync.phase == SyncPhase.notYet) ...[
+                    const SizedBox(height: 8),
+                    Notice(text.homeRebuiltWaiting),
+                    VeilQuietButton(
+                      label: text.homeRebuiltSync,
+                      onPressed: _locking ? null : widget.backend.sync,
+                    ),
+                  ],
                 ],
                 // A payment in doubt is said here too, not only on the
                 // screen it happened on.

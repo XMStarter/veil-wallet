@@ -37,6 +37,7 @@ let session = Session::start(config, WalletSource::Open, password);
 session.sync();
 session.prepare_send(&to, amount); // state.send becomes Review { fee, .. }
 session.confirm_send();            // or cancel_send()
+session.clear_send();              // once the user has seen how it went
 ```
 
 Commands return at once and their outcome appears in the state, which
@@ -50,6 +51,35 @@ on command, and on a timer if told to; it saves after every
 synchronisation and every send; while a transaction is under review it
 takes no other command but closing. Closing, or dropping the session,
 saves the wallet and stops Tor.
+
+What the session holds to, whatever the interface does:
+
+- **A transaction is built only from a wallet that is level with a node.**
+  If the last synchronisation of the session did not finish, or there was
+  none, a send makes the session synchronise first; if that fails, the
+  send fails with the same reason, in the same change of the state. An
+  address that is not one and an amount of zero are refused at once,
+  without a node.
+- **A payment that needs several transactions is refused**
+  (`SeveralTransactions`). The wallet library would hand them over one by
+  one and stop at the first failure, and a payment could go out in part.
+- **A cancel never takes back what was sent.** `cancel_send` drops a
+  transaction under review, a send waiting to be built, or a failure. A
+  cancel that arrives when the transaction has just gone out leaves it
+  shown as sent. `clear_send` is what takes an outcome off the state.
+- **A wallet that cannot be written to disk says so.** `not_saved` in the
+  state holds the reason from the first save that fails until one works
+  again, and a session that cannot save on closing ends as `Failed`.
+- **Changes that belong together are one change.** The end of a
+  synchronisation, the balance and history after it, and what it means
+  for a send; the outcome of a send and the balance it left.
+- **A new wallet is made after Tor has started**, so a Tor that does not
+  start leaves no wallet behind that nobody has seen the phrase of. A
+  wallet that exists is opened before Tor is started, so a wrong password
+  starts nothing.
+- **A wallet opened from its keys alone does not synchronise by itself.**
+  Its data file is gone, and with it the user's own nodes. It waits for
+  `sync`, `set_nodes` or a send before it goes to any node.
 
 A synchronisation does not hold the session up:
 
@@ -79,7 +109,7 @@ C functions (`src/ffi.rs`). What crosses them is text:
 | `veil_session_start(config, password, phrase, &problem)` | Starts a session from a JSON configuration; returns a handle at once |
 | `veil_session_revision(handle)` | The state's revision, cheap enough to ask on every frame |
 | `veil_session_state(handle)` | The state as JSON |
-| `veil_session_command(handle, command)` | A command as JSON: `sync`, `new_address`, `prepare_send`, `confirm_send`, `cancel_send`, `set_nodes` |
+| `veil_session_command(handle, command)` | A command as JSON: `sync`, `new_address`, `prepare_send`, `confirm_send`, `cancel_send`, `clear_send`, `set_nodes` |
 | `veil_session_recovery_phrase(handle)` | The recovery phrase, freed with `veil_secret_free`, which wipes it |
 | `veil_session_is_password(handle, password)` | Whether that is the wallet's password |
 | `veil_session_change_password(handle, old, new)` | A new password for whoever knows the current one |
@@ -123,8 +153,11 @@ them again after a change that is meant.
 - **In the middle of a synchronisation.** While it downloads blocks, the
   wallet library asks again by itself three times. If the node stays away,
   or the connection is lost at another point, `sync` fails with the wallet's
-  `NodeUnreachable`; if it was Tor that dropped, with `TorNotReady`, so that
-  an interface can say which. The balance stays the one from the last
+  `NodeUnreachable`; if Tor is not ready, with `TorNotReady`. (The Tor
+  component reports itself ready from the end of its bootstrap on and
+  does not yet notice a network that has gone away afterwards, so in the
+  app a lost network shows as the node's failure; only the stand-in in
+  the tests can drop out of being ready.) The balance stays the one from the last
   synchronisation that finished, and the next one continues the scan.
 - **With other nodes to try.** `sync_with_any` takes the candidates in the
   caller's order and moves to the next when a node cannot be reached, is
@@ -145,8 +178,9 @@ them again after a change that is meant.
   it, having begun five minutes or more after the attempt, settles it:
   the state says so, and from then on a new send or a cancel is taken.
   The session never calls such a send failed. It writes the send into
-  the wallet's data file, encrypted with the rest, and a session that
-  opens the wallet later takes it up where the first left it.
+  the wallet's data file, encrypted with the rest, and saves the wallet
+  at once, so that an app killed a moment later has it on disk; a session
+  that opens the wallet later takes it up where the first left it.
 
 ## Use
 

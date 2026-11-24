@@ -21,6 +21,7 @@ String problemWords(AppLocalizations text, Problem problem) {
     ProblemKind.invalidAmount => text.problemInvalidAmount,
     ProblemKind.zeroAmount => text.problemZeroAmount,
     ProblemKind.notEnoughFunds => text.problemNotEnoughFunds,
+    ProblemKind.severalTransactions => text.problemSeveralTransactions,
     ProblemKind.notNow => text.problemNotNow,
     ProblemKind.invalidNode => text.problemInvalidNode,
     // The core says which line, or which program; in English, but it is

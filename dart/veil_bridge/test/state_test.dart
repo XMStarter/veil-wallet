@@ -38,6 +38,7 @@ void main() {
     expect(state.receiveAddress!.index, 3);
     expect(state.receiveAddress!.address, hasLength(95));
     expect(state.rebuiltFromKeys, isFalse);
+    expect(state.notSaved, isNull);
     expect(state.lastProblem!.kind, ProblemKind.notNow);
 
     expect(state.history, hasLength(2));
@@ -82,6 +83,8 @@ void main() {
     expect(state.send.txids, ['c' * 64]);
     expect(state.send.settled, isFalse);
     expect(state.rebuiltFromKeys, isTrue);
+    expect(state.notSaved!.kind, ProblemKind.other);
+    expect(state.notSaved!.detail, contains('wallet.new'));
     expect(state.lastProblem, isNull);
   });
 

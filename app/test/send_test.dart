@@ -78,7 +78,15 @@ void main() {
     expect(find.text('SENT'), findsOneWidget);
     expect(find.textContaining('The payment is on its way'), findsOneWidget);
 
+    // A cancel that arrives now, from a second click that was meant for
+    // the review, does not turn "sent" back into an empty form.
+    backend.cancelSend();
+    await tester.pumpAndSettle();
+    expect(find.text('SENT'), findsOneWidget);
+    expect(backend.state.value!.send.phase, SendPhase.sent);
+
     await press(tester, 'Done');
+    expect(backend.calls.last, 'clear send');
     expect(find.text('WALLET'), findsOneWidget);
     expect(backend.state.value!.send.phase, SendPhase.idle);
     expect(tester.takeException(), isNull);
@@ -106,7 +114,7 @@ void main() {
   testWidgets('what the wallet objects to is said where it belongs', (
     tester,
   ) async {
-    await openSend(tester, 'en');
+    final backend = await openSend(tester, 'en');
     await type(tester, 'Address to pay to', 'not an address');
     await type(tester, 'Amount, XMR', '1.5');
     await press(tester, 'Continue');
@@ -121,10 +129,11 @@ void main() {
     await type(tester, 'Amount, XMR', 'a lot');
     await press(tester, 'Continue');
     expect(find.textContaining('not a Monero address'), findsNothing);
-    expect(find.text('This is not an amount.'), findsOneWidget);
+    expect(find.textContaining('This is not an amount.'), findsOneWidget);
+    expect(find.textContaining('with a point'), findsOneWidget);
 
     await type(tester, 'Amount, XMR', '0');
-    expect(find.text('This is not an amount.'), findsNothing);
+    expect(find.textContaining('This is not an amount.'), findsNothing);
     await press(tester, 'Continue');
     expect(find.text('The amount must be more than zero.'), findsOneWidget);
 
@@ -135,7 +144,15 @@ void main() {
       findsOneWidget,
     );
 
+    // A payment that would not fit into one transaction is not sent in
+    // pieces: the wallet says so, by the amount.
+    backend.manySmallCoins = true;
     await type(tester, 'Amount, XMR', '1.5');
+    await press(tester, 'Continue');
+    expect(find.text('SEND'), findsOneWidget);
+    expect(find.textContaining('more than one transaction'), findsOneWidget);
+    backend.manySmallCoins = false;
+
     await press(tester, 'Continue');
     expect(find.text('CONFIRM'), findsOneWidget);
     expect(tester.takeException(), isNull);

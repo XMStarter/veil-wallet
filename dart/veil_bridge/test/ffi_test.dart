@@ -125,6 +125,7 @@ void main() {
     session.sync();
     session.newAddress();
     session.cancelSend();
+    session.clearSend();
     // An amount that is not a number is refused on the spot.
     expect(
       () => session.prepareSend('7abc', 'much'),

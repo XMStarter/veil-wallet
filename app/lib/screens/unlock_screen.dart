@@ -13,9 +13,13 @@ import 'problem_words.dart';
 
 /// The first screen on a device that has a wallet: its password.
 class UnlockScreen extends StatefulWidget {
-  const UnlockScreen({super.key, required this.backend});
+  const UnlockScreen({super.key, required this.backend, this.notSaved});
 
   final WalletBackend backend;
+
+  /// Why the wallet could not be saved when it was closed just now, if it
+  /// could not: said here, where closing it leads.
+  final Problem? notSaved;
 
   @override
   State<UnlockScreen> createState() => _UnlockScreenState();
@@ -58,6 +62,19 @@ class _UnlockScreenState extends State<UnlockScreen> {
       // A wallet whose phrase was never checked shows it again first.
       final confirmed = await backend.phraseConfirmed();
       final phrase = confirmed ? null : await backend.recoveryPhrase();
+      if (!confirmed && phrase == null) {
+        // The phrase was never checked and cannot be shown now. The
+        // wallet is not opened as if it had been: it is closed again, and
+        // the next attempt shows the phrase.
+        await backend.close();
+        _refused(
+          const Problem(
+            ProblemKind.other,
+            'the wallet gave no recovery phrase',
+          ),
+        );
+        return;
+      }
       if (!mounted) return;
       openAlone(
         context,
@@ -102,6 +119,14 @@ class _UnlockScreenState extends State<UnlockScreen> {
           ),
       ],
       children: [
+        if (widget.notSaved != null) ...[
+          Notice(
+            '${text.unlockNotSaved} '
+            '${text.problemDetail(widget.notSaved!.detail)}',
+            warning: true,
+          ),
+          const SizedBox(height: 16),
+        ],
         VeilField(
           label: text.passwordLabel,
           controller: _password,

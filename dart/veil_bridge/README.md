@@ -12,6 +12,7 @@ final session = core.start(config, password: password);
 session.sync();
 session.prepareSend(address, '1.5'); // state.send becomes review, with the fee
 session.confirmSend();               // or cancelSend()
+session.clearSend();                 // once the user has seen how it went
 final last = session.close();
 ```
 

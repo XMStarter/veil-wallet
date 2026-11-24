@@ -66,11 +66,25 @@ pub enum ParseAmountError {
     TooManyDecimals,
     #[error("the amount is too large")]
     TooLarge,
+    /// A comma with exactly three digits after it: one and a bit to some,
+    /// a thousand and more to others.
+    #[error(
+        "a comma followed by three digits can be read two ways; write the amount with a point"
+    )]
+    Ambiguous,
 }
 
 /// Parses a decimal XMR amount such as `0.25` or `1`. A comma is accepted as
 /// the decimal separator. Signs, exponents, spaces inside the number, and
 /// digit grouping are rejected.
+///
+/// One way of writing is refused although it could be read: a comma with
+/// exactly three digits after it and one to three digits before it, the
+/// first not a zero, as in `1,250`. Where the comma separates decimals
+/// that is one and a quarter; where it groups thousands it is a thousand
+/// times as much, and a wallet must not guess. With a point the same
+/// digits are taken as they stand, `1.250` being how this wallet itself
+/// writes amounts, and `0,125` is nobody's thousands.
 impl FromStr for Amount {
     type Err = ParseAmountError;
 
@@ -85,6 +99,13 @@ impl FromStr for Amount {
         let fraction = parts.next().unwrap_or("");
         if parts.next().is_some() {
             return Err(ParseAmountError::InvalidCharacter);
+        }
+        if text.contains(',')
+            && fraction.len() == 3
+            && (1..=3).contains(&whole.len())
+            && !whole.starts_with('0')
+        {
+            return Err(ParseAmountError::Ambiguous);
         }
         if whole.is_empty() && fraction.is_empty() {
             return Err(ParseAmountError::InvalidCharacter);
@@ -187,6 +208,25 @@ mod tests {
                 "{text:?}"
             );
         }
+    }
+
+    #[test]
+    fn a_comma_that_could_group_thousands_is_refused() {
+        // One and a quarter to some, twelve hundred and fifty to others.
+        for text in ["1,250", "1,000", "12,500", "999,999", " 7,125 "] {
+            assert_eq!(parse(text), Err(ParseAmountError::Ambiguous), "{text:?}");
+        }
+        // With a point the digits are taken as they stand: it is how the
+        // wallet itself writes amounts.
+        assert_eq!(parse("1.250"), Ok(1_250_000_000_000));
+        assert_eq!(parse("0.001"), Ok(1_000_000_000));
+        // Nobody groups thousands after a zero, in a fraction of another
+        // length, or behind four digits.
+        assert_eq!(parse("0,125"), Ok(125_000_000_000));
+        assert_eq!(parse(",125"), Ok(125_000_000_000));
+        assert_eq!(parse("1,25"), Ok(1_250_000_000_000));
+        assert_eq!(parse("1,2500"), Ok(1_250_000_000_000));
+        assert_eq!(parse("1000,125"), Ok(1_000_125_000_000_000));
     }
 
     #[test]

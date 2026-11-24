@@ -53,6 +53,7 @@ pub(crate) enum Request {
     },
     ConfirmSend,
     CancelSend,
+    ClearSend,
     /// The user's own nodes; none for the ones the session started with.
     SetNodes(Vec<OnionNode>),
 }
@@ -204,6 +205,7 @@ pub(crate) fn parse_command(command: &str) -> Result<Request, Problem> {
         "new_address" => Ok(Request::NewAddress),
         "confirm_send" => Ok(Request::ConfirmSend),
         "cancel_send" => Ok(Request::CancelSend),
+        "clear_send" => Ok(Request::ClearSend),
         "prepare_send" => {
             let amount = match text(&command, "amount")?.trim() {
                 "all" => SendAmount::Everything,
@@ -236,6 +238,7 @@ fn kind_name(kind: ProblemKind) -> &'static str {
         ProblemKind::TransportMissing => "transport_missing",
         ProblemKind::ZeroAmount => "zero_amount",
         ProblemKind::NotEnoughFunds => "not_enough_funds",
+        ProblemKind::SeveralTransactions => "several_transactions",
         ProblemKind::TooManyUnusedAddresses => "too_many_unused_addresses",
         ProblemKind::SendOutcomeUnknown => "send_outcome_unknown",
         ProblemKind::NotNow => "not_now",
@@ -357,6 +360,7 @@ pub(crate) fn state_json(state: &SessionState) -> Value {
         "history": history,
         "send": send,
         "rebuilt_from_keys": state.rebuilt_from_keys,
+        "not_saved": state.not_saved.as_ref().map(problem_json),
         "last_problem": state.last_problem.as_ref().map(problem_json),
     })
 }
@@ -368,6 +372,7 @@ fn apply(session: &Session, request: Request) {
         Request::PrepareSend { to, amount } => session.prepare_send(&to, amount),
         Request::ConfirmSend => session.confirm_send(),
         Request::CancelSend => session.cancel_send(),
+        Request::ClearSend => session.clear_send(),
         Request::SetNodes(nodes) => session.set_nodes(nodes),
     }
 }
@@ -375,6 +380,14 @@ fn apply(session: &Session, request: Request) {
 /// Hands text to C. Interior NUL bytes, which C cannot carry, become spaces.
 fn to_c(text: String) -> *mut c_char {
     CString::new(text.replace('\0', " ")).map_or(ptr::null_mut(), CString::into_raw)
+}
+
+/// Hands a secret to C, to be freed with `veil_secret_free`, which wipes
+/// it. The one copy made here is the one handed over: nothing of the
+/// secret is left behind in memory that is freed without being wiped,
+/// which [`to_c`] would do.
+fn secret_to_c(secret: &str) -> *mut c_char {
+    CString::new(secret).map_or(ptr::null_mut(), CString::into_raw)
 }
 
 /// # Safety
@@ -532,7 +545,8 @@ pub unsafe extern "C" fn veil_session_state(handle: *const VeilSession) -> *mut 
 /// Gives the session a command, a JSON object such as `{"command":
 /// "sync"}`. The commands are `sync`, `new_address`, `prepare_send` (with
 /// `to` and `amount`, a decimal number as text or `all`), `confirm_send`,
-/// `cancel_send`, and `set_nodes` (with `nodes`, the user's own nodes as
+/// `cancel_send` (drops a send that has gone nowhere), `clear_send` (takes
+/// the outcome of the last send off the state), and `set_nodes` (with `nodes`, the user's own nodes as
 /// `host.onion:port`; an empty list goes back to the nodes the session was
 /// started with).
 ///
@@ -682,7 +696,7 @@ pub unsafe extern "C" fn veil_session_recovery_phrase(handle: *const VeilSession
     unsafe {
         with_session(handle, ptr::null_mut(), |session| {
             match session.recovery_phrase() {
-                Ok(phrase) => to_c(phrase.as_str().to_owned()),
+                Ok(phrase) => secret_to_c(phrase.as_str()),
                 Err(_) => ptr::null_mut(),
             }
         })

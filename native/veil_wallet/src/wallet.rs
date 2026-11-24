@@ -1203,6 +1203,17 @@ impl Wallet {
             if txids.is_empty() {
                 return Err(Error::Wallet("the transaction has no id".into()));
             }
+            // A wallet with very many small coins needs several
+            // transactions for a large payment. The library hands them to
+            // the node one by one and stops at the first that fails, so
+            // such a payment can go out in part, and what is reported
+            // then is true of one transaction only. Nothing was sent yet;
+            // what was built is dropped.
+            if txids.len() > 1 {
+                return Err(Error::SeveralTransactions {
+                    transactions: txids.len(),
+                });
+            }
             let sources = self.lib.take_string(
                 api.MONERO_PendingTransaction_subaddrIndices(pending, separator.as_ptr()),
             );
@@ -1303,8 +1314,9 @@ impl PendingSend<'_> {
         &self.source_addresses
     }
 
-    /// Ids of the transactions that carry the payment. More than one only
-    /// when the wallet holds many small inputs.
+    /// The id of the transaction that carries the payment. Always one: a
+    /// payment that would need several is refused by
+    /// [`Wallet::prepare_send`].
     pub fn txids(&self) -> &[String] {
         &self.txids
     }

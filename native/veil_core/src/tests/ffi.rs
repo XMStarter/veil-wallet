@@ -137,6 +137,10 @@ fn commands_are_read_or_refused_with_a_reason() {
         Request::CancelSend
     );
     assert_eq!(
+        read(r#"{"command":"clear_send"}"#).unwrap(),
+        Request::ClearSend
+    );
+    assert_eq!(
         read(r#"{"command":"prepare_send","to":"7abc","amount":"1.5"}"#).unwrap(),
         Request::PrepareSend {
             to: "7abc".into(),
@@ -183,7 +187,8 @@ fn commands_are_read_or_refused_with_a_reason() {
         }
     );
     // An amount is text, exact; what is not a number is the user's mistake.
-    for typed in ["1.2.3", "one", "1.0000000000001", ""] {
+    // Nor is a comma that could be grouping thousands read either way.
+    for typed in ["1.2.3", "one", "1.0000000000001", "", "1,250"] {
         let command = serde_json::json!({"command": "prepare_send", "to": "7abc", "amount": typed});
         assert_eq!(
             kind_of(read(&command.to_string())),
@@ -275,6 +280,7 @@ fn sample_states() -> [(&'static str, SessionState); 2] {
             source_addresses: vec![1, 3],
         },
         rebuilt_from_keys: false,
+        not_saved: None,
         last_problem: Some(problem(
             ProblemKind::NotNow,
             "a transaction is under review",
@@ -306,6 +312,10 @@ fn sample_states() -> [(&'static str, SessionState); 2] {
             settled: false,
         },
         rebuilt_from_keys: true,
+        not_saved: Some(problem(
+            ProblemKind::Other,
+            "failed to save file /home/user/.local/share/veil/stagenet/wallet.new",
+        )),
         last_problem: None,
     };
     [("state-busy.json", busy), ("state-troubled.json", troubled)]

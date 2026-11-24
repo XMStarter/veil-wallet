@@ -477,6 +477,11 @@ class _PasswordScreenState extends State<PasswordScreen> {
   }
 }
 
+/// The wallet could not say whether a password is its own: it is closed,
+/// or busy with a transaction. Not the same as a wrong password, and not
+/// to be shown as one.
+const _notNow = Problem(ProblemKind.notNow, 'the wallet cannot be asked now');
+
 /// The recovery phrase again, for whoever knows the password.
 class ShowPhraseScreen extends StatefulWidget {
   const ShowPhraseScreen({super.key, required this.backend});
@@ -510,8 +515,15 @@ class _ShowPhraseScreenState extends State<ShowPhraseScreen> {
     String? phrase;
     Problem? problem;
     try {
-      final right = await backend.isPassword(_password.text) ?? false;
-      phrase = right ? await backend.recoveryPhrase() : null;
+      final right = await backend.isPassword(_password.text);
+      if (right == null) {
+        problem = _notNow;
+      } else if (right) {
+        phrase = await backend.recoveryPhrase();
+        // The password was right and still there is no phrase: that is
+        // not a wrong password either.
+        if (phrase == null) problem = _notNow;
+      }
     } catch (error) {
       problem = unforeseen(error);
     }
@@ -670,7 +682,9 @@ class _RemoveWalletScreenState extends State<RemoveWalletScreen> {
     var right = false;
     Problem? problem;
     try {
-      right = await backend.isPassword(_password.text) ?? false;
+      final answer = await backend.isPassword(_password.text);
+      if (answer == null) problem = _notNow;
+      right = answer ?? false;
       if (right) await backend.removeWallet();
     } catch (error) {
       problem = unforeseen(error);

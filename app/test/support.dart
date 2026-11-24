@@ -71,6 +71,7 @@ class FakeBackend implements WalletBackend {
     List<String>? ownNodes,
     SendStatus? send,
     bool? rebuilt,
+    Problem? notSaved,
     Problem? lastProblem,
   }) {
     final now = _state.value!;
@@ -90,6 +91,7 @@ class FakeBackend implements WalletBackend {
       history: history ?? now.history,
       send: send ?? now.send,
       rebuiltFromKeys: rebuilt ?? now.rebuiltFromKeys,
+      notSaved: notSaved ?? now.notSaved,
       // Cleared by the next command, as in the core.
       lastProblem: lastProblem,
     );
@@ -201,9 +203,14 @@ class FakeBackend implements WalletBackend {
     if (broken != null) throw broken;
   }
 
+  /// The wallet cannot be asked about its password: it is busy with a
+  /// transaction, as the real one can be.
+  bool busy = false;
+
   @override
   Future<bool?> isPassword(String password) async {
     await _work();
+    if (busy) return null;
     return _state.value == null ? null : password == this.password;
   }
 
@@ -251,6 +258,10 @@ class FakeBackend implements WalletBackend {
   /// The amount a send of everything comes to, and its total.
   static const everythingAmount = '10.49996934';
 
+  /// The wallet's funds are in so many small coins that a payment would
+  /// take more than one transaction.
+  bool manySmallCoins = false;
+
   @override
   Problem? prepareSend(String to, String amount) {
     calls.add('prepare $amount to $to');
@@ -270,6 +281,13 @@ class FakeBackend implements WalletBackend {
         send: const SendStatus(
           SendPhase.failed,
           problem: Problem(ProblemKind.zeroAmount, 'zero'),
+        ),
+      );
+    } else if (manySmallCoins) {
+      report(
+        send: const SendStatus(
+          SendPhase.failed,
+          problem: Problem(ProblemKind.severalTransactions, 'needs 2'),
         ),
       );
     } else if (amount != everything && double.parse(amount) > 10) {
@@ -321,6 +339,26 @@ class FakeBackend implements WalletBackend {
     calls.add('cancel send');
     final send = _state.value?.send;
     if (send == null) return;
+    // As in the core: only what has gone nowhere is cancelled. A send
+    // that went out, or may have, stays as it is.
+    switch (send.phase) {
+      case SendPhase.review || SendPhase.preparing || SendPhase.failed:
+        report(send: const SendStatus(SendPhase.idle));
+      case SendPhase.outcomeUnknown when send.settled != true:
+        report(
+          send: send,
+          lastProblem: const Problem(ProblemKind.notNow, 'not known yet'),
+        );
+      default:
+        break;
+    }
+  }
+
+  @override
+  void clearSend() {
+    calls.add('clear send');
+    final send = _state.value?.send;
+    if (send == null) return;
     // As in the core: an outcome that is unknown and not settled stays.
     if (send.phase == SendPhase.outcomeUnknown && send.settled != true) {
       report(
@@ -333,8 +371,19 @@ class FakeBackend implements WalletBackend {
   }
 
   @override
+  void sync() {
+    calls.add('sync');
+    if (_state.value != null) {
+      report(sync: const SyncStatus(SyncPhase.running));
+    }
+  }
+
+  /// The wallet gives no recovery phrase when asked.
+  bool noPhrase = false;
+
+  @override
   Future<String?> recoveryPhrase() async =>
-      _state.value == null ? null : testPhrase;
+      _state.value == null || noPhrase ? null : testPhrase;
 
   @override
   Future<bool> phraseConfirmed() async => confirmed;
@@ -345,10 +394,21 @@ class FakeBackend implements WalletBackend {
     confirmed = true;
   }
 
+  /// What closing reports, if the wallet cannot be saved then.
+  Problem? notSavedOnClose;
+
+  /// Thrown by the next close, after the wallet is gone from the state:
+  /// a failure of a kind nobody foresaw.
+  Object? breakClose;
+
   @override
-  Future<void> close() async {
+  Future<Problem?> close() async {
     calls.add('close');
     _state.value = null;
+    final broken = breakClose;
+    breakClose = null;
+    if (broken != null) throw broken;
+    return notSavedOnClose;
   }
 }
 
@@ -370,6 +430,7 @@ SessionState _newSession(int revision) => SessionState(
   history: const [],
   send: const SendStatus(SendPhase.idle),
   rebuiltFromKeys: false,
+  notSaved: null,
   lastProblem: null,
 );
 

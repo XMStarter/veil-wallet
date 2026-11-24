@@ -78,8 +78,8 @@ abstract class WalletBackend {
   /// What is returned here is only a node that is not written as one.
   Problem? setNodes(List<String> nodes);
 
-  /// Whether [password] is the open wallet's password; null if that
-  /// cannot be said now.
+  /// Whether [password] is the open wallet's. Null when that cannot be
+  /// said now: no wallet is open, or it is busy with a transaction.
   Future<bool?> isPassword(String password);
 
   /// Gives the open wallet the password [next], if [old] is its password
@@ -109,9 +109,19 @@ abstract class WalletBackend {
   /// Sends the transaction under review.
   void confirmSend();
 
-  /// Drops the transaction under review or being prepared, or clears the
-  /// outcome of the last send.
+  /// Drops the transaction under review or being prepared, or takes a
+  /// send that failed off the state. It never touches a send that went
+  /// out or may have, however late it arrives.
   void cancelSend();
+
+  /// Takes the outcome of the last send off the state, once the user has
+  /// seen it: sent, failed, or unknown and settled.
+  void clearSend();
+
+  /// Synchronises now. The wallet does so by itself while it is open;
+  /// this is for the one case in which it waits to be told, a wallet
+  /// opened from its keys alone.
+  void sync();
 
   /// The recovery phrase of the open wallet.
   Future<String?> recoveryPhrase();
@@ -123,6 +133,7 @@ abstract class WalletBackend {
   Future<void> confirmPhrase();
 
   /// Saves and closes the wallet and stops Tor. A synchronisation under
-  /// way is stopped; what it had scanned is kept.
-  Future<void> close();
+  /// way is stopped; what it had scanned is kept. Returns null, or why
+  /// the wallet could not be saved: it is closed all the same.
+  Future<Problem?> close();
 }

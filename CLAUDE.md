@@ -259,7 +259,43 @@ had nobody listening to the backend). Fixed with it: screens show any
 failure and go on; a password field keeps the keyboard through a
 refusal; and the C interface no longer locks the handle for the whole of
 a call that waits, which froze the window while a password was checked
-during a synchronisation. Not confirmed by the owner yet. Bridges changed
+during a synchronisation. Not confirmed by the owner yet. The owner then
+asked for a review of the whole code for faults and for things that only
+look as if they worked, and for the findings to be fixed. Fixed after
+it, with offline tests unless said otherwise: a send whose outcome is
+unknown was written into the wallet but saved only by the next
+synchronisation or by closing, so a kill in between lost it; it is saved
+at once now (shown on a private chain only, by a copy of the data file
+taken while the session is open). A wallet that cannot be written to disk
+says so in the state (`not_saved`), on Home, and on the screen that
+closing leads to; before, nothing showed it. A cancel that arrives when
+the transaction has just gone out no longer takes "sent" off the state:
+`cancel_send` drops only what has gone nowhere, and `clear_send` is the
+new command for an outcome the user has seen (private chain only). A
+transaction is built only after a synchronisation of the same session
+that finished; otherwise the session synchronises first, and a send fails
+with the synchronisation it waited for. A new wallet's files are written
+after Tor has started, not before. A payment that would need several
+transactions is refused (`SeveralTransactions`): the library would send
+them one by one and stop at the first failure. A wallet opened from its
+keys alone waits to be told before it goes to any node, because the
+user's own nodes were in the lost file, and says so. An amount with a
+comma and exactly three digits after it (`1,250`) is refused as
+ambiguous; with a point it is taken as it stands. Changes of the state
+that belong together are one change in two more places. In the app: "not
+now" is no longer shown as a wrong password, a phrase that was never
+checked and cannot be read closes the wallet instead of opening Home,
+and locking or closing the window survives a failure of the backend.
+Left for tasks of their own, by the owner's decision: the Tor component
+reports itself ready from the end of its bootstrap on and does not
+notice a network that goes away afterwards, so the difference between a
+failure of Tor and of the node exists in the tests only (needs the `tor`
+level to work on); and the concept says that no node can link
+synchronisation and spending, while the node synchronised with is asked
+for what a transaction is built from. Also open: a password change that
+fails after the keys file was rewritten is reported as failed although
+the new password is in force; and `VEIL_CORE_LIB` and `VEIL_WALLET_LIB`
+still name the libraries in a release build. Bridges changed
 in Settings take effect the next time the wallet is opened. Next after
 its acceptance is step 3.8, the app on Windows. Not done: the app. See the build plan in
 `docs/concept.md`.

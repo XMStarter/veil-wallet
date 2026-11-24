@@ -75,6 +75,27 @@ class CoreBackend implements WalletBackend {
     } on VeilException catch (refused) {
       throw StartFailure(refused.problem);
     }
+    final SessionState state;
+    try {
+      state = await _opened(session);
+      if (source == WalletSource.restore) {
+        await confirmPhrase();
+      }
+    } catch (_) {
+      // Whatever went wrong, the session is not left running, with Tor
+      // and perhaps a wallet, and nobody knowing of it.
+      await _away(_paths.coreLibrary, session.address, _close);
+      rethrow;
+    }
+    _session = session;
+    _seen = state.revision;
+    _state.value = state;
+    _watch = Timer.periodic(_watchEvery, (_) => _look());
+  }
+
+  /// Waits for [session] to have its wallet open, and returns the state
+  /// it is in then; throws a [StartFailure] with the reason if it has not.
+  Future<SessionState> _opened(VeilSession session) async {
     // Opening a wallet takes a moment: its password is stretched on purpose.
     var state = session.state();
     while (state.phase == Phase.opening) {
@@ -82,18 +103,11 @@ class CoreBackend implements WalletBackend {
       state = session.state();
     }
     if (state.phase != Phase.ready) {
-      await _away(_paths.coreLibrary, session.address, _close);
       throw StartFailure(
         state.phaseProblem ?? const Problem(ProblemKind.other, 'not opened'),
       );
     }
-    if (source == WalletSource.restore) {
-      await confirmPhrase();
-    }
-    _session = session;
-    _seen = state.revision;
-    _state.value = state;
-    _watch = Timer.periodic(_watchEvery, (_) => _look());
+    return state;
   }
 
   void _look() {
@@ -189,6 +203,12 @@ class CoreBackend implements WalletBackend {
   void cancelSend() => _session?.cancelSend();
 
   @override
+  void clearSend() => _session?.clearSend();
+
+  @override
+  void sync() => _session?.sync();
+
+  @override
   Future<String?> recoveryPhrase() async {
     final session = _session;
     if (session == null) return null;
@@ -214,19 +234,24 @@ class CoreBackend implements WalletBackend {
           .writeAsString(jsonEncode({'phrase_confirmed': true}), flush: true);
 
   @override
-  Future<void> close() async {
+  Future<Problem?> close() async {
     _watch?.cancel();
     _watch = null;
     final session = _session;
     _session = null;
     _state.value = null;
-    if (session == null) return;
+    if (session == null) return null;
     // Closing releases the session. A call still under way on another
     // isolate gets its answer first.
     while (_underWay.isNotEmpty) {
       await Future.wait(_underWay.toList());
     }
-    await _away(_paths.coreLibrary, session.address, _close);
+    final last = await _away(_paths.coreLibrary, session.address, _close);
+    // A session that could not save its wallet on closing says so with
+    // its last state. The wallet is closed either way.
+    return last.phase == Phase.failed
+        ? last.phaseProblem ?? const Problem(ProblemKind.other, 'not saved')
+        : null;
   }
 
   /// Calls that wait for the session's thread and have not returned yet.

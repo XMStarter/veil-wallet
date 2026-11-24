@@ -55,7 +55,9 @@ if, at build time, Arti cannot run bridges on Android.
   after the blocks it is working on, normally within seconds, and goes on
   afterwards or the next time the wallet is opened. A send asked for
   during a scan is built when the scan has finished, never from a wallet
-  that has seen only part of the chain.
+  that has seen only part of the chain. If the last synchronisation
+  failed, or there was none since the wallet was opened, the wallet
+  synchronises first, and if it cannot, the send fails for that reason.
 - **Separate Tor circuits.** Synchronisation uses one node. A transaction is
   broadcast through a different node on a separate circuit, so that no node
   can link the sync history to the spend.
@@ -97,9 +99,19 @@ if, at build time, Arti cannot run bridges on Android.
   after the attempt still does not show it, the wallet says that it most
   likely never went out and lets the user send again, with the warning
   that the recipient is paid twice if the first one arrives after all. It
-  never reports such a send as failed by itself. The wallet remembers
-  such a payment when the app is closed, and takes it up again the next
-  time it is opened.
+  never reports such a send as failed by itself. The wallet writes such
+  a payment to disk the moment it happens, so that it is remembered when
+  the app is closed or killed, and takes it up again the next time it is
+  opened.
+- A payment goes out as one transaction or not at all. A wallet with
+  very many small coins may need several transactions for a large
+  amount; these would be sent one after another and could go out in
+  part. Such a payment is refused, with the advice to send less.
+- Pressing Cancel never takes back a payment that has been sent. If the
+  two meet, the payment stays shown as sent.
+- An amount is written with a point or a comma for the decimals. A comma
+  followed by exactly three digits, as in `1,250`, could also mean a
+  thousand and more, and is refused.
 - The wallet library chooses which coins to spend and takes them from a
   single subaddress as long as that one holds enough. If coins from
   different addresses have to be combined, the review says so, because
@@ -108,7 +120,8 @@ if, at build time, Arti cannot run bridges on Android.
 ## Recovery phrase and storage
 
 - **Creation.** A new wallet gets a 16-word Polyseed phrase with the creation
-  date encoded in it. Restoring therefore does not require the user to
+  date encoded in it. Its files are written only once Tor has started,
+  so a failed start leaves nothing behind. Restoring therefore does not require the user to
   remember a block height, which is the main cause of "restored but the
   balance is zero" complaints.
 - **Showing the phrase.** It is shown once and then verified by asking for a
@@ -120,7 +133,15 @@ if, at build time, Arti cannot run bridges on Android.
 - **Damaged files.** The keys are in a file of their own that is written
   when the wallet is made and again only when its password is changed. If
   the file that holds the wallet's view of the chain is damaged, the
-  wallet opens from the keys and scans the chain again.
+  wallet opens from the keys and scans the chain again. The user's own
+  nodes were in that file and are gone with it: the wallet says so and
+  does not go to the public nodes by itself, but waits to be told to
+  synchronise or to be given nodes again. A record of a payment whose
+  outcome was unknown is lost the same way.
+- **A wallet that cannot be saved.** If the wallet cannot be written to
+  disk, it says so for as long as that lasts, and again when it is
+  closed, instead of looking like any other wallet until what it learned
+  is gone.
 - **Changing the password.** Whoever knows the current password can set a
   new one. The keys file is written again under it, as a new file that
   takes the old one's place, so that an interruption leaves a wallet that
@@ -132,8 +153,9 @@ if, at build time, Arti cannot run bridges on Android.
 - **Encryption.** The wallet file is encrypted with the user's password. On
   Android, biometric unlock is available through the hardware-backed key
   store.
-- **On-device protection.** A way to lock the wallet at any time, auto-lock,
-  clipboard clearing, and Android cloud backup disabled. A locked wallet
+- **On-device protection.** A way to lock the wallet at any time and
+  auto-lock. Clearing the clipboard and switching off Android's cloud
+  backup belong to the Android step and are not done yet. A locked wallet
   is closed: Tor is stopped, and only the password opens it again. The
   wallet locks itself after five minutes without use; that can be set to
   one, fifteen or sixty minutes, and not switched off. It does not lock in

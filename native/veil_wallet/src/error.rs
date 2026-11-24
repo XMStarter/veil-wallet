@@ -76,6 +76,17 @@ pub enum Error {
     #[error("not enough funds that can be spent now: {0}")]
     NotEnoughFunds(String),
 
+    /// The payment does not fit into one transaction: the wallet would
+    /// have to spend more coins than one transaction takes. The library
+    /// would send several, one after another, and stop at the first that
+    /// fails, leaving a payment that went out in part. Veil does not send
+    /// such a payment at all.
+    #[error(
+        "the payment needs {transactions} transactions, and only payments that fit \
+         into one are sent; send a smaller amount"
+    )]
+    SeveralTransactions { transactions: usize },
+
     /// The amount to send is zero.
     #[error("the amount must be greater than zero")]
     ZeroAmount,

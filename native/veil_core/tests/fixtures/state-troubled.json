@@ -7,6 +7,10 @@
   "history": [],
   "last_problem": null,
   "node": null,
+  "not_saved": {
+    "detail": "failed to save file /home/user/.local/share/veil/stagenet/wallet.new",
+    "kind": "other"
+  },
   "own_nodes": [],
   "phase": {
     "name": "failed",

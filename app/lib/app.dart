@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'core/backend.dart';
 import 'l10n/app_localizations.dart';
 import 'screens/navigation.dart';
+import 'screens/problem_words.dart';
 import 'screens/start_screen.dart';
 import 'screens/unlock_screen.dart';
 import 'theme/theme.dart';
@@ -50,7 +51,12 @@ class _VeilAppState extends State<VeilApp> {
     // Closing the window saves the wallet and stops Tor first.
     _lifecycle = AppLifecycleListener(
       onExitRequested: () async {
-        await widget.backend.close();
+        try {
+          await widget.backend.close();
+        } catch (_) {
+          // Nothing more can be done for the wallet, and a window that
+          // will not close helps nobody.
+        }
         return AppExitResponse.exit;
       },
     );
@@ -116,11 +122,16 @@ class _VeilAppState extends State<VeilApp> {
       _idle = Timer(_lookAgain, _lockIfIdle);
       return;
     }
-    await widget.backend.close();
+    Problem? notSaved;
+    try {
+      notSaved = await widget.backend.close();
+    } catch (error) {
+      notSaved = unforeseen(error);
+    }
     final navigator = _navigator.currentState;
     if (navigator == null || !mounted) return;
     navigator.pushAndRemoveUntil(
-      at<void>(UnlockScreen(backend: widget.backend)),
+      at<void>(UnlockScreen(backend: widget.backend, notSaved: notSaved)),
       (_) => false,
     );
   }

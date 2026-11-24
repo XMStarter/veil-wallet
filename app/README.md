@@ -117,6 +117,10 @@ stagenet nodes.
 
 ## Not done yet
 
+- A password or a phrase that has been typed or shown stays in the app's
+  memory until that memory is reused: text in Dart cannot be wiped. The
+  core wipes its own copies.
+- The clipboard is not cleared after an address was copied.
 - Restoring from a 25-word phrase asks for a block number to scan from,
   not for a date as the concept says. The core cannot turn a date into a
   block yet.

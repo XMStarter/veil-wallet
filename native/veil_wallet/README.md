@@ -19,11 +19,18 @@ See [`../wallet_lib`](../wallet_lib) for the library itself.
   unused, far below the 200 a restored wallet looks ahead, so a restore
   always finds every payment.
 - **Exact amounts.** `Amount` is an integer number of atomic units. Parsing
-  rejects anything ambiguous instead of rounding.
+  rejects anything ambiguous instead of rounding. A comma is taken as a
+  decimal separator, except where it could as well be grouping thousands
+  (`1,250`): that is refused, and the same digits with a point are taken
+  as they stand.
 - **No accidental "send everything".** Sending the whole balance is a
   separate, explicit choice; an amount of zero is an error.
 - **Review before sending.** `prepare_send` builds and signs a transaction
   and reports its fee. Nothing is broadcast until `commit`.
+- **One payment, one transaction.** A payment that the library would
+  split into several transactions is refused with `SeveralTransactions`.
+  The library sends such transactions one after another and stops at the
+  first that fails, which would leave a payment that went out in part.
 - **Secrets are wiped.** Recovery phrases and passwords are zeroed in memory
   after use and never appear in debug output or error messages.
 - **On Windows, nothing rides in with the library.** Windows would look for

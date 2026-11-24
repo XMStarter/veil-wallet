@@ -136,7 +136,8 @@ class _SendScreenState extends State<SendScreen> {
     final aboutAmount =
         kind == ProblemKind.invalidAmount ||
         kind == ProblemKind.zeroAmount ||
-        kind == ProblemKind.notEnoughFunds;
+        kind == ProblemKind.notEnoughFunds ||
+        kind == ProblemKind.severalTransactions;
     return VeilScreen(
       title: text.sendTitle,
       actions: [
@@ -273,7 +274,7 @@ class _SendScreenState extends State<SendScreen> {
         VeilButton(
           label: text.sentDone,
           onPressed: () {
-            widget.backend.cancelSend();
+            widget.backend.clearSend();
             Navigator.of(context).pop();
           },
         ),
@@ -294,7 +295,7 @@ class _SendScreenState extends State<SendScreen> {
         if (settled)
           VeilButton(
             label: text.unknownUnderstood,
-            onPressed: widget.backend.cancelSend,
+            onPressed: widget.backend.clearSend,
           ),
         VeilQuietButton(
           label: text.unknownBack,

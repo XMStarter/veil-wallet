@@ -44,6 +44,7 @@ abstract final class ProblemKind {
   static const transportMissing = 'transport_missing';
   static const zeroAmount = 'zero_amount';
   static const notEnoughFunds = 'not_enough_funds';
+  static const severalTransactions = 'several_transactions';
   static const tooManyUnusedAddresses = 'too_many_unused_addresses';
   static const sendOutcomeUnknown = 'send_outcome_unknown';
   static const notNow = 'not_now';
@@ -64,6 +65,7 @@ abstract final class ProblemKind {
     transportMissing,
     zeroAmount,
     notEnoughFunds,
+    severalTransactions,
     tooManyUnusedAddresses,
     sendOutcomeUnknown,
     notNow,
@@ -241,6 +243,7 @@ class SessionState {
     required this.history,
     required this.send,
     required this.rebuiltFromKeys,
+    required this.notSaved,
     required this.lastProblem,
   });
 
@@ -281,6 +284,11 @@ class SessionState {
   /// The wallet's data file could not be read and the wallet was opened
   /// from its keys. Its funds show again after a synchronisation.
   final bool rebuiltFromKeys;
+
+  /// Why the wallet could not be written to disk the last time that was
+  /// tried; null once a save has worked again. While it is set, what the
+  /// wallet has learned since its last good save is in memory only.
+  final Problem? notSaved;
 
   /// Why the last command did nothing, when the reason has no place of its
   /// own in the state.
@@ -337,6 +345,7 @@ class SessionState {
         problem: Problem.maybe(send['problem']),
       ),
       rebuiltFromKeys: json['rebuilt_from_keys'] as bool,
+      notSaved: Problem.maybe(json['not_saved']),
       lastProblem: Problem.maybe(json['last_problem']),
     );
   }

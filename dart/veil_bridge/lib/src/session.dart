@@ -258,9 +258,14 @@ class VeilSession {
   /// Sends the transaction under review.
   void confirmSend() => _send({'command': 'confirm_send'});
 
-  /// Drops the transaction under review, or clears the outcome of the last
-  /// send from the state.
+  /// Drops the transaction under review or the send waiting to be built,
+  /// or takes a send that failed off the state. It never touches a send
+  /// that went out or may have.
   void cancelSend() => _send({'command': 'cancel_send'});
+
+  /// Takes the outcome of the last send off the state, once the user has
+  /// seen it: sent, failed, or unknown and settled.
+  void clearSend() => _send({'command': 'clear_send'});
 
   /// Uses the user's own nodes, as `host.onion:port` in the order to try
   /// them, and keeps them in the wallet; an empty list goes back to the

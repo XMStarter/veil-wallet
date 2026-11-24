@@ -347,6 +347,27 @@ void main() {
     expect(backend.hasWallet, isFalse);
   });
 
+  testWidgets('a wallet too busy to be asked is not a wrong password', (
+    tester,
+  ) async {
+    final backend = await openSettings(tester, 'en');
+    backend.busy = true;
+
+    await openLine(tester, 'Recovery phrase');
+    await type(tester, 'Password', testPassword);
+    await press(tester, 'Show');
+    expect(find.text('Wrong password.'), findsNothing);
+    expect(find.textContaining('Not now'), findsOneWidget);
+    await press(tester, 'Back');
+
+    await openLine(tester, 'Remove wallet');
+    await type(tester, 'Password', testPassword);
+    await press(tester, 'Remove the wallet');
+    expect(find.text('Wrong password.'), findsNothing);
+    expect(find.textContaining('Not now'), findsOneWidget);
+    expect(backend.hasWallet, isTrue);
+  });
+
   testWidgets('a failure nobody foresaw leaves no screen waiting for ever', (
     tester,
   ) async {
