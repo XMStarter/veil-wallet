@@ -1,6 +1,7 @@
 // Settings, on a wallet that only pretends.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:veil/app.dart';
 import 'package:veil/core/backend.dart';
@@ -266,6 +267,80 @@ void main() {
     );
     await tester.pump();
     await tester.pump(const Duration(seconds: 61));
+    await tester.pumpAndSettle();
+    expect(backend.state.value, isNull);
+    expect(find.text('OPEN WALLET'), findsOneWidget);
+  });
+
+  testWidgets('a key pressed counts as use, like a click', (tester) async {
+    final backend = await openWallet(tester, 'en');
+    await backend.saveSettings(const AppSettings(autoLockMinutes: 1));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 50));
+    await tester.sendKeyEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pump(const Duration(seconds: 50));
+    expect(backend.state.value, isNotNull);
+    expect(find.text('WALLET'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 11));
+    await tester.pumpAndSettle();
+    expect(backend.state.value, isNull);
+    expect(find.text('OPEN WALLET'), findsOneWidget);
+  });
+
+  testWidgets('it locks from any screen and leaves no phrase on show', (
+    tester,
+  ) async {
+    final backend = await openSettings(tester, 'en');
+    await backend.saveSettings(const AppSettings(autoLockMinutes: 1));
+    await openLine(tester, 'Recovery phrase');
+    await type(tester, 'Password', testPassword);
+    await press(tester, 'Show');
+    final first = testPhrase.split(' ').first;
+    expect(find.text(first), findsOneWidget);
+
+    // Left alone with the phrase on the screen, three screens deep.
+    await tester.pump(const Duration(seconds: 61));
+    await tester.pumpAndSettle();
+    expect(backend.state.value, isNull);
+    expect(find.text('OPEN WALLET'), findsOneWidget);
+    expect(find.text(first), findsNothing);
+    // Nothing is left underneath to go back to.
+    expect(find.text('BACK'), findsNothing);
+    expect(find.text('SETTINGS'), findsNothing);
+  });
+
+  testWidgets('opened again, the wallet locks itself again', (tester) async {
+    final backend = await openWallet(tester, 'en');
+    await backend.saveSettings(const AppSettings(autoLockMinutes: 1));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 61));
+    await tester.pumpAndSettle();
+    expect(find.text('OPEN WALLET'), findsOneWidget);
+    // Locked, there is nothing to lock: time passes and nothing happens.
+    final closes = backend.calls.where((call) => call == 'close').length;
+    await tester.pump(const Duration(minutes: 5));
+    expect(backend.calls.where((call) => call == 'close').length, closes);
+
+    // Typing the password is use of the app, not of a wallet, and starts
+    // no clock either; opening the wallet does.
+    await type(tester, 'Password', testPassword);
+    await press(tester, 'Open wallet');
+    expect(find.text('WALLET'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 59));
+    expect(backend.state.value, isNotNull);
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    expect(backend.state.value, isNull);
+    expect(find.text('OPEN WALLET'), findsOneWidget);
+  });
+
+  testWidgets('left at its default, the wallet locks after five minutes', (
+    tester,
+  ) async {
+    final backend = await openWallet(tester, 'en');
+    await tester.pump(const Duration(minutes: 4, seconds: 59));
+    expect(backend.state.value, isNotNull);
+    await tester.pump(const Duration(seconds: 2));
     await tester.pumpAndSettle();
     expect(backend.state.value, isNull);
     expect(find.text('OPEN WALLET'), findsOneWidget);

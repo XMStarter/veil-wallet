@@ -226,7 +226,7 @@ meanwhile; a send to a node that cannot be reached is reported as unknown,
 settled by a synchronisation, and sent again, paid once. The owner
 reported that sending works in the app. Not tried: a lost connection in
 the app itself, which cannot be brought about by hand. Step 3.7,
-settings, is written and not yet accepted. In the app: a Settings screen
+settings, is done; what its acceptance took is told below. In the app: a Settings screen
 with the user's own node, Tor bridges, the password, the auto-lock (one to
 sixty minutes, never off, and never in the middle of a synchronisation),
 the recovery phrase shown again for the password, language, a dark theme,
@@ -331,7 +331,12 @@ line: loading the wallet DLL ended with Windows error 995, an operation
 aborted, after about half a minute. Nothing under test had run; the same
 test passed minutes later in the same run at the `regtest` level, and
 the level passed when run again. The cause was not found; it has
-happened once. Not reported from the app yet: the auto-lock. A synchronisation still starts with the first candidate every
+happened once. The auto-lock was never tried in the app with a real
+wallet: the owner left it to be checked without one, and its tests on the
+wallet that only pretends were widened for that (a key counts as use; it
+locks from any screen and leaves no phrase on show; a wallet opened again
+locks again; the default is five minutes). They pass, and they say
+nothing about a real window's clicks and keys. A synchronisation still starts with the first candidate every
 time, so a first node that is down costs every synchronisation the time
 it takes to find that out. Bridges changed
 in Settings take effect the next time the wallet is opened. Next after
