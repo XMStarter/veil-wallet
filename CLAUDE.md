@@ -363,11 +363,24 @@ second window, session or `veil` on the same wallet fails with
 for this step: the library locks the keys file of a wallet it has opened
 but not of one it has just made, so a second window could open a new
 wallet a second time. Tried in a cloud session: the offline level, and
-`windows-app.sh` on made-up folders without starting anything. Not tried
-at all: the new steps of the workflow, which run only in hosted CI, and
-the app as a Windows program, which nobody has started yet. To get the
-artifact the workflow has to run, on a pull request or started by hand.
-See the build plan in `docs/concept.md`.
+`windows-app.sh` on made-up folders without starting anything. In hosted
+CI the two new parts of the workflow worked the first time they ran: the
+Windows job took twenty-four minutes, most of it the core's release
+build from nothing, and kept an artifact of nineteen files and twenty
+megabytes. On commit `52720ee` the owner's run passed at the `offline`
+and `regtest` levels as Linux and as Windows programs; as Windows
+programs the offline tests of `veil_wallet` once took two hundred seconds
+where they take seventeen, and seventeen again minutes later, which
+looks like the slow loading over the WSL share seen once before and was
+not looked into. The owner then started the app as a Windows program:
+it opened a wallet, coins sent to it from another wallet arrived, and
+the owner reported that everything works. Which of the things listed
+for that walk were tried was not said; a second window on an open wallet
+and the auto-lock had never been seen with a real wallet before it. The
+two public faucets named at step 1.3 no longer served: one did not work
+and the other was blocked by the owner's antivirus as dangerous, so the
+coins came from the owner's own stagenet wallet. See the build plan in
+`docs/concept.md`.
 
 ## Environment notes
 
