@@ -632,9 +632,20 @@ fn run(
     }
     let rebuilt = core.was_rebuilt_from_keys();
     publish_wallet(&mut core, shared);
+    // A send whose outcome is unknown, until it is found or cleared. One
+    // left by an earlier session is taken up again.
+    let mut unknown = UnknownSend::remembered(&core);
+    // Said last, and together with everything the wallet brought with it:
+    // whoever sees the wallet open sees it whole.
     shared.update(|state| {
         state.tor = core.tor_status();
         state.rebuilt_from_keys = rebuilt;
+        if let Some(send) = &unknown {
+            state.send = SendState::OutcomeUnknown {
+                txids: send.txids.clone(),
+                settled: false,
+            };
+        }
         state.phase = Phase::Ready;
     });
 
@@ -647,17 +658,6 @@ fn run(
     // A send asked for while a synchronisation was owed. It is built when
     // that has ended, so never from a wallet that knows half the chain.
     let mut waiting_send: Option<(String, SendAmount)> = None;
-    // A send whose outcome is unknown, until it is found or cleared. One
-    // left by an earlier session is taken up again.
-    let mut unknown = UnknownSend::remembered(&core);
-    if let Some(send) = &unknown {
-        shared.update(|state| {
-            state.send = SendState::OutcomeUnknown {
-                txids: send.txids.clone(),
-                settled: false,
-            }
-        });
-    }
     // When the synchronisation under way, or the last one, began.
     let mut sync_began = Instant::now();
     loop {

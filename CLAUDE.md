@@ -235,10 +235,17 @@ data file as encrypted notes, bridges through the C interface with their
 programs looked for by `veil_core::transports` (moved from `veil_cli`),
 and a check of bridge lines that starts nothing. The owner asked for the
 removal of the wallet and for the unknown send to be remembered on disk
-as part of this step. The offline tests pass in a cloud session. Not run:
-the scenario on a private chain, which now closes and reopens the session
-while the outcome of a send is unknown; the Windows build; and anything in
-the app with a real wallet, a changed password above all. Bridges changed
+as part of this step. The offline tests pass in a cloud session. On the
+owner's machine, on commit `9cbd182`, everything passed as Linux and as
+Windows programs, the changed password and the notes in the wallet
+included, except one thing in two tests: a session reported its wallet
+open and, in a second change of the state, the send an earlier session
+had left unknown, and the tests read the state in between. It is one
+change now, said last. That failure stopped the `offline` level before
+it built the app, so the app the owner then started was the one of the
+step before, without Settings. Not shown yet: that a session writes such a
+send and the next one reads it, on a private chain; and anything in the
+app with a real wallet, a changed password above all. Bridges changed
 in Settings take effect the next time the wallet is opened. Next after
 its acceptance is step 3.8, the app on Windows. Not done: the app. See the build plan in
 `docs/concept.md`.
