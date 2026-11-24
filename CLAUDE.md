@@ -321,9 +321,17 @@ synchronised with if no other answers, and fails as not sent if none
 does. Offline tests show which node is asked and chosen; that a payment
 goes out that way is in the scenario on a private chain, which also has
 a new kind of cut in the stand-in for a transaction that never arrives
-(`BeforeMoreRequestBytes`). Not run on the owner's machine yet. Not
-reported from the app yet: the auto-lock, and anything of what the review
-changed. A synchronisation still starts with the first candidate every
+(`BeforeMoreRequestBytes`). On commit `2d187fc`, which adds only
+`accept.sh` to that, the owner's run passed at the `offline` and
+`regtest` levels as Linux and as Windows programs, the reworked scenario
+included, and the owner reported that sending works in the app again.
+As Windows programs the `offline` level failed the first time in one
+test, `a_wallet_survives_being_killed_while_it_saves`, on its first
+line: loading the wallet DLL ended with Windows error 995, an operation
+aborted, after about half a minute. Nothing under test had run; the same
+test passed minutes later in the same run at the `regtest` level, and
+the level passed when run again. The cause was not found; it has
+happened once. Not reported from the app yet: the auto-lock. A synchronisation still starts with the first candidate every
 time, so a first node that is down costs every synchronisation the time
 it takes to find that out. Bridges changed
 in Settings take effect the next time the wallet is opened. Next after
@@ -339,6 +347,10 @@ its acceptance is step 3.8, the app on Windows. Not done: the app. See the build
   does not start there. The machine's antivirus (ESET) flags the wallet DLL
   and `monerod.exe` as a coin miner; the owner has to allow each after it
   is rebuilt, and a run made while its question is open fails on loading.
+  Once, loading the DLL failed there with Windows error 995 (operation
+  aborted) in one test and worked in every other; if it comes back, the
+  first thing to try is loading it from a Windows disk, not over the WSL
+  file share.
   Each run of `veil.exe` takes 15 to 20 seconds there before it does
   anything, from loading over the WSL file share and being scanned. Tor connects
   from that machine without bridges, so the `bridges` level shows there
