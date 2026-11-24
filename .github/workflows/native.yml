@@ -67,3 +67,15 @@ jobs:
       - name: Format, lint, offline tests, and the app's build
         shell: bash
         run: bash check.sh offline
+      # The app as it was just built for Windows, with the core next to it,
+      # kept with this run as a file to download: it is what the owner
+      # starts on a Windows machine (native/windows-app.sh). Nothing leaves
+      # GitHub by this, and the wallet library is not in it.
+      - name: Keep the app built for Windows
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: veil-windows
+          path: app/build/windows/x64/runner/Release
+          if-no-files-found: error
+          retention-days: 14

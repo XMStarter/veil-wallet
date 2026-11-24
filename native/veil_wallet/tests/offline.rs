@@ -353,6 +353,35 @@ fn files_in(dir: &std::path::Path) -> Vec<String> {
 }
 
 #[test]
+fn a_wallet_that_is_open_already_is_not_opened_twice_and_not_touched() {
+    let Some(lib) = wallet_library() else { return };
+    let dir = TempDir::new("open-twice");
+    let path = dir.file("w");
+    let (mut first, _) = Wallet::create(&lib, &path, PASSWORD, Network::Mainnet).unwrap();
+    let address = first.receive_address().unwrap();
+    first.save().unwrap();
+    let files_before = files_in(&dir.0);
+
+    // A second window of the app, say. The failure is told apart from a
+    // wallet that cannot be read, with the right password and the wrong.
+    for password in [PASSWORD, "not the password"] {
+        match Wallet::open(&lib, &path, password, Network::Mainnet) {
+            Err(Error::WalletInUse) => {}
+            Err(other) => panic!("unexpected error {other}"),
+            Ok(_) => panic!("a wallet that is open must not be opened again"),
+        }
+    }
+    // Nothing was set aside or renamed under the wallet that is running,
+    assert_eq!(files_in(&dir.0), files_before);
+    // which goes on saving, and opens as it was once it has been closed.
+    first.save().unwrap();
+    first.close().unwrap();
+    let mut again = Wallet::open(&lib, &path, PASSWORD, Network::Mainnet).unwrap();
+    assert!(!again.was_rebuilt_from_keys());
+    assert_eq!(again.receive_address().unwrap(), address);
+}
+
+#[test]
 fn a_wallet_whose_data_file_is_damaged_opens_from_its_keys() {
     let Some(lib) = wallet_library() else { return };
     type Damage = fn(&[u8]) -> Vec<u8>;
@@ -376,7 +405,13 @@ fn a_wallet_whose_data_file_is_damaged_opens_from_its_keys() {
 
         // A wrong password still opens nothing, and moves nothing.
         assert!(Wallet::open(&lib, &path, "not the password", Network::Mainnet).is_err());
-        assert_eq!(files_in(path.parent().unwrap()), ["w", "w.keys"], "{what}");
+        // The third is the mark that says a wallet is open; it stays where
+        // the wallet is.
+        assert_eq!(
+            files_in(path.parent().unwrap()),
+            ["w", "w.keys", "w.lock"],
+            "{what}"
+        );
         assert_eq!(std::fs::read(&path).unwrap(), damaged, "{what}");
 
         // The right one opens the same wallet, and says how.
@@ -400,7 +435,7 @@ fn a_wallet_whose_data_file_is_damaged_opens_from_its_keys() {
             .into_iter()
             .filter(|name| name != "w.unportable")
             .collect();
-        assert_eq!(files, ["w", "w.keys", "w.unreadable-1"], "{what}");
+        assert_eq!(files, ["w", "w.keys", "w.lock", "w.unreadable-1"], "{what}");
     }
 }
 
@@ -414,7 +449,7 @@ fn a_wallet_without_its_keys_file_does_not_open_and_nothing_is_moved() {
     std::fs::remove_file(path.with_file_name("w.keys")).unwrap();
 
     assert!(Wallet::open(&lib, &path, PASSWORD, Network::Mainnet).is_err());
-    assert_eq!(files_in(path.parent().unwrap()), ["w"]);
+    assert_eq!(files_in(path.parent().unwrap()), ["w", "w.lock"]);
 }
 
 /// Where scanning starts decides whether old payments are found, so it has

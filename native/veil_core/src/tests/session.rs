@@ -709,6 +709,51 @@ fn a_wallet_is_not_made_when_tor_does_not_start() {
 }
 
 #[test]
+fn a_wallet_that_is_open_is_not_opened_by_a_second_session() {
+    let dir = TempDir::new("session-twice");
+    let Some(config) = config(&dir, "w") else {
+        return;
+    };
+    let stand_in = StandIn::start().unwrap();
+    let first = start(config.clone(), &stand_in, WalletSource::Create);
+    let address = opened(&first).receive_address;
+
+    // A second window of the app on the same wallet. It is told that the
+    // wallet is open elsewhere, and nothing is started for it: two
+    // sessions on one wallet's files would overwrite each other.
+    let started = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let flag = std::sync::Arc::clone(&started);
+    let transport = stand_in.clone();
+    let hooks = Hooks {
+        transport: Box::new(move |_| {
+            flag.store(true, std::sync::atomic::Ordering::SeqCst);
+            Ok(Box::new(transport) as Box<dyn Transport>)
+        }),
+        wallet: Box::new(|_| {}),
+        save_every: crate::session::SAVE_EVERY,
+        send_settles_after: crate::session::SEND_SETTLES_AFTER,
+    };
+    let second = Session::start_with(config.clone(), WalletSource::Open, PASSWORD, hooks);
+    let state = opened(&second);
+    assert_eq!(failed_with(&state.phase), Some(ProblemKind::WalletInUse));
+    assert!(!started.load(std::sync::atomic::Ordering::SeqCst));
+    drop(second);
+
+    // The first goes on as if nothing had happened, and once it is closed
+    // the wallet opens again.
+    first.new_address();
+    wait(&first, |state| {
+        state.receive_address.as_ref().is_some_and(|a| a.index == 2)
+    });
+    assert_eq!(first.close().phase, Phase::Closed);
+    let again = start(config, &stand_in, WalletSource::Open);
+    let state = opened(&again);
+    assert_eq!(state.phase, Phase::Ready, "{state:#?}");
+    assert!(!state.rebuilt_from_keys);
+    assert_ne!(state.receive_address, address);
+}
+
+#[test]
 fn a_wallet_that_cannot_be_saved_says_so_until_it_can() {
     let dir = TempDir::new("session-not-saved");
     let Some(config) = config(&dir, "w") else {

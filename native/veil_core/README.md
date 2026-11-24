@@ -73,6 +73,10 @@ What the session holds to, whatever the interface does:
 - **Changes that belong together are one change.** The end of a
   synchronisation, the balance and history after it, and what it means
   for a send; the outcome of a send and the balance it left.
+- **One wallet, one session.** A wallet that is open is marked as such
+  by a lock on a file next to it (`veil_wallet`), and a second session on
+  it, a second window of the app for one, fails with `WalletInUse` before
+  anything is started.
 - **A new wallet is made after Tor has started**, so a Tor that does not
   start leaves no wallet behind that nobody has seen the phrase of. A
   wallet that exists is opened before Tor is started, so a wrong password

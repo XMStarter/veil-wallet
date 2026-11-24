@@ -220,6 +220,7 @@
   "torFailed": "Tor не запустился",
   "problemWrongPassword": "Неверный пароль.",
   "problemWalletExists": "На этом устройстве уже есть кошелёк. Ничего не изменено.",
+  "problemWalletInUse": "Кошелёк уже открыт — в другом окне Veil или в другой программе. Сначала закройте его там.",
   "problemInvalidPhrase": "Это не фраза восстановления: какое-то слово неверно или слова стоят в другом порядке.",
   "problemTorFailed": "Tor не запустился.",
   "problemTorNotReady": "Tor не подключён.",

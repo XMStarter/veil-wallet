@@ -241,6 +241,7 @@
   "torFailed": "Tor could not start",
   "problemWrongPassword": "Wrong password.",
   "problemWalletExists": "There is already a wallet on this device. Nothing was changed.",
+  "problemWalletInUse": "The wallet is already open, in another window of Veil or in another program. Close it there first.",
   "problemInvalidPhrase": "This is not a recovery phrase: a word is wrong, or the words are in another order.",
   "problemTorFailed": "Tor could not start.",
   "problemTorNotReady": "Tor is not connected.",
