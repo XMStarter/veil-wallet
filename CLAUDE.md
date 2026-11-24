@@ -193,8 +193,8 @@ copies that file while the wallet is closed. In the app with a real
 wallet the owner confirmed that the synchronisation starts by itself once
 Tor is connected, that Receive shows the code and the address and Copy
 works, and that locking in the middle of a synchronisation takes seconds.
-Nobody has scanned the QR code from the app's window with another wallet,
-and no payment has been received in the app yet. Next is step 3.6, send. Not done: the app. See the build plan in
+The owner also reported that the QR code works. No payment has been
+received in the app yet. Next is step 3.6, send. Not done: the app. See the build plan in
 `docs/concept.md`.
 
 ## Environment notes
