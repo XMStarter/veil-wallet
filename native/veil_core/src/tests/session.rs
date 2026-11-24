@@ -1585,8 +1585,10 @@ mod on_a_private_chain {
         // Tor. Confirmed, it is handed to no node: each is asked whether
         // it is there, through Tor, and none can be reached. It is reported
         // as not sent, for Tor's reason and not the nodes', and that Tor
-        // has lost its network is said in the same change.
-        session.prepare_send(&payee_address, SendAmount::Exact(amount));
+        // has lost its network is said in the same change. The amount is
+        // one the wallet still has after its three payments.
+        let little: Amount = "0.1".parse().unwrap();
+        session.prepare_send(&payee_address, SendAmount::Exact(little));
         let state = wait(&session, |state| {
             matches!(state.send, SendState::Review { .. } | SendState::Failed(_))
         });

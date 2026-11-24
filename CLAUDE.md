@@ -350,8 +350,8 @@ nothing about a real window's clicks and keys. A synchronisation started with th
 time, so a first node that was down cost every synchronisation the time
 it takes to find that out; since step 3.8 was merged the node that
 carried a synchronisation to its end is the one asked first the next
-time (shown on a private chain only, at the end of the scenario; not run
-there yet). Bridges changed
+time (shown on a private chain only, near the end of the scenario; it
+passed there as Linux programs on commit `23882af`). Bridges changed
 in Settings take effect the next time the wallet is opened. Step 3.7 was
 merged on the owner's word after hosted CI had passed on Linux and
 Windows. Step 3.8, the app on Windows, is done; how it was accepted is
@@ -402,7 +402,13 @@ stand-in loses its network the same way (`set_network`,
 `AfterCut::NetworkLost`), in place of the "not ready after a cut" it had,
 which a real Tor never does. The offline tests pass in a cloud session;
 the scenario on a private chain has a new end, a send confirmed with the
-network gone, not run yet. Not known: which kind of failure Arti gives
+network gone. On commit `23882af` the owner's run as Linux programs
+passed at the `offline` level and failed at `regtest` in that new end,
+for a mistake of the test's own: it asked for a payment of one and a
+half where the three payments before it had left the wallet under a
+half. It asks for a tenth now, which has not been run. The part of the
+scenario before it, the node that worked being asked first, passed there
+for the first time. Not known: which kind of failure Arti gives
 when the owner's machine really loses its network. If it is only
 timeouts, the app will go on saying that no node answered, and the
 reading in `veil_tor::service::network_after` is the place to change.
