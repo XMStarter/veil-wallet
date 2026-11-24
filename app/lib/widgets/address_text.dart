@@ -30,7 +30,7 @@ class AddressText extends StatelessWidget {
               text: position == parts.length - 1 ? part : '$part ',
               style: position < _edge || position >= parts.length - _edge
                   ? VeilText.addressEdge
-                  : VeilText.addressMiddle,
+                  : VeilText.addressMiddleIn(context),
             ),
         ],
       ),

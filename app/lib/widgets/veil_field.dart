@@ -37,14 +37,16 @@ class VeilField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const border = OutlineInputBorder(
-      borderRadius: BorderRadius.all(Radius.circular(VeilSizes.cornerRadius)),
-      borderSide: BorderSide(color: VeilColors.fieldBorder),
+    final palette = VeilPalette.of(context);
+    const corners = BorderRadius.all(Radius.circular(VeilSizes.cornerRadius));
+    final border = OutlineInputBorder(
+      borderRadius: corners,
+      borderSide: BorderSide(color: palette.fieldBorder),
     );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: VeilText.secondary),
+        Text(label, style: VeilText.secondaryIn(context)),
         const SizedBox(height: 6),
         TextField(
           controller: controller,
@@ -62,20 +64,21 @@ class VeilField extends StatelessWidget {
           onChanged: onChanged,
           onSubmitted: onSubmitted,
           style: monospace ? VeilText.address : VeilText.body,
-          cursorColor: VeilColors.ink,
-          decoration: const InputDecoration(
+          cursorColor: palette.ink,
+          decoration: InputDecoration(
             filled: true,
-            fillColor: VeilColors.field,
+            fillColor: palette.field,
             isDense: true,
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 14,
+            ),
             border: border,
             enabledBorder: border,
             disabledBorder: border,
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.all(
-                Radius.circular(VeilSizes.cornerRadius),
-              ),
-              borderSide: BorderSide(color: VeilColors.ink, width: 2),
+              borderRadius: corners,
+              borderSide: BorderSide(color: palette.ink, width: 2),
             ),
           ),
         ),

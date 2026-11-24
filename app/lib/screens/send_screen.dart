@@ -187,7 +187,7 @@ class _SendScreenState extends State<SendScreen> {
           const SizedBox(height: 8),
           Text(
             text.homeAvailable(state.balanceUnlocked),
-            style: VeilText.secondary,
+            style: VeilText.secondaryIn(context),
           ),
         ],
         VeilQuietButton(
@@ -209,7 +209,7 @@ class _SendScreenState extends State<SendScreen> {
             state?.sync.phase == SyncPhase.running
                 ? text.sendWaitingForSync
                 : text.sendPreparing,
-            style: VeilText.secondary,
+            style: VeilText.secondaryIn(context),
             textAlign: TextAlign.center,
           ),
         ],
@@ -234,10 +234,10 @@ class _SendScreenState extends State<SendScreen> {
         ),
       ],
       children: [
-        Text(text.reviewTo.toUpperCase(), style: VeilText.heading),
+        Text(text.reviewTo.toUpperCase(), style: VeilText.headingIn(context)),
         const SizedBox(height: 8),
         Container(
-          color: VeilColors.surface,
+          color: VeilPalette.of(context).surface,
           padding: const EdgeInsets.all(12),
           child: AddressText(send.to ?? ''),
         ),
@@ -257,7 +257,7 @@ class _SendScreenState extends State<SendScreen> {
           const SizedBox(height: 8),
           Text(
             text.reviewSending,
-            style: VeilText.secondary,
+            style: VeilText.secondaryIn(context),
             textAlign: TextAlign.center,
           ),
         ] else

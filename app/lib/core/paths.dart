@@ -58,6 +58,9 @@ class AppPaths {
   /// What the app remembers about the wallet besides the wallet itself.
   String get notesFile => '$walletDir${_separator}app.json';
 
+  /// What the app remembers apart from any wallet.
+  String get settingsFile => '$dataDir${_separator}settings.json';
+
   String get torStateDir => '$dataDir${_separator}tor${_separator}state';
 
   String get torCacheDir => '$dataDir${_separator}tor${_separator}cache';

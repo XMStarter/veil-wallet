@@ -42,9 +42,14 @@ pub struct VeilSession {
 pub(crate) enum Request {
     Sync,
     NewAddress,
-    PrepareSend { to: String, amount: SendAmount },
+    PrepareSend {
+        to: String,
+        amount: SendAmount,
+    },
     ConfirmSend,
     CancelSend,
+    /// The user's own nodes; none for the ones the session started with.
+    SetNodes(Vec<OnionNode>),
 }
 
 fn bad_request(detail: impl Into<String>) -> Problem {
@@ -84,25 +89,8 @@ pub(crate) fn parse_start(
         .get("tor")
         .and_then(Value::as_object)
         .ok_or_else(|| bad_request("`tor` is missing or is not an object"))?;
-    // The user's own nodes, in their order. Without any, the public ones.
-    let no_nodes = Vec::new();
-    let nodes = match config.get("nodes") {
-        None | Some(Value::Null) => &no_nodes,
-        Some(nodes) => nodes
-            .as_array()
-            .ok_or_else(|| bad_request("`nodes` is not a list"))?,
-    };
-    let nodes = nodes
-        .iter()
-        .map(|node| {
-            node.as_str()
-                .and_then(|node| node.parse::<OnionNode>().ok())
-                .ok_or_else(|| Problem {
-                    kind: ProblemKind::InvalidNode,
-                    detail: format!("{node} is not a node; a node is written as host.onion:port"),
-                })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    // Nodes named here, in their order. Without any, the public ones.
+    let nodes = nodes_in(&config)?;
     let nodes = crate::stagenet_candidates(nodes);
     let sync_every = match config.get("sync_every_seconds") {
         None | Some(Value::Null) => None,
@@ -139,8 +127,7 @@ pub(crate) fn parse_start(
         tor: TorConfig {
             state_dir: PathBuf::from(text(tor, "state_dir")?),
             cache_dir: PathBuf::from(text(tor, "cache_dir")?),
-            // Bridges are not reachable through this interface yet.
-            bridges: Bridges::none(),
+            bridges: bridges_in(&config)?,
         },
         nodes,
         sync_every,
@@ -148,10 +135,66 @@ pub(crate) fn parse_start(
     Ok((config, source))
 }
 
+/// The nodes in the `nodes` of a request, which may be left out.
+fn nodes_in(request: &Map<String, Value>) -> Result<Vec<OnionNode>, Problem> {
+    let nodes = match request.get("nodes") {
+        None | Some(Value::Null) => return Ok(Vec::new()),
+        Some(nodes) => nodes
+            .as_array()
+            .ok_or_else(|| bad_request("`nodes` is not a list"))?,
+    };
+    nodes
+        .iter()
+        .map(|node| {
+            node.as_str()
+                .and_then(|node| node.trim().parse::<OnionNode>().ok())
+                .ok_or_else(|| Problem {
+                    kind: ProblemKind::InvalidNode,
+                    detail: format!("{node} is not a node; a node is written as host.onion:port"),
+                })
+        })
+        .collect()
+}
+
+/// The bridges in the `bridges` of a request, a list of bridge lines that
+/// may be left out, with the programs their transports need.
+fn bridges_in(request: &Map<String, Value>) -> Result<Bridges, Problem> {
+    let lines = match request.get("bridges") {
+        None | Some(Value::Null) => return Ok(Bridges::none()),
+        Some(lines) => lines
+            .as_array()
+            .ok_or_else(|| bad_request("`bridges` is not a list"))?,
+    };
+    let lines = lines
+        .iter()
+        .map(|line| {
+            line.as_str()
+                .map(str::to_owned)
+                .ok_or_else(|| bad_request("a bridge is not text"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut bridges = Bridges {
+        // Empty lines and comments go, as in a file of bridges.
+        lines: Bridges::lines_from_text(&lines.join("\n")),
+        transports: Vec::new(),
+    };
+    let needed = bridges.transports_needed().map_err(|error| Problem {
+        kind: ProblemKind::InvalidBridge,
+        detail: error.to_string(),
+    })?;
+    bridges.transports =
+        crate::transports::programs_for(&needed, Vec::new()).map_err(|missing| Problem {
+            kind: ProblemKind::TransportMissing,
+            detail: missing.to_string(),
+        })?;
+    Ok(bridges)
+}
+
 /// Reads one command.
 pub(crate) fn parse_command(command: &str) -> Result<Request, Problem> {
     let command = object(command)?;
     match text(&command, "command")? {
+        "set_nodes" => Ok(Request::SetNodes(nodes_in(&command)?)),
         "sync" => Ok(Request::Sync),
         "new_address" => Ok(Request::NewAddress),
         "confirm_send" => Ok(Request::ConfirmSend),
@@ -184,6 +227,8 @@ fn kind_name(kind: ProblemKind) -> &'static str {
         ProblemKind::InvalidAddress => "invalid_address",
         ProblemKind::InvalidAmount => "invalid_amount",
         ProblemKind::InvalidNode => "invalid_node",
+        ProblemKind::InvalidBridge => "invalid_bridge",
+        ProblemKind::TransportMissing => "transport_missing",
         ProblemKind::ZeroAmount => "zero_amount",
         ProblemKind::NotEnoughFunds => "not_enough_funds",
         ProblemKind::TooManyUnusedAddresses => "too_many_unused_addresses",
@@ -285,6 +330,7 @@ pub(crate) fn state_json(state: &SessionState) -> Value {
             "message": state.tor.message,
         },
         "node": state.node.as_ref().map(ToString::to_string),
+        "own_nodes": state.own_nodes.iter().map(ToString::to_string).collect::<Vec<_>>(),
         "sync": sync,
         "syncs_ended": state.syncs_ended,
         "balance": {
@@ -317,6 +363,7 @@ fn apply(session: &Session, request: Request) {
         Request::PrepareSend { to, amount } => session.prepare_send(&to, amount),
         Request::ConfirmSend => session.confirm_send(),
         Request::CancelSend => session.cancel_send(),
+        Request::SetNodes(nodes) => session.set_nodes(nodes),
     }
 }
 
@@ -475,8 +522,10 @@ pub unsafe extern "C" fn veil_session_state(handle: *const VeilSession) -> *mut 
 
 /// Gives the session a command, a JSON object such as `{"command":
 /// "sync"}`. The commands are `sync`, `new_address`, `prepare_send` (with
-/// `to` and `amount`, a decimal number as text or `all`), `confirm_send`
-/// and `cancel_send`.
+/// `to` and `amount`, a decimal number as text or `all`), `confirm_send`,
+/// `cancel_send`, and `set_nodes` (with `nodes`, the user's own nodes as
+/// `host.onion:port`; an empty list goes back to the nodes the session was
+/// started with).
 ///
 /// Returns null when the command was handed over; its outcome appears in
 /// the state. Returns a JSON object `{"kind", "detail"}`, to be freed with
@@ -514,6 +563,100 @@ pub unsafe extern "C" fn veil_session_command(
             kind: ProblemKind::NotNow,
             detail: "the session is closed".into(),
         })
+    }
+}
+
+/// Checks bridge lines without starting anything: `{"bridges": ["obfs4
+/// ...", ...]}`. Returns null if every line is a bridge and a program is
+/// installed for every transport they need; otherwise a JSON object
+/// `{"kind", "detail"}`, to be freed with `veil_string_free`, with the kind
+/// `invalid_bridge` or `transport_missing`.
+///
+/// # Safety
+///
+/// `request` must be null or point to a NUL-terminated string that stays
+/// valid for the duration of the call.
+#[no_mangle]
+pub unsafe extern "C" fn veil_check_bridges(request: *const c_char) -> *mut c_char {
+    // SAFETY: the caller guarantees the string.
+    let request = unsafe { from_c(request) };
+    let checked = catch_unwind(|| match request {
+        Some(request) => object(request).and_then(|request| bridges_in(&request)),
+        None => Err(bad_request("the request is missing")),
+    });
+    match checked {
+        Ok(Ok(_)) => ptr::null_mut(),
+        Ok(Err(problem)) => to_c(problem_json(&problem).to_string()),
+        Err(_) => {
+            to_c(problem_json(&bad_request("checking the bridges failed unexpectedly")).to_string())
+        }
+    }
+}
+
+/// Whether `password` is the wallet's password: 1 if it is, 0 if it is
+/// not, and -1 if that cannot be said now, for a null or closed handle or
+/// while a transaction is under review. Waits for the session's thread,
+/// like `veil_session_recovery_phrase`.
+///
+/// # Safety
+///
+/// `handle` must be null or a live handle from `veil_session_start`;
+/// `password` must be null or point to a NUL-terminated string that stays
+/// valid for the duration of the call.
+#[no_mangle]
+pub unsafe extern "C" fn veil_session_is_password(
+    handle: *const VeilSession,
+    password: *const c_char,
+) -> i32 {
+    // SAFETY: the caller guarantees the string.
+    let Some(password) = (unsafe { from_c(password) }) else {
+        return -1;
+    };
+    // SAFETY: passed on from the caller.
+    unsafe {
+        with_session(handle, -1, |session| match session.is_password(password) {
+            Ok(true) => 1,
+            Ok(false) => 0,
+            Err(_) => -1,
+        })
+    }
+}
+
+/// Gives the wallet the password `new`, if `old` is its password now.
+/// Returns null when it is changed; otherwise a JSON object `{"kind",
+/// "detail"}`, to be freed with `veil_string_free`, with the kind
+/// `wrong_password` when `old` is not the password, and nothing is
+/// changed. Waits for the session's thread.
+///
+/// # Safety
+///
+/// `handle` must be null or a live handle from `veil_session_start`; `old`
+/// and `new` must be null or point to NUL-terminated strings that stay
+/// valid for the duration of the call.
+#[no_mangle]
+pub unsafe extern "C" fn veil_session_change_password(
+    handle: *const VeilSession,
+    old: *const c_char,
+    new: *const c_char,
+) -> *mut c_char {
+    let refused = |problem: Problem| to_c(problem_json(&problem).to_string());
+    // SAFETY: the caller guarantees the strings.
+    let (Some(old), Some(new)) = (unsafe { (from_c(old), from_c(new)) }) else {
+        return refused(bad_request("a password is missing"));
+    };
+    let closed = || Problem {
+        kind: ProblemKind::NotNow,
+        detail: "the session is closed".into(),
+    };
+    // SAFETY: passed on from the caller.
+    let changed = unsafe {
+        with_session(handle, Err(closed()), |session| {
+            session.change_password(old, new)
+        })
+    };
+    match changed {
+        Ok(()) => ptr::null_mut(),
+        Err(problem) => refused(problem),
     }
 }
 

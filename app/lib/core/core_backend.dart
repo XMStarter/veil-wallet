@@ -25,6 +25,7 @@ class CoreBackend implements WalletBackend {
   Timer? _watch;
   int _seen = -1;
   final _state = ValueNotifier<SessionState?>(null);
+  final _settings = ValueNotifier<AppSettings>(const AppSettings());
 
   /// How often the state's revision is looked at.
   static const _watchEvery = Duration(milliseconds: 200);
@@ -45,6 +46,7 @@ class CoreBackend implements WalletBackend {
     required String password,
     String? phrase,
     int? restoreHeight,
+    bool withoutBridges = false,
   }) async {
     await close();
     for (final library in [_paths.coreLibrary, _paths.walletLibrary]) {
@@ -64,6 +66,7 @@ class CoreBackend implements WalletBackend {
           torCacheDir: _paths.torCacheDir,
           source: source,
           restoreHeight: restoreHeight,
+          bridges: withoutBridges ? const [] : _settings.value.bridges,
           syncEvery: _syncEvery,
         ),
         password: password,
@@ -105,6 +108,75 @@ class CoreBackend implements WalletBackend {
       _seen = revision;
       _state.value = session.state();
     }
+  }
+
+  @override
+  ValueListenable<AppSettings> get settings => _settings;
+
+  @override
+  Future<void> loadSettings() async {
+    _settings.value = await AppSettings.load(_paths.settingsFile);
+  }
+
+  @override
+  Future<void> saveSettings(AppSettings settings) async {
+    await settings.save(_paths.settingsFile);
+    _settings.value = settings;
+  }
+
+  @override
+  Problem? checkBridges(List<String> lines) {
+    if (!File(_paths.coreLibrary).existsSync()) {
+      return Problem(libraryMissing, _paths.coreLibrary);
+    }
+    return (_core ??= VeilCore.open(_paths.coreLibrary)).checkBridges(lines);
+  }
+
+  @override
+  Problem? setNodes(List<String> nodes) {
+    try {
+      _session?.setNodes(nodes);
+      return null;
+    } on VeilException catch (refused) {
+      return refused.problem;
+    }
+  }
+
+  @override
+  Future<bool?> isPassword(String password) async {
+    final session = _session;
+    if (session == null) return null;
+    final address = session.address;
+    final library = _paths.coreLibrary;
+    return Isolate.run(
+      () => VeilSession.fromAddress(
+        VeilCore.open(library),
+        address,
+      ).isPassword(password),
+    );
+  }
+
+  @override
+  Future<Problem?> changePassword(String old, String next) async {
+    final session = _session;
+    if (session == null) {
+      return const Problem(ProblemKind.notNow, 'no wallet is open');
+    }
+    final address = session.address;
+    final library = _paths.coreLibrary;
+    return Isolate.run(
+      () => VeilSession.fromAddress(
+        VeilCore.open(library),
+        address,
+      ).changePassword(old, next),
+    );
+  }
+
+  @override
+  Future<void> removeWallet() async {
+    await close();
+    final dir = Directory(_paths.walletDir);
+    if (await dir.exists()) await dir.delete(recursive: true);
   }
 
   @override

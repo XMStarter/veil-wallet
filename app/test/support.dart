@@ -68,6 +68,7 @@ class FakeBackend implements WalletBackend {
     String? locked,
     ReceiveAddress? address,
     List<Transfer>? history,
+    List<String>? ownNodes,
     SendStatus? send,
     bool? rebuilt,
     Problem? lastProblem,
@@ -79,6 +80,7 @@ class FakeBackend implements WalletBackend {
       phaseProblem: null,
       tor: tor ?? now.tor,
       node: null,
+      ownNodes: ownNodes ?? now.ownNodes,
       sync: sync ?? now.sync,
       syncsEnded: now.syncsEnded,
       balanceTotal: total ?? now.balanceTotal,
@@ -106,8 +108,19 @@ class FakeBackend implements WalletBackend {
     required String password,
     String? phrase,
     int? restoreHeight,
+    bool withoutBridges = false,
   }) async {
-    calls.add('start ${source.name}');
+    calls.add(
+      'start ${source.name}${withoutBridges ? ' without bridges' : ''}',
+    );
+    // Bridges whose program has gone missing keep Tor from starting.
+    if (!withoutBridges &&
+        bridgesBroken &&
+        _settings.value.bridges.isNotEmpty) {
+      throw const StartFailure(
+        Problem(ProblemKind.transportMissing, 'no program for obfs4'),
+      );
+    }
     final failure = failNext;
     failNext = null;
     if (failure != null) throw StartFailure(failure);
@@ -123,6 +136,75 @@ class FakeBackend implements WalletBackend {
     hasWallet = true;
     if (source == WalletSource.restore) confirmed = true;
     _state.value = _newSession(++_revision);
+  }
+
+  /// Whether the bridges in the settings have stopped working.
+  bool bridgesBroken = false;
+  final _settings = ValueNotifier<AppSettings>(const AppSettings());
+
+  @override
+  ValueListenable<AppSettings> get settings => _settings;
+
+  @override
+  Future<void> loadSettings() async {}
+
+  @override
+  Future<void> saveSettings(AppSettings settings) async {
+    calls.add('save settings');
+    _settings.value = settings;
+  }
+
+  @override
+  Problem? checkBridges(List<String> lines) {
+    for (final (number, line) in lines.indexed) {
+      // The pretended core knows two transports and a plain bridge.
+      final first = line.split(' ').first;
+      if (first == 'snowflake') {
+        return const Problem(
+          ProblemKind.transportMissing,
+          'none of its programs (snowflake-client) is installed',
+        );
+      }
+      if (first != 'obfs4' && !first.contains(':')) {
+        return Problem(
+          ProblemKind.invalidBridge,
+          'bridge line ${number + 1} is not a bridge',
+        );
+      }
+    }
+    return null;
+  }
+
+  @override
+  Problem? setNodes(List<String> nodes) {
+    calls.add('set nodes ${nodes.join(',')}');
+    if (nodes.any((node) => !node.contains('.onion:'))) {
+      return const Problem(ProblemKind.invalidNode, 'not a node');
+    }
+    report(ownNodes: nodes);
+    return null;
+  }
+
+  @override
+  Future<bool?> isPassword(String password) async =>
+      _state.value == null ? null : password == this.password;
+
+  @override
+  Future<Problem?> changePassword(String old, String next) async {
+    calls.add('change password');
+    if (old != password) {
+      return const Problem(ProblemKind.wrongPassword, 'wrong password');
+    }
+    password = next;
+    return null;
+  }
+
+  @override
+  Future<void> removeWallet() async {
+    calls.add('remove wallet');
+    _state.value = null;
+    hasWallet = false;
+    confirmed = false;
   }
 
   @override
@@ -259,6 +341,7 @@ SessionState _newSession(int revision) => SessionState(
   phaseProblem: null,
   tor: const TorStatus(TorState.bootstrapping, 15, null),
   node: null,
+  ownNodes: const [],
   sync: const SyncStatus(SyncPhase.notYet),
   syncsEnded: 0,
   balanceTotal: '0.00',

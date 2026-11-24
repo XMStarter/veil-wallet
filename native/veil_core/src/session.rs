@@ -32,7 +32,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Condvar, Mutex, OnceLock};
 use std::thread::JoinHandle;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use veil_tor::{State, Status, TorConfig, TorService, Transport};
 use veil_wallet::{
@@ -106,6 +106,10 @@ pub enum ProblemKind {
     InvalidAmount,
     /// A node is not written as `host.onion:port`.
     InvalidNode,
+    /// A bridge line is not one.
+    InvalidBridge,
+    /// The bridges need a transport that no installed program speaks.
+    TransportMissing,
     /// The amount to send is zero.
     ZeroAmount,
     /// The wallet cannot pay the amount and its fee from what can be spent
@@ -252,6 +256,11 @@ pub struct SessionState {
     pub tor: Status,
     /// The node synchronised with last.
     pub node: Option<OnionNode>,
+    /// The user's own nodes, in the order to try them. Empty while the
+    /// nodes the session was started with are used. Kept in the wallet's
+    /// data file, encrypted with the rest: which node somebody uses is
+    /// nobody else's business.
+    pub own_nodes: Vec<OnionNode>,
     pub sync: SyncState,
     /// How many synchronisations have ended since the session started,
     /// whatever their outcome.
@@ -286,10 +295,20 @@ pub struct Session {
 enum Command {
     Sync,
     NewAddress,
-    PrepareSend { to: String, amount: SendAmount },
+    PrepareSend {
+        to: String,
+        amount: SendAmount,
+    },
     ConfirmSend,
     CancelSend,
     Phrase(Sender<Result<SeedPhrase, Problem>>),
+    CheckPassword(Zeroizing<String>, Sender<Result<bool, Problem>>),
+    ChangePassword {
+        old: Zeroizing<String>,
+        new: Zeroizing<String>,
+        reply: Sender<Result<(), Problem>>,
+    },
+    SetNodes(Vec<OnionNode>),
     Close,
 }
 
@@ -403,6 +422,7 @@ impl Session {
                     message: None,
                 },
                 node: None,
+                own_nodes: Vec::new(),
                 sync: SyncState::NotYet,
                 syncs_ended: 0,
                 balance: Balance {
@@ -503,9 +523,41 @@ impl Session {
     pub fn recovery_phrase(&self) -> Result<SeedPhrase, Problem> {
         let (reply, answer) = mpsc::channel();
         self.send(Command::Phrase(reply));
-        answer
-            .recv()
-            .unwrap_or_else(|_| Err(Problem::new(ProblemKind::NotNow, "the session has ended")))
+        answer.recv().unwrap_or_else(|_| Err(session_ended()))
+    }
+
+    /// Whether `password` is the wallet's password: asked before the
+    /// recovery phrase is shown again or the wallet is removed. Waits for
+    /// the session's thread, like [`Session::recovery_phrase`].
+    pub fn is_password(&self, password: &str) -> Result<bool, Problem> {
+        let (reply, answer) = mpsc::channel();
+        self.send(Command::CheckPassword(
+            Zeroizing::new(password.to_owned()),
+            reply,
+        ));
+        answer.recv().unwrap_or_else(|_| Err(session_ended()))
+    }
+
+    /// Gives the wallet the password `new`, if `old` is its password now;
+    /// otherwise fails with [`ProblemKind::WrongPassword`] and changes
+    /// nothing. Waits for the session's thread.
+    pub fn change_password(&self, old: &str, new: &str) -> Result<(), Problem> {
+        let (reply, answer) = mpsc::channel();
+        self.send(Command::ChangePassword {
+            old: Zeroizing::new(old.to_owned()),
+            new: Zeroizing::new(new.to_owned()),
+            reply,
+        });
+        answer.recv().unwrap_or_else(|_| Err(session_ended()))
+    }
+
+    /// Uses the user's own nodes from now on, in the order given, and
+    /// keeps them in the wallet for the sessions to come; an empty list
+    /// goes back to the nodes of [`SessionConfig::nodes`]. A
+    /// synchronisation under way is dropped and a new one begins.
+    /// [`SessionState::own_nodes`] shows what is in force.
+    pub fn set_nodes(&self, nodes: Vec<OnionNode>) {
+        self.send(Command::SetNodes(nodes));
     }
 
     /// Saves and closes the wallet and stops Tor. Returns the last state:
@@ -541,6 +593,11 @@ impl Drop for Session {
     }
 }
 
+/// What a call that waits for the session's thread gets when there is none.
+fn session_ended() -> Problem {
+    Problem::new(ProblemKind::NotNow, "the session has ended")
+}
+
 /// The session's thread, from opening the wallet to closing it.
 fn run(
     config: SessionConfig,
@@ -560,6 +617,19 @@ fn run(
         }
     };
     drop(password);
+    // The user's own nodes, if the wallet has any on record, take the
+    // place of the ones the session was started with.
+    let mut nodes = config.nodes.clone();
+    let own = own_nodes(&core);
+    if !own.is_empty() {
+        match nodes_for(&own).and_then(|chosen| Ok(core.set_nodes(chosen)?)) {
+            Ok(()) => {
+                nodes = own.clone();
+                shared.update(|state| state.own_nodes = own);
+            }
+            Err(problem) => shared.update(|state| state.last_problem = Some(problem)),
+        }
+    }
     let rebuilt = core.was_rebuilt_from_keys();
     publish_wallet(&mut core, shared);
     shared.update(|state| {
@@ -577,8 +647,17 @@ fn run(
     // A send asked for while a synchronisation was owed. It is built when
     // that has ended, so never from a wallet that knows half the chain.
     let mut waiting_send: Option<(String, SendAmount)> = None;
-    // A send whose outcome is unknown, until it is found or cleared.
-    let mut unknown: Option<UnknownSend> = None;
+    // A send whose outcome is unknown, until it is found or cleared. One
+    // left by an earlier session is taken up again.
+    let mut unknown = UnknownSend::remembered(&core);
+    if let Some(send) = &unknown {
+        shared.update(|state| {
+            state.send = SendState::OutcomeUnknown {
+                txids: send.txids.clone(),
+                settled: false,
+            }
+        });
+    }
     // When the synchronisation under way, or the last one, began.
     let mut sync_began = Instant::now();
     loop {
@@ -592,7 +671,7 @@ fn run(
         if matches!(
             command,
             Ok(Command::Sync | Command::NewAddress | Command::PrepareSend { .. })
-                | Ok(Command::ConfirmSend | Command::CancelSend)
+                | Ok(Command::ConfirmSend | Command::CancelSend | Command::SetNodes(_))
         ) {
             shared.update(|state| state.last_problem = None);
         }
@@ -610,14 +689,17 @@ fn run(
                 if unknown.as_ref().is_some_and(|send| !send.settled) {
                     shared.update(|state| state.last_problem = Some(outcome_not_known()));
                 } else if sync_owed {
-                    unknown = None;
+                    forget(&mut unknown, &mut core, shared);
                     shared.update(|state| state.send = SendState::Preparing);
                     waiting_send = Some((to, amount));
                 } else {
+                    forget(&mut unknown, &mut core, shared);
                     match review(&mut core, &to, amount, shared, inbox) {
                         AfterReview::Close => break,
-                        AfterReview::Continue => unknown = None,
-                        AfterReview::Unknown(txids) => unknown = Some(UnknownSend::new(txids)),
+                        AfterReview::Continue => {}
+                        AfterReview::Unknown(txids) => {
+                            unknown = Some(UnknownSend::remember(txids, &mut core, shared));
+                        }
                     }
                 }
             }
@@ -631,13 +713,48 @@ fn run(
                 if unknown.as_ref().is_some_and(|send| !send.settled) {
                     shared.update(|state| state.last_problem = Some(outcome_not_known()));
                 } else {
-                    unknown = None;
+                    forget(&mut unknown, &mut core, shared);
                     waiting_send = None;
                     shared.update(|state| state.send = SendState::Idle);
                 }
             }
             Ok(Command::Phrase(reply)) => {
                 let _ = reply.send(core.seed_phrase().map_err(Problem::from));
+            }
+            Ok(Command::CheckPassword(password, reply)) => {
+                let _ = reply.send(Ok(core.is_password(&password)));
+            }
+            Ok(Command::ChangePassword { old, new, reply }) => {
+                let changed = if core.is_password(&old) {
+                    core.change_password(&new).map_err(Problem::from)
+                } else {
+                    Err(Problem::new(
+                        ProblemKind::WrongPassword,
+                        "the old password is not the wallet's password",
+                    ))
+                };
+                let _ = reply.send(changed);
+            }
+            Ok(Command::SetNodes(own)) => {
+                let chosen = if own.is_empty() {
+                    config.nodes.clone()
+                } else {
+                    own.clone()
+                };
+                let set = nodes_for(&chosen)
+                    .and_then(|pair| Ok(core.set_nodes(pair)?))
+                    .and_then(|()| Ok(core.set_note(OWN_NODES_NOTE, &node_list(&own))?));
+                match set {
+                    Ok(()) => {
+                        nodes = chosen;
+                        save(&mut core, shared);
+                        shared.update(|state| state.own_nodes = own);
+                        // Whatever was under way was with the old nodes.
+                        interrupted = None;
+                        sync_owed = true;
+                    }
+                    Err(problem) => shared.update(|state| state.last_problem = Some(problem)),
+                }
             }
             Err(RecvTimeoutError::Timeout) => {}
         }
@@ -660,7 +777,7 @@ fn run(
         }
         interrupted = sync(
             &mut core,
-            &config,
+            &nodes,
             shared,
             save_every,
             interrupted.take(),
@@ -674,13 +791,15 @@ fn run(
         sync_owed = false;
         last_sync = Some(Instant::now());
         if unknown.as_ref().is_some_and(|send| send.found) {
-            unknown = None;
+            forget(&mut unknown, &mut core, shared);
         }
         if let Some((to, amount)) = waiting_send.take() {
             match review(&mut core, &to, amount, shared, inbox) {
                 AfterReview::Close => break,
-                AfterReview::Continue => unknown = None,
-                AfterReview::Unknown(txids) => unknown = Some(UnknownSend::new(txids)),
+                AfterReview::Continue => {}
+                AfterReview::Unknown(txids) => {
+                    unknown = Some(UnknownSend::remember(txids, &mut core, shared));
+                }
             }
         }
     }
@@ -726,21 +845,50 @@ fn open(
         WalletSource::Open => Wallet::open(&lib, path, password, config.network)?,
     };
     (hooks.wallet)(&mut wallet);
-    let nodes = match config.nodes.as_slice() {
-        [] => {
-            return Err(Problem::new(
-                ProblemKind::NoNode,
-                "the session was given no node",
-            ))
-        }
-        [only] => Nodes::single(only.clone()),
-        [first, rest @ ..] => match rest.iter().find(|node| node.host() != first.host()) {
-            Some(other) => Nodes::separate(first.clone(), other.clone())?,
-            None => Nodes::single(first.clone()),
-        },
-    };
+    let nodes = nodes_for(&config.nodes)?;
     let transport = (hooks.transport)(config.tor.clone())?;
     Ok(Core::with_transport(transport, wallet, nodes)?)
+}
+
+/// Where the wallet keeps the user's own nodes: in its data file, as
+/// `host.onion:port` separated by commas.
+const OWN_NODES_NOTE: &str = "veil.nodes";
+
+fn node_list(nodes: &[OnionNode]) -> String {
+    nodes
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+/// The user's own nodes as the wallet has them on record; none if there
+/// is no record or it cannot be read as nodes.
+fn own_nodes(core: &Core) -> Vec<OnionNode> {
+    let Ok(note) = core.note(OWN_NODES_NOTE) else {
+        return Vec::new();
+    };
+    note.split(',')
+        .filter(|node| !node.is_empty())
+        .map(str::parse)
+        .collect::<Result<Vec<OnionNode>, _>>()
+        .unwrap_or_default()
+}
+
+/// The nodes a core starts on, given the list to try in order: the first
+/// synchronises, and the first after it that is another service broadcasts.
+fn nodes_for(list: &[OnionNode]) -> Result<Nodes, Problem> {
+    match list {
+        [] => Err(Problem::new(
+            ProblemKind::NoNode,
+            "the session was given no node",
+        )),
+        [only] => Ok(Nodes::single(only.clone())),
+        [first, rest @ ..] => match rest.iter().find(|node| node.host() != first.host()) {
+            Some(other) => Ok(Nodes::separate(first.clone(), other.clone())?),
+            None => Ok(Nodes::single(first.clone())),
+        },
+    }
 }
 
 /// Copies what the wallet knows into the state.
@@ -781,7 +929,7 @@ fn save(core: &mut Core, shared: &Shared) {
 /// are reported in one change of the state.
 fn sync(
     core: &mut Core,
-    config: &SessionConfig,
+    candidates: &[OnionNode],
     shared: &Shared,
     save_every: Duration,
     interrupted: Option<SyncAttempt>,
@@ -789,7 +937,7 @@ fn sync(
 ) -> Option<SyncAttempt> {
     let mut attempt = interrupted.unwrap_or_else(|| {
         shared.update(|state| state.sync = SyncState::Running { progress: None });
-        SyncAttempt::through(&config.nodes)
+        SyncAttempt::through(candidates)
     });
     let outcome = loop {
         // The clock for saving starts with the first blocks of this
@@ -858,14 +1006,58 @@ struct UnknownSend {
     found: bool,
 }
 
+/// Where the wallet keeps a send whose outcome is unknown: in its data
+/// file, encrypted with the rest, as the time of the attempt in seconds
+/// since 1970 and the transaction ids.
+const UNKNOWN_SEND_NOTE: &str = "veil.unknown_send";
+
 impl UnknownSend {
-    fn new(txids: Vec<String>) -> UnknownSend {
+    /// Takes note of a send whose outcome is unknown, in memory and in the
+    /// wallet, so that closing the app does not make the wallet forget
+    /// that a payment may be on its way. The caller saves the wallet.
+    fn remember(txids: Vec<String>, core: &mut Core, shared: &Shared) -> UnknownSend {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |since| since.as_secs());
+        let note = format!("{now} {}", txids.join(","));
+        if let Err(error) = core.set_note(UNKNOWN_SEND_NOTE, &note) {
+            shared.update(|state| state.last_problem = Some(error.into()));
+        }
         UnknownSend {
             txids,
             since: Instant::now(),
             settled: false,
             found: false,
         }
+    }
+
+    /// The send an earlier session left in the wallet, if any. It counts
+    /// as old as the clock says it is; if the clock makes no sense of it,
+    /// as new.
+    fn remembered(core: &Core) -> Option<UnknownSend> {
+        let note = core.note(UNKNOWN_SEND_NOTE).ok()?;
+        let (at, ids) = note.split_once(' ')?;
+        let at: u64 = at.parse().ok()?;
+        let txids: Vec<String> = ids
+            .split(',')
+            .filter(|id| !id.is_empty() && id.bytes().all(|b| b.is_ascii_hexdigit()))
+            .map(str::to_owned)
+            .collect();
+        if txids.is_empty() {
+            return None;
+        }
+        let age = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .ok()
+            .and_then(|now| now.as_secs().checked_sub(at))
+            .map_or(Duration::ZERO, Duration::from_secs);
+        let now = Instant::now();
+        Some(UnknownSend {
+            txids,
+            since: now.checked_sub(age).unwrap_or(now),
+            settled: false,
+            found: false,
+        })
     }
 
     /// Looks at the history a synchronisation has just left in `state`,
@@ -908,6 +1100,18 @@ impl UnknownSend {
     }
 }
 
+/// Lets go of a send whose outcome was unknown, in memory and in the
+/// wallet, and saves the wallet. Does nothing if there is none.
+fn forget(unknown: &mut Option<UnknownSend>, core: &mut Core, shared: &Shared) {
+    if unknown.take().is_none() {
+        return;
+    }
+    if let Err(error) = core.set_note(UNKNOWN_SEND_NOTE, "") {
+        shared.update(|state| state.last_problem = Some(error.into()));
+    }
+    save(core, shared);
+}
+
 /// Why a send is neither built nor cleared while the last one's outcome is
 /// unknown.
 fn outcome_not_known() -> Problem {
@@ -915,6 +1119,11 @@ fn outcome_not_known() -> Problem {
         ProblemKind::NotNow,
         "the outcome of the last send is not known yet",
     )
+}
+
+/// Why nothing else is done while a transaction is held for review.
+fn under_review() -> Problem {
+    Problem::new(ProblemKind::NotNow, "a transaction is under review")
 }
 
 #[derive(PartialEq, Eq)]
@@ -1013,12 +1222,20 @@ fn hold_for_review(
             }
             Ok(Command::Close) | Err(_) => return AfterReview::Close,
             Ok(Command::Phrase(reply)) => {
-                let _ = reply.send(Err(Problem::new(
-                    ProblemKind::NotNow,
-                    "a transaction is under review",
-                )));
+                let _ = reply.send(Err(under_review()));
             }
-            Ok(Command::Sync | Command::NewAddress | Command::PrepareSend { .. }) => {
+            Ok(Command::CheckPassword(_, reply)) => {
+                let _ = reply.send(Err(under_review()));
+            }
+            Ok(Command::ChangePassword { reply, .. }) => {
+                let _ = reply.send(Err(under_review()));
+            }
+            Ok(
+                Command::Sync
+                | Command::NewAddress
+                | Command::PrepareSend { .. }
+                | Command::SetNodes(_),
+            ) => {
                 shared.update(|state| {
                     state.last_problem = Some(Problem::new(
                         ProblemKind::NotNow,

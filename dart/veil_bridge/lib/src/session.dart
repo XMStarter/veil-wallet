@@ -20,6 +20,7 @@ class SessionConfig {
     required this.torCacheDir,
     required this.source,
     this.nodes = const [],
+    this.bridges = const [],
     this.restoreHeight,
     this.syncEvery,
   });
@@ -37,6 +38,10 @@ class SessionConfig {
   /// The user's own nodes, as `host.onion:port`, in the order to try them.
   /// Empty: the public stagenet nodes, in an order nobody can predict.
   final List<String> nodes;
+
+  /// Bridge lines to reach Tor through, one bridge each. Empty: Tor is
+  /// connected to directly. With bridges set they are the only way in.
+  final List<String> bridges;
   final WalletSource source;
 
   /// Where scanning starts when restoring from a 25-word phrase.
@@ -53,6 +58,7 @@ class SessionConfig {
     'wallet_path': walletPath,
     'tor': {'state_dir': torStateDir, 'cache_dir': torCacheDir},
     'nodes': nodes,
+    'bridges': bridges,
     'restore_height': ?restoreHeight,
     'sync_every_seconds': ?syncEvery?.inSeconds,
   };
@@ -80,6 +86,14 @@ typedef _RevisionC = Uint64 Function(Pointer<_Handle>);
 typedef _RevisionDart = int Function(Pointer<_Handle>);
 typedef _TextOf = Pointer<Utf8> Function(Pointer<_Handle>);
 typedef _CommandC = Pointer<Utf8> Function(Pointer<_Handle>, Pointer<Utf8>);
+typedef _CheckC = Pointer<Utf8> Function(Pointer<Utf8>);
+typedef _IsPasswordC = Int32 Function(Pointer<_Handle>, Pointer<Utf8>);
+typedef _IsPasswordDart = int Function(Pointer<_Handle>, Pointer<Utf8>);
+typedef _ChangePasswordC = Pointer<Utf8> Function(
+  Pointer<_Handle>,
+  Pointer<Utf8>,
+  Pointer<Utf8>,
+);
 typedef _FreeC = Void Function(Pointer<Utf8>);
 typedef _FreeDart = void Function(Pointer<Utf8>);
 
@@ -100,6 +114,16 @@ class VeilCore {
       _phrase = library.lookupFunction<_TextOf, _TextOf>(
         'veil_session_recovery_phrase',
       ),
+      _checkBridges = library.lookupFunction<_CheckC, _CheckC>(
+        'veil_check_bridges',
+      ),
+      _isPassword = library.lookupFunction<_IsPasswordC, _IsPasswordDart>(
+        'veil_session_is_password',
+      ),
+      _changePassword = library
+          .lookupFunction<_ChangePasswordC, _ChangePasswordC>(
+            'veil_session_change_password',
+          ),
       _close = library.lookupFunction<_TextOf, _TextOf>('veil_session_close'),
       _freeText = library.lookupFunction<_FreeC, _FreeDart>('veil_string_free'),
       _freeSecret = library.lookupFunction<_FreeC, _FreeDart>(
@@ -111,6 +135,9 @@ class VeilCore {
   final _TextOf _state;
   final _CommandC _command;
   final _TextOf _phrase;
+  final _CheckC _checkBridges;
+  final _IsPasswordDart _isPassword;
+  final _ChangePasswordC _changePassword;
   final _TextOf _close;
   final _FreeDart _freeText;
   final _FreeDart _freeSecret;
@@ -144,6 +171,19 @@ class VeilCore {
     }
   }
 
+  /// Checks bridge lines without starting anything. Null if every line is
+  /// a bridge and a program is installed for every transport they need;
+  /// otherwise the problem, of the kind [ProblemKind.invalidBridge] or
+  /// [ProblemKind.transportMissing].
+  Problem? checkBridges(List<String> lines) {
+    final request = jsonEncode({'bridges': lines}).toNativeUtf8();
+    try {
+      return _takeProblem(_checkBridges(request));
+    } finally {
+      calloc.free(request);
+    }
+  }
+
   /// Overwrites a secret this side copied for the call, then frees it.
   void _wipe(Pointer<Utf8> secret) {
     final bytes = secret.cast<Uint8>();
@@ -172,11 +212,11 @@ class VeilCore {
 /// A wallet running on a thread of the native library.
 ///
 /// Commands return at once; what came of them shows in [state]. Reading
-/// the state never waits for the network. [recoveryPhrase] and [close] do
-/// wait, for the session's thread: for the end of a synchronisation if one
-/// is running. An app calls them off its main isolate; [address] is what
-/// to send to another isolate, and [VeilSession.fromAddress] takes it
-/// there.
+/// the state never waits for the network. [recoveryPhrase], [isPassword],
+/// [changePassword] and [close] do wait, for the session's thread, which
+/// stops a synchronisation for them, normally within seconds. An app calls
+/// them off its main isolate; [address] is what to send to another
+/// isolate, and [VeilSession.fromAddress] takes it there.
 class VeilSession {
   VeilSession._(this._core, this._handle);
 
@@ -221,6 +261,45 @@ class VeilSession {
   /// Drops the transaction under review, or clears the outcome of the last
   /// send from the state.
   void cancelSend() => _send({'command': 'cancel_send'});
+
+  /// Uses the user's own nodes, as `host.onion:port` in the order to try
+  /// them, and keeps them in the wallet; an empty list goes back to the
+  /// nodes the session was started with. What is in force shows in the
+  /// state's `ownNodes`.
+  ///
+  /// Throws a [VeilException] at once if one of them is not a node.
+  void setNodes(List<String> nodes) =>
+      _send({'command': 'set_nodes', 'nodes': nodes});
+
+  /// Whether [password] is the wallet's password; null if that cannot be
+  /// said now.
+  bool? isPassword(String password) {
+    final passwordC = password.toNativeUtf8();
+    try {
+      return switch (_core._isPassword(_handle, passwordC)) {
+        1 => true,
+        0 => false,
+        _ => null,
+      };
+    } finally {
+      _core._wipe(passwordC);
+    }
+  }
+
+  /// Gives the wallet the password [next], if [old] is its password now.
+  /// Returns null when it is changed; otherwise the problem, of the kind
+  /// [ProblemKind.wrongPassword] when [old] is not the password, and
+  /// nothing is changed.
+  Problem? changePassword(String old, String next) {
+    final oldC = old.toNativeUtf8();
+    final nextC = next.toNativeUtf8();
+    try {
+      return _core._takeProblem(_core._changePassword(_handle, oldC, nextC));
+    } finally {
+      _core._wipe(oldC);
+      _core._wipe(nextC);
+    }
+  }
 
   /// The wallet's recovery phrase, or null if it cannot be given now.
   String? recoveryPhrase() {

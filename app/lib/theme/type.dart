@@ -1,4 +1,4 @@
-import 'package:flutter/painting.dart';
+import 'package:flutter/widgets.dart';
 
 import 'colors.dart';
 
@@ -17,7 +17,22 @@ abstract final class VeilFonts {
 /// Lining, tabular figures, for everything that shows a number.
 const _figures = [FontFeature.liningFigures(), FontFeature.tabularFigures()];
 
+/// The styles carry no colour of their own: text is drawn in the theme's
+/// ink unless a screen says otherwise, and what is to be quieter than that
+/// asks for it with one of the `...In` methods, which know the theme.
 abstract final class VeilText {
+  /// [secondary] in the muted colour of the theme in force.
+  static TextStyle secondaryIn(BuildContext context) =>
+      secondary.copyWith(color: VeilPalette.of(context).muted);
+
+  /// [heading] in the muted colour of the theme in force.
+  static TextStyle headingIn(BuildContext context) =>
+      heading.copyWith(color: VeilPalette.of(context).muted);
+
+  /// [addressMiddle] in the muted colour of the theme in force.
+  static TextStyle addressMiddleIn(BuildContext context) =>
+      addressMiddle.copyWith(color: VeilPalette.of(context).muted);
+
   /// A screen title: uppercase by the caller, widely spaced.
   static const title = TextStyle(
     fontFamily: VeilFonts.display,
@@ -25,7 +40,6 @@ abstract final class VeilText {
     fontVariations: [FontVariation('wght', 500)],
     letterSpacing: 5,
     height: 1.2,
-    color: VeilColors.ink,
     fontFeatures: _figures,
   );
 
@@ -35,7 +49,6 @@ abstract final class VeilText {
     fontSize: 40,
     fontVariations: [FontVariation('wght', 500)],
     height: 1.1,
-    color: VeilColors.ink,
     fontFeatures: _figures,
   );
 
@@ -44,7 +57,6 @@ abstract final class VeilText {
     fontSize: 16,
     fontVariations: [FontVariation('wght', 400)],
     height: 1.4,
-    color: VeilColors.ink,
     fontFeatures: _figures,
   );
 
@@ -53,7 +65,6 @@ abstract final class VeilText {
     fontSize: 14,
     fontVariations: [FontVariation('wght', 400)],
     height: 1.4,
-    color: VeilColors.muted,
     fontFeatures: _figures,
   );
 
@@ -72,7 +83,6 @@ abstract final class VeilText {
     fontSize: 14,
     fontVariations: [FontVariation('wght', 400)],
     height: 1.5,
-    color: VeilColors.ink,
   );
 
   /// The beginning and the end of an address, which are what people
@@ -82,7 +92,6 @@ abstract final class VeilText {
     fontSize: 14,
     fontVariations: [FontVariation('wght', 700)],
     height: 1.5,
-    color: VeilColors.ink,
   );
 
   /// The middle of an address.
@@ -91,7 +100,6 @@ abstract final class VeilText {
     fontSize: 14,
     fontVariations: [FontVariation('wght', 400)],
     height: 1.5,
-    color: VeilColors.muted,
   );
 
   /// The amount of one entry in the activity list.
@@ -100,7 +108,6 @@ abstract final class VeilText {
     fontSize: 22,
     fontVariations: [FontVariation('wght', 600)],
     height: 1.2,
-    color: VeilColors.ink,
     fontFeatures: _figures,
   );
 
@@ -111,6 +118,5 @@ abstract final class VeilText {
     fontVariations: [FontVariation('wght', 500)],
     letterSpacing: 2,
     height: 1.4,
-    color: VeilColors.muted,
   );
 }

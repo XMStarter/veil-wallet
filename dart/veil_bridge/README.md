@@ -27,6 +27,9 @@ final last = session.close();
   its own.
 - A problem has a kind (`ProblemKind`) for the interface to put into its
   own words, and a detail in English for a log.
+- The password is checked and changed through calls of their own, and
+  bridges can be checked without a session. The user's own nodes are a
+  command; the wallet keeps them, and the state shows them.
 - A send under review comes with its total and with the addresses whose
   coins it spends. A send whose outcome is unknown comes with whether the
   core has settled it; the core turns it into a sent one by itself when

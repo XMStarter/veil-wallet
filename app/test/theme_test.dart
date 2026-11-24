@@ -63,6 +63,37 @@ void main() {
     },
   );
 
+  test('the dark theme keeps the same contrast with its own colours', () {
+    const dark = VeilPalette.dark;
+    for (final (text, background) in [
+      (dark.ink, dark.ground),
+      (dark.ink, dark.surface),
+      (dark.ink, dark.field),
+      (dark.muted, dark.ground),
+      (dark.muted, dark.surface),
+      // The primary button's label.
+      (dark.ground, dark.ink),
+      (dark.threadNavy, dark.ground),
+      (dark.threadCrimson, dark.ground),
+      (dark.threadCrimson, dark.surface),
+    ]) {
+      expect(
+        contrast(text, background),
+        greaterThanOrEqualTo(4.5),
+        reason: '$text on $background',
+      );
+    }
+    // The light palette is the design document's colours, by name.
+    expect(VeilPalette.light.ink, VeilColors.ink);
+    expect(VeilPalette.light.ground, VeilColors.ground);
+    final theme = veilTheme(dark: true);
+    expect(theme.brightness, Brightness.dark);
+    expect(theme.scaffoldBackgroundColor, dark.ground);
+    expect(theme.colorScheme.primary, dark.ink);
+    expect(theme.extension<VeilPalette>(), dark);
+    expect(veilTheme().extension<VeilPalette>(), VeilPalette.light);
+  });
+
   test('each role has its typeface', () {
     expect(VeilText.title.fontFamily, 'Cormorant Garamond');
     expect(VeilText.amount.fontFamily, 'Cormorant Garamond');

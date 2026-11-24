@@ -40,6 +40,8 @@ abstract final class ProblemKind {
   static const invalidAddress = 'invalid_address';
   static const invalidAmount = 'invalid_amount';
   static const invalidNode = 'invalid_node';
+  static const invalidBridge = 'invalid_bridge';
+  static const transportMissing = 'transport_missing';
   static const zeroAmount = 'zero_amount';
   static const notEnoughFunds = 'not_enough_funds';
   static const tooManyUnusedAddresses = 'too_many_unused_addresses';
@@ -58,6 +60,8 @@ abstract final class ProblemKind {
     invalidAddress,
     invalidAmount,
     invalidNode,
+    invalidBridge,
+    transportMissing,
     zeroAmount,
     notEnoughFunds,
     tooManyUnusedAddresses,
@@ -227,6 +231,7 @@ class SessionState {
     required this.phaseProblem,
     required this.tor,
     required this.node,
+    required this.ownNodes,
     required this.sync,
     required this.syncsEnded,
     required this.balanceTotal,
@@ -249,6 +254,10 @@ class SessionState {
 
   /// The node synchronised with last, as `host.onion:port`.
   final String? node;
+
+  /// The user's own nodes, as `host.onion:port`, in the order to try
+  /// them. Empty while the nodes the session was started with are used.
+  final List<String> ownNodes;
   final SyncStatus sync;
 
   /// How many synchronisations have ended since the session started.
@@ -294,6 +303,7 @@ class SessionState {
         tor['message'] as String?,
       ),
       node: json['node'] as String?,
+      ownNodes: (json['own_nodes'] as List<dynamic>).cast<String>(),
       sync: SyncStatus(
         _named(SyncPhase.values, sync['name'], 'state of synchronisation'),
         walletHeight: sync['wallet_height'] as int?,

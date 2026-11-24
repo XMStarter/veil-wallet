@@ -480,3 +480,81 @@ fn the_start_height_given_at_creation_or_restore_is_kept_on_disk() {
     changed.close().unwrap();
     assert_eq!(reopened_height("new"), created_at);
 }
+
+#[test]
+fn the_password_can_be_checked_and_changed() {
+    let Some(lib) = wallet_library() else { return };
+    let dir = TempDir::new("change-password");
+    let path = dir.file("w");
+    let new = "a new and longer password";
+    let (mut wallet, phrase) = Wallet::create(&lib, &path, PASSWORD, Network::Mainnet).unwrap();
+    let address = wallet.receive_address().unwrap();
+
+    // The open wallet knows its password from any other, however close.
+    assert!(wallet.is_password(PASSWORD));
+    assert!(!wallet.is_password(""));
+    assert!(!wallet.is_password(&PASSWORD[..PASSWORD.len() - 1]));
+    assert!(!wallet.is_password(&format!("{PASSWORD} ")));
+    assert!(!wallet.is_password(new));
+
+    wallet.change_password(new).unwrap();
+    assert!(wallet.is_password(new));
+    assert!(!wallet.is_password(PASSWORD));
+    wallet.close().unwrap();
+
+    // From now on only the new one opens it, and it is the same wallet.
+    match Wallet::open(&lib, &path, PASSWORD, Network::Mainnet) {
+        Err(Error::WrongPassword) => {}
+        Err(other) => panic!("unexpected error {other}"),
+        Ok(_) => panic!("the old password must not open the wallet any more"),
+    }
+    let mut reopened = Wallet::open(&lib, &path, new, Network::Mainnet).unwrap();
+    assert!(!reopened.was_rebuilt_from_keys());
+    assert!(reopened.is_password(new));
+    assert_eq!(reopened.seed_phrase().unwrap().as_str(), phrase.as_str());
+    assert_eq!(reopened.receive_address().unwrap(), address);
+}
+
+#[test]
+fn a_restored_wallet_knows_its_password_too() {
+    let Some(lib) = wallet_library() else { return };
+    let dir = TempDir::new("restored-password");
+    let (wallet, phrase) =
+        Wallet::create(&lib, &dir.file("first"), PASSWORD, Network::Mainnet).unwrap();
+    wallet.close().unwrap();
+    let restored = Wallet::restore(
+        &lib,
+        &dir.file("second"),
+        "another password",
+        Network::Mainnet,
+        &phrase,
+        0,
+    )
+    .unwrap();
+    assert!(restored.is_password("another password"));
+    assert!(!restored.is_password(PASSWORD));
+}
+
+#[test]
+fn a_note_is_kept_with_the_wallet_and_can_be_cleared() {
+    let Some(lib) = wallet_library() else { return };
+    let dir = TempDir::new("note");
+    let path = dir.file("w");
+    let (mut wallet, _) = Wallet::create(&lib, &path, PASSWORD, Network::Mainnet).unwrap();
+    assert_eq!(wallet.note("veil.test").unwrap(), "");
+    wallet.set_note("veil.test", "1795400000 abc,def").unwrap();
+    assert_eq!(wallet.note("veil.test").unwrap(), "1795400000 abc,def");
+    wallet.close().unwrap();
+
+    // It is in the data file, which is encrypted: not readable from outside.
+    let on_disk = std::fs::read(&path).unwrap();
+    assert!(!on_disk.windows(7).any(|window| window == b"abc,def"));
+
+    let mut reopened = Wallet::open(&lib, &path, PASSWORD, Network::Mainnet).unwrap();
+    assert_eq!(reopened.note("veil.test").unwrap(), "1795400000 abc,def");
+    assert_eq!(reopened.note("veil.other").unwrap(), "");
+    reopened.set_note("veil.test", "").unwrap();
+    reopened.close().unwrap();
+    let reopened = Wallet::open(&lib, &path, PASSWORD, Network::Mainnet).unwrap();
+    assert_eq!(reopened.note("veil.test").unwrap(), "");
+}

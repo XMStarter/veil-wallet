@@ -18,6 +18,13 @@ String problemWords(AppLocalizations text, Problem problem) {
     ProblemKind.zeroAmount => text.problemZeroAmount,
     ProblemKind.notEnoughFunds => text.problemNotEnoughFunds,
     ProblemKind.notNow => text.problemNotNow,
+    ProblemKind.invalidNode => text.problemInvalidNode,
+    // The core says which line, or which program; in English, but it is
+    // what the user needs to put it right.
+    ProblemKind.invalidBridge =>
+      '${text.problemInvalidBridge} ${text.problemDetail(problem.detail)}',
+    ProblemKind.transportMissing =>
+      '${text.problemTransportMissing} ${text.problemDetail(problem.detail)}',
     libraryMissing =>
       '${text.problemLibraryMissing} ${text.problemDetail(problem.detail)}',
     _ => '${text.problemOther} ${text.problemDetail(problem.detail)}',

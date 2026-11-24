@@ -1,6 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:veil_bridge/veil_bridge.dart';
 
+import 'settings.dart';
+
+export 'settings.dart' show AppSettings;
+
 export 'package:veil_bridge/veil_bridge.dart'
     show
         Direction,
@@ -43,12 +47,49 @@ abstract class WalletBackend {
   /// connected, and again and again while it is open.
   ///
   /// [phrase] and [restoreHeight] are for [WalletSource.restore].
+  /// [withoutBridges] leaves the bridges in the settings aside for this
+  /// once: the way in when they have stopped working.
   Future<void> start(
     WalletSource source, {
     required String password,
     String? phrase,
     int? restoreHeight,
+    bool withoutBridges = false,
   });
+
+  /// How the app is set to behave. Loaded by [loadSettings].
+  ValueListenable<AppSettings> get settings;
+
+  /// Reads the settings from where they are kept. Called once, at the
+  /// start.
+  Future<void> loadSettings();
+
+  /// Keeps [settings] and puts them into force. Bridges take effect the
+  /// next time a wallet is opened.
+  Future<void> saveSettings(AppSettings settings);
+
+  /// Checks bridge lines without starting anything. Null if they can be
+  /// used; otherwise the reason they cannot.
+  Problem? checkBridges(List<String> lines);
+
+  /// Uses the user's own nodes, as `host.onion:port` in the order to try
+  /// them, and has the wallet remember them; none goes back to the
+  /// public ones. Returns at once: what is in force appears in [state].
+  /// What is returned here is only a node that is not written as one.
+  Problem? setNodes(List<String> nodes);
+
+  /// Whether [password] is the open wallet's password; null if that
+  /// cannot be said now.
+  Future<bool?> isPassword(String password);
+
+  /// Gives the open wallet the password [next], if [old] is its password
+  /// now. Null when it is changed; otherwise the reason it is not.
+  Future<Problem?> changePassword(String old, String next);
+
+  /// Closes the wallet and removes it from this device: its keys, its
+  /// data, and what the app remembered about it. Only its recovery
+  /// phrase brings it back.
+  Future<void> removeWallet();
 
   /// The state of the open wallet; null while there is none.
   ValueListenable<SessionState?> get state;

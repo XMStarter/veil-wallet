@@ -11,9 +11,10 @@ use veil_wallet::{Amount, Balance, Direction, ReceiveAddress, SendAmount, SyncPr
 
 use super::{TempDir, BROADCAST_HOST, PASSWORD, SYNC_HOST};
 use crate::ffi::{
-    parse_command, parse_start, start_with, state_json, veil_secret_free, veil_session_close,
-    veil_session_command, veil_session_recovery_phrase, veil_session_revision, veil_session_start,
-    veil_session_state, veil_string_free, Request, VeilSession,
+    parse_command, parse_start, start_with, state_json, veil_check_bridges, veil_secret_free,
+    veil_session_change_password, veil_session_close, veil_session_command,
+    veil_session_is_password, veil_session_recovery_phrase, veil_session_revision,
+    veil_session_start, veil_session_state, veil_string_free, Request, VeilSession,
 };
 use crate::session::Hooks;
 use crate::{
@@ -149,6 +150,30 @@ fn commands_are_read_or_refused_with_a_reason() {
             amount: SendAmount::Everything,
         }
     );
+    // The user's own nodes, or none for the ones the session started with.
+    let own = serde_json::json!({
+        "command": "set_nodes",
+        "nodes": [format!("{SYNC_HOST}:38081"), format!(" {BROADCAST_HOST}:38089 ")],
+    });
+    assert_eq!(
+        read(&own.to_string()).unwrap(),
+        Request::SetNodes(vec![
+            OnionNode::new(SYNC_HOST, 38081).unwrap(),
+            OnionNode::new(BROADCAST_HOST, 38089).unwrap(),
+        ])
+    );
+    for none in [
+        r#"{"command":"set_nodes"}"#,
+        r#"{"command":"set_nodes","nodes":[]}"#,
+    ] {
+        assert_eq!(read(none).unwrap(), Request::SetNodes(Vec::new()));
+    }
+    assert_eq!(
+        read(r#"{"command":"set_nodes","nodes":["example.com:18081"]}"#)
+            .unwrap_err()
+            .kind,
+        ProblemKind::InvalidNode
+    );
     // A comma is a decimal separator too, as people type it.
     assert_eq!(
         read(r#"{"command":"prepare_send","to":"7abc","amount":"1,5"}"#).unwrap(),
@@ -197,6 +222,10 @@ fn sample_states() -> [(&'static str, SessionState); 2] {
             message: None,
         },
         node: Some(OnionNode::new(SYNC_HOST, 38089).unwrap()),
+        own_nodes: vec![
+            OnionNode::new(SYNC_HOST, 38089).unwrap(),
+            OnionNode::new(BROADCAST_HOST, 38089).unwrap(),
+        ],
         sync: SyncState::Running {
             progress: Some(SyncProgress {
                 wallet_height: 2_250_000,
@@ -260,6 +289,7 @@ fn sample_states() -> [(&'static str, SessionState); 2] {
             message: Some("the network may be blocking Tor".to_owned()),
         },
         node: None,
+        own_nodes: Vec::new(),
         sync: SyncState::Failed(problem(
             ProblemKind::TorNotReady,
             "Tor is not ready yet (45%)",
@@ -472,7 +502,122 @@ fn a_session_is_driven_through_the_interface_from_start_to_close() {
         .to_string()
         .contains(&format!("{first_word} ")));
 
+    // The password is checked and changed through calls of their own, and
+    // is in no state either.
+    let c = |text: &str| CString::new(text).unwrap();
+    let (right, wrong, new) = (c(PASSWORD), c("not the password"), c("a new password"));
+    // SAFETY: a live handle and valid strings.
+    unsafe {
+        assert_eq!(veil_session_is_password(handle, right.as_ptr()), 1);
+        assert_eq!(veil_session_is_password(handle, wrong.as_ptr()), 0);
+        assert_eq!(veil_session_is_password(handle, ptr::null()), -1);
+        assert_eq!(veil_session_is_password(ptr::null(), right.as_ptr()), -1);
+        let refused = take_json(veil_session_change_password(
+            handle,
+            wrong.as_ptr(),
+            new.as_ptr(),
+        ))
+        .unwrap();
+        assert_eq!(refused["kind"], "wrong_password");
+        assert_eq!(veil_session_is_password(handle, right.as_ptr()), 1);
+        assert!(veil_session_change_password(handle, right.as_ptr(), new.as_ptr()).is_null());
+        assert_eq!(veil_session_is_password(handle, new.as_ptr()), 1);
+        assert_eq!(veil_session_is_password(handle, right.as_ptr()), 0);
+        let refused = take_json(veil_session_change_password(
+            handle,
+            new.as_ptr(),
+            ptr::null(),
+        ))
+        .unwrap();
+        assert_eq!(refused["kind"], "bad_request");
+    }
+
+    // Nodes of the user's own are taken, and shown as in force.
+    let own = format!("{BROADCAST_HOST}:38081");
+    assert_eq!(
+        command(
+            handle,
+            serde_json::json!({"command": "set_nodes", "nodes": [own]})
+        ),
+        None
+    );
+    let state = wait(handle, |state| {
+        state["own_nodes"] == serde_json::json!([own])
+    });
+    assert_eq!(state["last_problem"], Value::Null);
+
     // SAFETY: a live handle, used by nobody else.
     let last = take_json(unsafe { veil_session_close(handle) }).unwrap();
     assert_eq!(last["phase"]["name"], "closed");
+}
+
+#[test]
+fn bridges_are_checked_before_anything_is_started() {
+    let dir = TempDir::new("ffi-bridges");
+    let with = |bridges: Value| {
+        let mut config: Value = serde_json::from_str(&config_json(&dir, "create")).unwrap();
+        config["bridges"] = bridges;
+        parse_start(&config.to_string(), None).map(|(config, _)| config.tor.bridges)
+    };
+    // None, in every way of saying so.
+    for none in [
+        Value::Null,
+        serde_json::json!([]),
+        serde_json::json!(["", "# a comment"]),
+    ] {
+        assert!(with(none).unwrap().is_empty());
+    }
+    // A bridge that needs no transport needs no program either.
+    let plain = "192.0.2.55:443 316E643333645F6D79216558614D3931657A5F5F";
+    let bridges = with(serde_json::json!([plain, "  "])).unwrap();
+    assert_eq!(bridges.lines, vec![plain.to_owned()]);
+    assert!(bridges.transports.is_empty());
+    // What is not a bridge is refused, by the number of its line and
+    // without repeating it.
+    let problem = with(serde_json::json!([plain, "not a bridge at all"])).unwrap_err();
+    assert_eq!(problem.kind, ProblemKind::InvalidBridge, "{problem:?}");
+    assert!(problem.detail.contains('2'), "{problem:?}");
+    assert!(
+        !problem.detail.contains("not a bridge at all"),
+        "{problem:?}"
+    );
+    // A transport nobody has a program for is said to be missing.
+    let unheard = format!("conjure {plain}");
+    let problem = with(serde_json::json!([unheard])).unwrap_err();
+    assert_eq!(problem.kind, ProblemKind::TransportMissing, "{problem:?}");
+    assert!(problem.detail.contains("conjure"), "{problem:?}");
+    assert_eq!(
+        with(serde_json::json!("obfs4 ...")).unwrap_err().kind,
+        ProblemKind::BadRequest
+    );
+
+    // The same check is there on its own, for a settings screen.
+    let check = |request: &str| {
+        let request = CString::new(request).unwrap();
+        // SAFETY: a valid string; the result is freed below.
+        let answer = unsafe { veil_check_bridges(request.as_ptr()) };
+        if answer.is_null() {
+            return None;
+        }
+        // SAFETY: a string this library returned.
+        let text = unsafe { CStr::from_ptr(answer) }
+            .to_str()
+            .unwrap()
+            .to_owned();
+        // SAFETY: returned by this library, freed once.
+        unsafe { veil_string_free(answer) };
+        Some(serde_json::from_str::<Value>(&text).unwrap())
+    };
+    assert_eq!(
+        check(&serde_json::json!({ "bridges": [plain] }).to_string()),
+        None
+    );
+    assert_eq!(check("{}"), None);
+    let refused = check(&serde_json::json!({ "bridges": ["nonsense"] }).to_string()).unwrap();
+    assert_eq!(refused["kind"], "invalid_bridge");
+    let refused = check(&serde_json::json!({ "bridges": [unheard] }).to_string()).unwrap();
+    assert_eq!(refused["kind"], "transport_missing");
+    assert_eq!(check("not json").unwrap()["kind"], "bad_request");
+    // SAFETY: null is allowed.
+    assert!(!unsafe { veil_check_bridges(std::ptr::null()) }.is_null());
 }

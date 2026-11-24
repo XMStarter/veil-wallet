@@ -97,7 +97,9 @@ if, at build time, Arti cannot run bridges on Android.
   after the attempt still does not show it, the wallet says that it most
   likely never went out and lets the user send again, with the warning
   that the recipient is paid twice if the first one arrives after all. It
-  never reports such a send as failed by itself.
+  never reports such a send as failed by itself. The wallet remembers
+  such a payment when the app is closed, and takes it up again the next
+  time it is opened.
 - The wallet library chooses which coins to spend and takes them from a
   single subaddress as long as that one holds enough. If coins from
   different addresses have to be combined, the review says so, because
@@ -116,14 +118,34 @@ if, at build time, Arti cannot run bridges on Android.
   approximate creation date. (For now it asks for a block number instead:
   the core cannot turn a date into a block yet.)
 - **Damaged files.** The keys are in a file of their own that is written
-  once. If the file that holds the wallet's view of the chain is damaged,
-  the wallet opens from the keys and scans the chain again.
+  when the wallet is made and again only when its password is changed. If
+  the file that holds the wallet's view of the chain is damaged, the
+  wallet opens from the keys and scans the chain again.
+- **Changing the password.** Whoever knows the current password can set a
+  new one. The keys file is written again under it, as a new file that
+  takes the old one's place, so that an interruption leaves a wallet that
+  opens with one password or the other.
+- **Removing the wallet.** The wallet can be taken off the device: its
+  keys, its data, and what the app remembered about it. It asks for the
+  password and says first that only the recovery phrase brings the wallet
+  back. The funds are not touched; they belong to whoever has the phrase.
 - **Encryption.** The wallet file is encrypted with the user's password. On
   Android, biometric unlock is available through the hardware-backed key
   store.
 - **On-device protection.** A way to lock the wallet at any time, auto-lock,
   clipboard clearing, and Android cloud backup disabled. A locked wallet
-  is closed: Tor is stopped, and only the password opens it again.
+  is closed: Tor is stopped, and only the password opens it again. The
+  wallet locks itself after five minutes without use; that can be set to
+  one, fifteen or sixty minutes, and not switched off. It does not lock in
+  the middle of a synchronisation, which a long first scan would otherwise
+  never finish, and locks as soon as that is over. The recovery phrase is
+  shown again only for the password.
+- **What the wallet remembers besides funds.** The user's own nodes and a
+  payment whose outcome is unknown are kept inside the wallet's data
+  file, encrypted with it: which node somebody uses and which
+  transaction is theirs is nobody else's business. Language, theme,
+  auto-lock and bridges are kept in a plain file: they are no secret, and
+  bridges have to be known before a wallet is open.
 
 ## Screens
 
@@ -188,7 +210,10 @@ run where is set out in [development.md](development.md).
       coins are spent, for the review; a lack of funds as a problem of its
       own kind; and the search for a transaction whose outcome is unknown.
    7. *Settings:* node, bridges, password, auto-lock, recovery phrase,
-      theme, language.
+      theme, language, and removing the wallet. With it, in the core: the
+      password checked and changed, the user's own nodes and a payment
+      whose outcome is unknown kept in the wallet, and bridges through the
+      C interface.
    8. *The app on Windows:* the build from hosted CI with the wallet library
       next to it, run on the owner's machine.
 4. **Android.** Background sync through a foreground service, battery

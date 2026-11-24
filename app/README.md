@@ -14,9 +14,11 @@ stopped, and the app asks for the password. While the wallet is open it
 synchronises by itself, a minute after the last time. Send takes an
 address and an amount, shows the transaction with its fee and total for a
 last look, and then how it went: sent, or, if the connection was lost,
-not known, which the wallet then clears up by itself. The settings come
-with build step 3.7 of [docs/concept.md](../docs/concept.md). The network
-is stagenet.
+not known, which the wallet then clears up by itself. Settings has a line
+for each thing that can be set: the user's own node, Tor bridges, the
+password, the auto-lock, the recovery phrase shown again, language, the
+light or dark theme, and the wallet taken off the device. The network is
+stagenet.
 
 The app reaches the wallet only through the core
 ([`native/veil_core`](../native/veil_core)), which it loads as a shared
@@ -31,7 +33,7 @@ connection of any kind.
 | `lib/theme` | Colours, typefaces and sizes from the design document, and the theme built from them |
 | `lib/widgets` | What screens are made of: the buttons, the single column, a notice, a field, an address in groups of four, a QR code |
 | `lib/screens` | The screens |
-| `lib/core` | What the screens need from the wallet (`backend.dart`), the real thing over the core (`core_backend.dart`), where the app keeps its files (`paths.dart`), and the handling of a typed phrase |
+| `lib/core` | What the screens need from the wallet (`backend.dart`), the real thing over the core (`core_backend.dart`), where the app keeps its files (`paths.dart`), how it is set to behave (`settings.dart`), and the handling of a typed phrase and of pasted text |
 | `lib/l10n` | The texts, in `app_en.arb` and `app_ru.arb`. `flutter pub get` writes the Dart files next to them |
 | `fonts` | Cormorant Garamond, Jost and JetBrains Mono, each one variable font file with its licence (SIL Open Font License). Nothing is fetched at runtime |
 | `assets/brand` | The logo |
@@ -40,7 +42,10 @@ connection of any kind.
 ## Rules
 
 - A colour, a typeface or a size comes from `lib/theme`, never from a
-  literal in a screen.
+  literal in a screen. A screen asks for colours with
+  `VeilPalette.of(context)`, which is the light or the dark set; text
+  styles carry no colour of their own. Only the QR code names its two
+  colours, because it is dark on white whatever the theme.
 - A text the user reads comes from the `.arb` files, in both languages.
 - A screen shows amounts and addresses as the core hands them over. It
   does not calculate with amounts.
@@ -66,8 +71,8 @@ flutter test
 ```
 
 The tests draw the screens without a display, with the app's own fonts,
-and walk the whole way to an open wallet, and through Home, Receive and
-Send, on a wallet that only pretends: no core, no files, no Tor. They also write
+and walk the whole way to an open wallet, and through Home, Receive, Send
+and Settings, on a wallet that only pretends: no core, no files, no Tor. They also write
 each screen as a picture to `build/screenshots/`, to look at without
 running the app.
 
@@ -80,6 +85,7 @@ and is skipped without it.
 | What | Linux | Windows |
 |---|---|---|
 | The wallet | `~/.local/share/veil/stagenet/` | `%APPDATA%\Veil\stagenet\` |
+| Language, theme, auto-lock, bridges | `~/.local/share/veil/settings.json` | `%APPDATA%\Veil\settings.json` |
 | Tor's files | `~/.local/share/veil/tor/` | `%APPDATA%\Veil\tor\` |
 
 The core and the Monero wallet library are looked for next to the program
@@ -108,9 +114,13 @@ stagenet nodes.
   share into.
 - Home lists the latest twenty payments and has no way to the rest.
 - Send has no way to scan a code. That is for Android.
-- A send whose outcome is unknown is forgotten when the app is closed. The
-  wallet synchronises before it builds a send after a start, which shows
-  the transaction if it went out and has spread by then.
+- New bridges take effect the next time the wallet is opened, and the
+  programs they need have to be installed on the machine; none comes with
+  the app yet. If bridges in the settings stop working, the screen that
+  asks for the password offers to open the wallet without them.
+- The auto-lock counts touches, clicks and keys. It does not lock a wallet
+  in the middle of a synchronisation.
+- Removing the wallet leaves Tor's own files and the app's settings.
 - Closing the window or locking the wallet during a synchronisation waits
   for the blocks that are on their way, normally seconds. If the node has
   gone silent it waits until the wallet library gives up on it, which

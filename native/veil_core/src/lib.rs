@@ -21,6 +21,7 @@ pub mod ffi;
 mod node;
 mod public_nodes;
 mod session;
+pub mod transports;
 
 use veil_tor::{Purpose, State, Status, TorService, Transport};
 use veil_wallet::{
@@ -380,6 +381,27 @@ impl Core {
     /// [`Wallet::set_restore_height`]: the change is not written to disk.
     pub fn set_restore_height(&mut self, height: u64) {
         self.wallet.set_restore_height(height);
+    }
+
+    /// Whether `password` is the wallet's. See [`Wallet::is_password`].
+    pub fn is_password(&self, password: &str) -> bool {
+        self.wallet.is_password(password)
+    }
+
+    /// Gives the wallet a new password. See [`Wallet::change_password`].
+    pub fn change_password(&mut self, new: &str) -> Result<(), CoreError> {
+        Ok(self.wallet.change_password(new)?)
+    }
+
+    /// A short text kept in the wallet's data file. See [`Wallet::note`].
+    pub fn note(&self, key: &str) -> Result<String, CoreError> {
+        Ok(self.wallet.note(key)?)
+    }
+
+    /// Sets the text kept under `key`; the next [`Core::save`] writes it to
+    /// disk. See [`Wallet::set_note`].
+    pub fn set_note(&mut self, key: &str, value: &str) -> Result<(), CoreError> {
+        Ok(self.wallet.set_note(key, value)?)
     }
 
     /// The wallet's recovery phrase, in the format it was created with.

@@ -87,7 +87,7 @@ that cannot lose the user's funds.
   `native/veil_core/tests/fixtures`, which both sides test against.
 - `app/`: the app, written with Flutter, for Linux and Windows first. So
   far the way to an open wallet (create, recovery phrase, restore, unlock),
-  Home, Receive, and Send.
+  Home, Receive, Send, and Settings.
   Screens talk to `WalletBackend` (`app/lib/core`), never to the core
   directly; tests use a backend that only pretends, and no test opens a
   real wallet, because that starts Tor. Read
@@ -221,8 +221,26 @@ transactions before any block and reported as sent; no other send is built
 meanwhile; a send to a node that cannot be reached is reported as unknown,
 settled by a synchronisation, and sent again, paid once. The owner
 reported that sending works in the app. Not tried: a lost connection in
-the app itself, which cannot be brought about by hand. Next is step 3.7,
-settings. Not done: the app. See the build plan in
+the app itself, which cannot be brought about by hand. Step 3.7,
+settings, is written and not yet accepted. In the app: a Settings screen
+with the user's own node, Tor bridges, the password, the auto-lock (one to
+sixty minutes, never off, and never in the middle of a synchronisation),
+the recovery phrase shown again for the password, language, a dark theme,
+and the wallet removed from the device for the password; colours now come
+from `VeilPalette.of(context)`. In the core: the password checked and
+changed (`Wallet` keeps the one it was opened with in memory, because the
+library's own copy is empty for a wallet made in the same session), the
+user's own nodes and a send whose outcome is unknown kept in the wallet's
+data file as encrypted notes, bridges through the C interface with their
+programs looked for by `veil_core::transports` (moved from `veil_cli`),
+and a check of bridge lines that starts nothing. The owner asked for the
+removal of the wallet and for the unknown send to be remembered on disk
+as part of this step. The offline tests pass in a cloud session. Not run:
+the scenario on a private chain, which now closes and reopens the session
+while the outcome of a send is unknown; the Windows build; and anything in
+the app with a real wallet, a changed password above all. Bridges changed
+in Settings take effect the next time the wallet is opened. Next after
+its acceptance is step 3.8, the app on Windows. Not done: the app. See the build plan in
 `docs/concept.md`.
 
 ## Environment notes

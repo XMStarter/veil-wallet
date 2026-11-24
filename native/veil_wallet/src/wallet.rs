@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use crate::sys::{self, c_string, SecretCString, WalletLibrary};
 use crate::{Amount, Error, SeedKind, SeedPhrase};
+use zeroize::Zeroizing;
 
 /// How many addresses may be issued in a row without any of them receiving a
 /// payment.
@@ -154,6 +155,19 @@ pub struct Wallet {
     listener: *mut c_void,
     /// See [`Wallet::was_rebuilt_from_keys`].
     rebuilt_from_keys: bool,
+    /// The password the wallet was opened with, for [`Wallet::is_password`].
+    /// Wiped when the wallet is dropped.
+    password: Zeroizing<String>,
+}
+
+/// Whether two texts are the same, taking as long for a near miss as for a
+/// far one.
+fn same_text(a: &[u8], b: &[u8]) -> bool {
+    a.len() == b.len()
+        && a.iter()
+            .zip(b)
+            .fold(0u8, |differs, (x, y)| differs | (x ^ y))
+            == 0
 }
 
 /// What the library's refusal to build a transaction means. It says in
@@ -247,6 +261,7 @@ impl Wallet {
             SeedKind::Polyseed => Self::from_polyseed(lib, path, password, network, phrase, false),
             SeedKind::Legacy => {
                 let (manager, c_path) = Self::prepare_new(lib, path)?;
+                let kept = Zeroizing::new(password.to_owned());
                 let password = SecretCString::new(password, "password")?;
                 let words = SecretCString::new(phrase.as_str(), "recovery phrase")?;
                 let offset = c_string("", "seed offset")?;
@@ -264,7 +279,7 @@ impl Wallet {
                         offset.as_ptr(),
                     )
                 };
-                Self::adopt(lib, manager, wallet, network, path)
+                Self::adopt(lib, manager, wallet, network, path, kept)
             }
         }
     }
@@ -338,6 +353,7 @@ impl Wallet {
     ) -> Result<Wallet, Error> {
         let manager = Self::manager(lib)?;
         let c_path = c_string(path_text(path)?, "wallet path")?;
+        let kept = Zeroizing::new(password.to_owned());
         let password = SecretCString::new(password, "password")?;
         // SAFETY: valid NUL-terminated strings; `manager` comes from the
         // library.
@@ -349,7 +365,7 @@ impl Wallet {
                 network.id(),
             )
         };
-        Self::adopt(lib, manager, wallet, network, path)
+        Self::adopt(lib, manager, wallet, network, path, kept)
     }
 
     fn from_polyseed(
@@ -361,6 +377,7 @@ impl Wallet {
         new_wallet: bool,
     ) -> Result<Wallet, Error> {
         let (manager, c_path) = Self::prepare_new(lib, path)?;
+        let kept = Zeroizing::new(password.to_owned());
         let password = SecretCString::new(password, "password")?;
         let words = SecretCString::new(phrase.as_str(), "recovery phrase")?;
         let passphrase = c_string("", "seed passphrase")?;
@@ -379,7 +396,7 @@ impl Wallet {
                 KDF_ROUNDS,
             )
         };
-        Self::adopt(lib, manager, wallet, network, path)
+        Self::adopt(lib, manager, wallet, network, path, kept)
     }
 
     fn manager(lib: &WalletLibrary) -> Result<*mut c_void, Error> {
@@ -428,6 +445,7 @@ impl Wallet {
         wallet: *mut c_void,
         network: Network,
         path: &Path,
+        password: Zeroizing<String>,
     ) -> Result<Wallet, Error> {
         if wallet.is_null() {
             // SAFETY: valid manager; the result is a library-owned string.
@@ -449,6 +467,7 @@ impl Wallet {
             on_sync_node: true,
             listener: std::ptr::null_mut(),
             rebuilt_from_keys: false,
+            password,
         };
         // The manager returns an object even when opening failed; the error
         // is on the object. Dropping `wallet` on the error path closes it.
@@ -499,6 +518,78 @@ impl Wallet {
 
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// Whether `password` is the wallet's password.
+    ///
+    /// It is compared with the one the wallet was opened with, which is
+    /// kept in memory for this while the wallet is open; the wallet's
+    /// keys are there as well. The keys file is not read: the library
+    /// keeps it locked, and on Windows a locked file cannot be read at
+    /// all. Nor is the library asked: the copy it keeps is empty for a
+    /// wallet that was created or restored in this session.
+    pub fn is_password(&self, password: &str) -> bool {
+        same_text(self.password.as_bytes(), password.as_bytes())
+    }
+
+    /// Gives the wallet a new password. The caller has checked the old one
+    /// with [`Wallet::is_password`].
+    ///
+    /// The library writes the keys file again under the new password, as a
+    /// new file that then takes the old one's place, so a kill in the
+    /// middle leaves a wallet that opens with one password or the other.
+    /// The data file does not depend on the password.
+    pub fn change_password(&mut self, new: &str) -> Result<(), Error> {
+        let kept = Zeroizing::new(new.to_owned());
+        let new = SecretCString::new(new, "password")?;
+        // SAFETY: live wallet object and a valid string.
+        let changed = unsafe {
+            self.lib
+                .api
+                .MONERO_Wallet_setPassword(self.wallet, new.as_ptr())
+        };
+        if !changed {
+            self.check()?;
+            return Err(Error::Wallet("the password could not be changed".into()));
+        }
+        self.password = kept;
+        Ok(())
+    }
+
+    /// A short text the wallet keeps under `key` in its data file,
+    /// encrypted like the rest of it; empty if there is none. For what
+    /// Veil has to remember about this wallet that is nobody else's
+    /// business.
+    pub fn note(&self, key: &str) -> Result<String, Error> {
+        let key = c_string(key, "note key")?;
+        // SAFETY: live wallet object and a valid string; the result is a
+        // library-owned string.
+        Ok(unsafe {
+            self.lib.take_string(
+                self.lib
+                    .api
+                    .MONERO_Wallet_getCacheAttribute(self.wallet, key.as_ptr()),
+            )
+        })
+    }
+
+    /// Sets the text kept under `key`; empty clears it. It reaches the
+    /// disk with the next [`Wallet::save`], and is lost with the data file
+    /// if the wallet ever has to be rebuilt from its keys.
+    pub fn set_note(&mut self, key: &str, value: &str) -> Result<(), Error> {
+        let key = c_string(key, "note key")?;
+        let value = c_string(value, "note")?;
+        // SAFETY: live wallet object and valid strings.
+        let set = unsafe {
+            self.lib
+                .api
+                .MONERO_Wallet_setCacheAttribute(self.wallet, key.as_ptr(), value.as_ptr())
+        };
+        if !set {
+            self.check()?;
+            return Err(Error::Wallet("the note could not be kept".into()));
+        }
+        Ok(())
     }
 
     /// The wallet's recovery phrase, in the format it was created with.

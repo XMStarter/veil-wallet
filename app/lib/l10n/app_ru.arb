@@ -33,6 +33,8 @@
   "unlockTitle": "Veil",
   "unlockAction": "Открыть кошелёк",
   "unlockWorking": "Открываем кошелёк…",
+  "unlockWithoutBridges": "Открыть без мостов",
+  "unlockBridgesNotice": "Tor не удалось запустить через мосты из настроек. Без них подключение к Tor идёт напрямую, и сеть, которая следит за Tor, это видит.",
   "homeTitle": "Кошелёк",
   "homeBalanceHide": "Скрыть баланс",
   "homeBalanceShow": "Показать баланс",
@@ -64,6 +66,7 @@
   },
   "homeReceive": "Получить",
   "homeSend": "Отправить",
+  "homeSettings": "Настройки",
   "homeUnknownNotice": "Один платёж мог уйти, а мог и не уйти. Откройте «Отправить», чтобы увидеть, что с ним.",
   "homeActivity": "Недавние операции",
   "homeNoActivity": "Платежей пока нет.",
@@ -148,6 +151,61 @@
   "unknownSettled": "Платёж так и не появился, хотя кошелёк с тех пор синхронизировался. Скорее всего, он не ушёл. Его можно отправить снова. Если первый всё же дойдёт, получатель получит оплату дважды.",
   "unknownUnderstood": "Понятно",
   "unknownBack": "Назад к кошельку",
+  "settingsTitle": "Настройки",
+  "settingsTor": "Tor",
+  "save": "Сохранить",
+  "choiceSelected": "Выбрано",
+  "settingsNode": "Узел",
+  "settingsNodePublic": "Общедоступные узлы",
+  "settingsNodeOwn": "Свой",
+  "nodeLabel": "Свои узлы, по одному в строке",
+  "nodeNotice": "Узел пишется как его onion-адрес и порт: имя.onion:38089. Свой узел — самый приватный вариант: никто посторонний не видит, что запрашивает кошелёк. Если узлов несколько, используется первый ответивший, а платежи отправляются через другой. Оставьте поле пустым, чтобы пользоваться общедоступными узлами.",
+  "settingsBridges": "Мосты Tor",
+  "settingsBridgesNone": "Нет",
+  "settingsBridgesSet": "{count, plural, one{{count} мост} few{{count} моста} many{{count} мостов} other{{count} моста}}",
+  "@settingsBridgesSet": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bridgesLabel": "Строки мостов, по одной в строке",
+  "bridgesNotice": "Мосты нужны в сетях, где Tor заблокирован. Если мосты заданы, подключение к Tor идёт только через них. Они начнут действовать при следующем открытии кошелька.",
+  "bridgesSaved": "Сохранено. Заблокируйте кошелёк и откройте его снова, чтобы подключиться через них.",
+  "settingsPassword": "Пароль",
+  "settingsPasswordChange": "Сменить",
+  "passwordOldLabel": "Текущий пароль",
+  "passwordChangeAction": "Сменить пароль",
+  "passwordChangeWorking": "Пароль меняется…",
+  "passwordChanged": "Пароль изменён.",
+  "settingsAutoLock": "Автоблокировка",
+  "autoLockAfter": "{minutes, plural, one{Через {minutes} минуту} few{Через {minutes} минуты} many{Через {minutes} минут} other{Через {minutes} минуты}}",
+  "@autoLockAfter": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "autoLockNotice": "Кошелёк блокируется сам, если им столько не пользуются и он синхронизирован: долгая первая синхронизация не прерывается.",
+  "settingsPhrase": "Фраза восстановления",
+  "settingsPhraseShow": "Показать",
+  "phraseAskPassword": "Введите пароль, чтобы увидеть фразу восстановления.",
+  "phraseShowNotice": "У кого эти слова, у того и средства. Убедитесь, что экран никто больше не видит.",
+  "settingsLanguage": "Язык",
+  "languageDevice": "Как на устройстве",
+  "languageEnglish": "English",
+  "languageRussian": "Русский",
+  "settingsTheme": "Тема",
+  "themeLight": "Светлая",
+  "themeDark": "Тёмная",
+  "settingsRemove": "Удаление кошелька",
+  "settingsRemoveValue": "С этого устройства",
+  "removeNotice": "Кошелёк удаляется с этого устройства: его ключи, история и то, что приложение о нём помнило. Средства остаются в сети и принадлежат тому, у кого фраза восстановления. Без фразы они потеряны навсегда. Прежде чем продолжить, убедитесь, что фраза у вас записана.",
+  "removeAskPassword": "Введите пароль, чтобы удалить кошелёк.",
+  "removeAction": "Удалить кошелёк",
+  "removeWorking": "Кошелёк удаляется…",
   "homeRebuilt": "Файл данных кошелька не удалось прочитать. Кошелёк открыт по ключам, они целы; средства снова появятся после синхронизации.",
   "lockAction": "Заблокировать кошелёк",
   "lockWorking": "Закрываем кошелёк…",
@@ -166,6 +224,9 @@
   "problemZeroAmount": "Сумма должна быть больше нуля.",
   "problemNotEnoughFunds": "Доступных средств не хватает. То, что ещё ожидает подтверждений, потратить нельзя, а комиссия идёт сверху.",
   "problemNotNow": "Не сейчас: кошелёк занят другим.",
+  "problemInvalidNode": "Одна из строк — не узел. Узел пишется как имя.onion:порт.",
+  "problemInvalidBridge": "Одна из строк — не мост.",
+  "problemTransportMissing": "На этом устройстве не установлена программа, которая нужна этим мостам.",
   "problemLibraryMissing": "Приложение неполное: не найдена его часть.",
   "problemOther": "Что-то пошло не так.",
   "problemDetail": "Подробности: {detail}"

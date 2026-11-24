@@ -42,6 +42,7 @@ const labels = {
     everything: 'Send everything',
     next: 'Continue',
     pay: 'Send payment',
+    settings: 'Settings',
   ),
   'ru': (
     create: 'Создать кошелёк',
@@ -58,6 +59,7 @@ const labels = {
     everything: 'Отправить всё',
     next: 'Продолжить',
     pay: 'Отправить платёж',
+    settings: 'Настройки',
   ),
 };
 
@@ -155,6 +157,41 @@ void main() {
       backend.sendEndsAs = SendPhase.outcomeUnknown;
       await press(tester, label.pay);
       await capture(tester, '12-unknown-$language');
+    });
+
+    testWidgets('settings and the dark theme, drawn ($language)', (
+      tester,
+    ) async {
+      final backend = FakeBackend(hasWallet: true, confirmed: true);
+      await pumpApp(tester, language, backend: backend);
+      await type(tester, label.password, testPassword);
+      await press(tester, label.open);
+      backend.report(
+        tor: const TorStatus(TorState.ready, 100, null),
+        sync: const SyncStatus(
+          SyncPhase.done,
+          walletHeight: 2256644,
+          nodeHeight: 2256644,
+        ),
+        total: '12.345678901234',
+        unlocked: '10.50',
+        locked: '1.845678901234',
+        history: [
+          transfer(direction: Direction.incoming, amount: '12.50'),
+          transfer(direction: Direction.outgoing, amount: '0.15'),
+        ],
+      );
+      await tester.pumpAndSettle();
+      await press(tester, label.settings);
+      await capture(tester, '13-settings-$language');
+
+      await backend.saveSettings(const AppSettings(dark: true));
+      await tester.pumpAndSettle();
+      await capture(tester, '14-settings-dark-$language');
+      await press(tester, label.back);
+      await capture(tester, '15-home-dark-$language');
+      await press(tester, label.receive);
+      await capture(tester, '16-receive-dark-$language');
     });
   }
 }
