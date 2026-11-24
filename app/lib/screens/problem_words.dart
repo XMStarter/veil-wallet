@@ -16,6 +16,7 @@ String problemWords(AppLocalizations text, Problem problem) {
     ProblemKind.invalidPhrase => text.problemInvalidPhrase,
     ProblemKind.torFailed => text.problemTorFailed,
     ProblemKind.torNotReady => text.problemTorNotReady,
+    ProblemKind.torLost => text.problemTorLost,
     ProblemKind.noNode => text.problemNoNode,
     ProblemKind.tooManyUnusedAddresses => text.problemTooManyAddresses,
     ProblemKind.invalidAddress => text.problemInvalidAddress,

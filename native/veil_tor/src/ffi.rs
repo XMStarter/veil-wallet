@@ -23,6 +23,9 @@ pub const VEIL_TOR_BOOTSTRAPPING: i32 = State::Bootstrapping as i32;
 pub const VEIL_TOR_READY: i32 = State::Ready as i32;
 /// `veil_tor_state` result: Tor failed to start, or the handle is null.
 pub const VEIL_TOR_FAILED: i32 = State::Failed as i32;
+/// `veil_tor_state` result: Tor was ready and cannot reach its network now.
+/// It goes on trying whenever a connection is asked of it.
+pub const VEIL_TOR_LOST: i32 = State::Lost as i32;
 
 /// `veil_tor_socks_port` purpose: wallet synchronisation.
 pub const VEIL_TOR_PURPOSE_SYNC: i32 = Purpose::Sync as i32;

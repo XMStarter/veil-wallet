@@ -40,6 +40,9 @@ pub trait Transport: sealed::Sealed + Send {
     fn socks_port(&self, purpose: Purpose) -> u16;
     /// Current state, progress, and any message for the user.
     fn status(&self) -> Status;
+    /// What kind of failure the last connection ended in, if it failed.
+    /// See [`TorService::last_failure`].
+    fn last_failure(&self) -> Option<String>;
 }
 
 mod sealed {
@@ -56,6 +59,10 @@ impl Transport for TorService {
     fn status(&self) -> Status {
         TorService::status(self)
     }
+
+    fn last_failure(&self) -> Option<String> {
+        TorService::last_failure(self)
+    }
 }
 
 #[cfg(feature = "stand-in")]
@@ -69,5 +76,10 @@ impl Transport for StandIn {
 
     fn status(&self) -> Status {
         StandIn::status(self)
+    }
+
+    fn last_failure(&self) -> Option<String> {
+        // The stand-in has no Arti to quote.
+        None
     }
 }

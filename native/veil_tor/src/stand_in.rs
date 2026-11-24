@@ -7,8 +7,9 @@
 //! were asked for and through which listener.
 //!
 //! It can also lose a connection on purpose, at a chosen point of the
-//! exchange ([`StandIn::cut_once`]), so that what the wallet does when Tor or
-//! a node drops away in the middle of its work can be tested without a
+//! exchange ([`StandIn::cut_once`]), and lose the network under Tor
+//! ([`StandIn::set_network`]), so that what the wallet does when Tor or a
+//! node drops away in the middle of its work can be tested without a
 //! network.
 //!
 //! It exists only with the `stand-in` feature, which no app build enables.
@@ -46,9 +47,10 @@ pub enum AfterCut {
     /// The onion service is gone: its route is removed, as if by
     /// [`StandIn::unroute`].
     NodeGone,
-    /// Tor itself has lost its connection: the stand-in stops being ready,
-    /// as if by [`StandIn::set_ready`].
-    TorNotReady,
+    /// The network under Tor is gone, as if by [`StandIn::set_network`]:
+    /// no node can be reached, and the stand-in says that Tor has lost its
+    /// network from the next connection it is asked for.
+    NetworkLost,
 }
 
 /// Where a connection is cut. Bytes are counted from the moment the cut is
@@ -117,6 +119,11 @@ impl Drop for Runner {
 
 struct Shared {
     ready: AtomicBool,
+    /// Whether there is a network under Tor.
+    network: AtomicBool,
+    /// Whether the last connection that said anything about the network
+    /// said that it is gone.
+    lost: AtomicBool,
     routes: Mutex<HashMap<(String, u16), u16>>,
     requests: Mutex<Vec<Request>>,
     cut: Mutex<Option<Cut>>,
@@ -194,7 +201,7 @@ impl Shared {
             AfterCut::NodeGone => {
                 lock(&self.routes).remove(&(cut.host.clone(), cut.port));
             }
-            AfterCut::TorNotReady => self.ready.store(false, Ordering::SeqCst),
+            AfterCut::NetworkLost => self.network.store(false, Ordering::SeqCst),
         }
         self.cuts.fetch_add(1, Ordering::SeqCst);
     }
@@ -211,6 +218,8 @@ impl StandIn {
             .build()?;
         let shared = Arc::new(Shared {
             ready: AtomicBool::new(true),
+            network: AtomicBool::new(true),
+            lost: AtomicBool::new(false),
             routes: Mutex::new(HashMap::new()),
             requests: Mutex::new(Vec::new()),
             cut: Mutex::new(None),
@@ -303,6 +312,20 @@ impl StandIn {
         self.shared.ready.store(ready, Ordering::SeqCst);
     }
 
+    /// Takes the network from under Tor, or gives it back.
+    ///
+    /// Like [`TorService`], the stand-in does not notice either by itself.
+    /// Without a network every connection asked for fails, and from the
+    /// first that does the state is [`State::Lost`]. It stays so until a
+    /// connection gets through to a node. A target without a route says
+    /// nothing either way, like the timeout a service that is not there
+    /// can end in.
+    ///
+    /// [`TorService`]: crate::TorService
+    pub fn set_network(&self, there: bool) {
+        self.shared.network.store(there, Ordering::SeqCst);
+    }
+
     /// Every onion target asked for so far, in order. Requests the listener
     /// itself refuses, such as a target that is not an onion name, never get
     /// this far and are not listed.
@@ -327,16 +350,22 @@ impl StandIn {
     ///
     /// [`TorService`]: crate::TorService
     pub fn status(&self) -> Status {
-        if self.shared.ready.load(Ordering::SeqCst) {
-            Status {
-                state: State::Ready,
-                percent: 100,
-                message: None,
-            }
-        } else {
+        if !self.shared.ready.load(Ordering::SeqCst) {
             Status {
                 state: State::Bootstrapping,
                 percent: 0,
+                message: None,
+            }
+        } else if self.shared.lost.load(Ordering::SeqCst) {
+            Status {
+                state: State::Lost,
+                percent: 100,
+                message: Some("error connecting to Tor".to_owned()),
+            }
+        } else {
+            Status {
+                state: State::Ready,
+                percent: 100,
                 message: None,
             }
         }
@@ -375,6 +404,10 @@ impl Connector for LocalConnector {
         if !self.shared.ready.load(Ordering::SeqCst) {
             return Err(ConnectFailure::General);
         }
+        if !self.shared.network.load(Ordering::SeqCst) {
+            self.shared.lost.store(true, Ordering::SeqCst);
+            return Err(ConnectFailure::NetworkUnreachable);
+        }
         let local_port = lock(&self.shared.routes)
             .get(&(onion_host.to_owned(), port))
             .copied()
@@ -382,6 +415,8 @@ impl Connector for LocalConnector {
         let node = TcpStream::connect((Ipv4Addr::LOCALHOST, local_port))
             .await
             .map_err(|_| ConnectFailure::HostUnreachable)?;
+        // A node was reached, so the network is there.
+        self.shared.lost.store(false, Ordering::SeqCst);
         let (near, far) = tokio::io::duplex(RELAY_BUFFER);
         tokio::spawn(relay(
             far,
@@ -747,14 +782,14 @@ mod tests {
     }
 
     #[test]
-    fn after_a_cut_tor_can_be_not_ready() {
+    fn after_a_cut_the_network_can_be_gone() {
         let stand_in = StandIn::start().unwrap();
         stand_in.route(ONION, 18081, serve_digits());
         stand_in.cut_once(
             ONION,
             18081,
             CutPoint::AfterReplyBytes(3),
-            AfterCut::TorNotReady,
+            AfterCut::NetworkLost,
         );
         let socks = stand_in.socks_port(Purpose::Sync);
 
@@ -762,9 +797,42 @@ mod tests {
         stream.write_all(b"GET /blocks\n").unwrap();
         assert_eq!(read_to_close(&mut stream), b"012");
 
-        assert_eq!(stand_in.status().state, State::Bootstrapping);
+        // Nobody has asked for a connection since, so nothing has shown
+        // the loss yet.
+        assert_eq!(stand_in.status().state, State::Ready);
         let (_stream, code) = socks4a(socks, ONION, 18081);
         assert_eq!(code, 91);
+        assert_eq!(stand_in.status().state, State::Lost);
+    }
+
+    /// The loss of the network shows from the first connection that fails
+    /// for it, and its return from the first that reaches a node. A
+    /// target that leads nowhere says nothing about the network.
+    #[test]
+    fn a_lost_network_shows_and_ends_with_a_connection() {
+        let stand_in = StandIn::start().unwrap();
+        stand_in.route(ONION, 18081, serve_digits());
+        let socks = stand_in.socks_port(Purpose::Sync);
+
+        stand_in.set_network(false);
+        assert_eq!(stand_in.status().state, State::Ready);
+        let (_stream, code) = socks4a(socks, ONION, 18081);
+        assert_eq!(code, 91);
+        let status = stand_in.status();
+        assert_eq!(status.state, State::Lost);
+        assert!(status.message.is_some());
+
+        stand_in.set_network(true);
+        assert_eq!(stand_in.status().state, State::Lost, "nothing was asked");
+        let (_stream, code) = socks4a(socks, ONION, 18089);
+        assert_eq!(code, 91, "no route to this one");
+        assert_eq!(stand_in.status().state, State::Lost);
+
+        let (_stream, code) = socks4a(socks, ONION, 18081);
+        assert_eq!(code, 90);
+        let status = stand_in.status();
+        assert_eq!(status.state, State::Ready);
+        assert_eq!(status.message, None);
     }
 
     #[test]

@@ -1,0 +1,41 @@
+{
+  "balance": {
+    "locked": "0.00",
+    "total": "2.00",
+    "unlocked": "2.00"
+  },
+  "history": [],
+  "last_problem": null,
+  "node": "2gzyxa5ihm7nsggfxnu52rck2vv4rvmdlkiu3zzui5du4xyclen53wid.onion:38089",
+  "not_saved": null,
+  "own_nodes": [],
+  "phase": {
+    "name": "ready"
+  },
+  "rebuilt_from_keys": false,
+  "receive_address": {
+    "address": "73a4nWuvkYoYoksGurDjKZQcZkmaxLaKbbeiKzHnMmqKivrCzq5Q2JtJG1UZNZFqLPbQ3MiXCk2Q5bdwdUNSr7X9QrPubkn",
+    "index": 1
+  },
+  "revision": 19,
+  "send": {
+    "name": "failed",
+    "problem": {
+      "detail": "Tor cannot reach its network: error connecting to Tor",
+      "kind": "tor_lost"
+    }
+  },
+  "sync": {
+    "name": "failed",
+    "problem": {
+      "detail": "Tor cannot reach its network: error connecting to Tor",
+      "kind": "tor_lost"
+    }
+  },
+  "syncs_ended": 5,
+  "tor": {
+    "message": "error connecting to Tor",
+    "percent": 100,
+    "state": "lost"
+  }
+}

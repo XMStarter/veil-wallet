@@ -43,6 +43,31 @@ while tor.status().state != State::Ready {
 bootstrapping, a `message` in the status usually means the network blocks
 Tor and bridges are needed.
 
+## When the network goes away
+
+A Tor that has finished its bootstrap goes on calling itself ready when the
+device loses its network: Arti's own status does not go back. So the
+service reads the loss from the connections it is asked for. The state is
+one of `Bootstrapping`, `Ready`, `Failed`, and `Lost`:
+
+- A connection that fails on the way to the first relay (Arti's kinds
+  `TorAccessFailed` and `LocalNetworkError`) makes a ready Tor `Lost`, with
+  the kind in words as the status message. The listener answers such a
+  request with the SOCKS reply "network unreachable".
+- A connection that gets through, or a failure that can only come from
+  inside the Tor network (the onion service is not in the directory, is not
+  running, or refused the connection), makes it `Ready` again.
+- Anything else, a timeout above all, changes nothing. A network that
+  swallows everything and a service that is not there both end in a
+  timeout, and the two cannot be told apart from here.
+
+Two things follow. The state changes only when a connection is asked for:
+a wallet that asks for nothing learns nothing, which is why `veil_core`
+goes on asking while Tor is `Lost`. And a loss that shows as nothing but
+timeouts is not reported as one; it looks like nodes that do not answer.
+While `Lost`, the listeners take requests as before. There is still no
+other way out than through Tor.
+
 ## Bridges
 
 On a network that blocks Tor, the way in is a bridge: a relay that is not
@@ -97,7 +122,11 @@ for tests of what happens in the middle of a long download.
 The stand-in can also lose a connection on purpose (`cut_once`): part way
 through what the node sends, or after a request has reached the node and
 before the answer comes back. Afterwards the node is reachable again, gone,
-or Tor itself is no longer ready. This is how the rest of Veil is tested
+or the network under Tor is gone. That last state can also be set and
+lifted directly (`set_network`), and the stand-in then behaves as the
+service does: `Lost` from the first connection that fails, `Ready` from
+the first that reaches a node, and no change for a target that leads
+nowhere. This is how the rest of Veil is tested
 against a connection that drops in the middle of a synchronisation or of a
 send. A cut is placed by counting bytes, not by recognising a request: the
 wallet library encrypts what it says to a real node.

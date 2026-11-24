@@ -103,6 +103,7 @@ fn wait_until_ready(service: &TorService) {
                 return;
             }
             State::Failed => panic!("Tor failed to start: {:?}", status.message),
+            State::Lost => panic!("Tor lost its network: {:?}", status.message),
             State::Bootstrapping => {}
         }
         assert!(

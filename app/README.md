@@ -11,7 +11,10 @@ Tor and the synchronisation are doing, in words, and the latest payments.
 From there Receive shows the address to be paid at, as a QR code and as
 text, and the wallet can be locked: it is saved and closed, Tor is
 stopped, and the app asks for the password. While the wallet is open it
-synchronises by itself, a minute after the last time. Send takes an
+synchronises by itself, a minute after the last time. If the device
+loses its network, Home says that Tor has lost its connection and that
+this, not the nodes, is why the synchronisation failed; the wallet goes
+on trying by itself and says so when Tor is connected again. Send takes an
 address and an amount, shows the transaction with its fee and total for a
 last look, and then how it went: sent, or, if the connection was lost,
 not known, which the wallet then clears up by itself. Settings has a line

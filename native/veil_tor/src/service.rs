@@ -58,6 +58,17 @@ pub enum State {
     Ready = 1,
     /// Tor could not start. See [`Status::message`].
     Failed = 2,
+    /// Tor was ready and can no longer reach its own network: the last
+    /// connection it was asked for failed on the way to the first relay,
+    /// which is what a device without a network looks like. Tor is still
+    /// running and takes requests; the first that gets into the Tor
+    /// network makes the state [`State::Ready`] again.
+    ///
+    /// Tor does not report this by itself. It is read from the connections
+    /// the wallet asks for, so the state changes only when one is asked
+    /// for, and a loss that shows as nothing but timeouts is not told
+    /// apart from a node that does not answer.
+    Lost = 3,
 }
 
 /// A snapshot of the service for display.
@@ -66,8 +77,9 @@ pub struct Status {
     pub state: State,
     /// Bootstrap progress, 0 to 100.
     pub percent: u8,
-    /// Why Tor is stuck or failed, when known. While bootstrapping, a message
-    /// here usually means the network blocks Tor and bridges are needed.
+    /// Why Tor is stuck, failed or lost, when known. While bootstrapping, a
+    /// message here usually means the network blocks Tor and bridges are
+    /// needed.
     pub message: Option<String>,
 }
 
@@ -110,11 +122,90 @@ struct Shared {
     state: AtomicU8,
     percent: AtomicU8,
     message: Mutex<Option<String>>,
+    /// See [`TorService::last_failure`].
+    last_failure: Mutex<Option<String>>,
 }
 
 impl Shared {
     fn set_message(&self, message: Option<String>) {
         *self.message.lock().unwrap_or_else(|e| e.into_inner()) = message;
+    }
+
+    fn set_last_failure(&self, kind: Option<String>) {
+        *self.last_failure.lock().unwrap_or_else(|e| e.into_inner()) = kind;
+    }
+
+    fn status(&self) -> Status {
+        let state = match self.state.load(Ordering::SeqCst) {
+            s if s == State::Ready as u8 => State::Ready,
+            s if s == State::Failed as u8 => State::Failed,
+            s if s == State::Lost as u8 => State::Lost,
+            _ => State::Bootstrapping,
+        };
+        let message = self
+            .message
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        Status {
+            state,
+            percent: self.percent.load(Ordering::SeqCst),
+            message,
+        }
+    }
+
+    /// A connection failed before it got into the Tor network. Only a Tor
+    /// that was ready can lose its network; one that is still starting
+    /// says so through its bootstrap.
+    fn network_lost(&self, why: String) {
+        if self.swap_state(State::Ready, State::Lost) {
+            self.set_message(Some(why));
+        }
+    }
+
+    /// Something came back from inside the Tor network, so the way into
+    /// it is there.
+    fn network_reached(&self) {
+        if self.swap_state(State::Lost, State::Ready) {
+            self.set_message(None);
+        }
+    }
+
+    /// Goes from `from` to `to`, and says whether it did: nothing happens
+    /// in any other state.
+    fn swap_state(&self, from: State, to: State) -> bool {
+        self.state
+            .compare_exchange(from as u8, to as u8, Ordering::SeqCst, Ordering::SeqCst)
+            .is_ok()
+    }
+}
+
+/// What a connection that was asked of Tor says about Tor's own way into
+/// its network.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Network {
+    /// Tor could not get to the Tor network at all.
+    Lost,
+    /// An answer came from inside the Tor network, good or bad.
+    Reached,
+    /// Neither is certain. A timeout is of this kind: it is what a network
+    /// that swallows everything looks like, and also a service that is
+    /// not there.
+    Unknown,
+}
+
+/// What a failed connection says about the network, by the kind Arti gives
+/// its error.
+fn network_after(kind: ErrorKind) -> Network {
+    match kind {
+        // The connection to the first relay could not be made or broke.
+        ErrorKind::TorAccessFailed | ErrorKind::LocalNetworkError => Network::Lost,
+        // Arti gives these kinds only after a directory inside the Tor
+        // network, or the service itself, has answered.
+        ErrorKind::OnionServiceNotFound
+        | ErrorKind::OnionServiceNotRunning
+        | ErrorKind::RemoteConnectionRefused => Network::Reached,
+        _ => Network::Unknown,
     }
 }
 
@@ -148,6 +239,7 @@ impl TorService {
             state: AtomicU8::new(State::Bootstrapping as u8),
             percent: AtomicU8::new(0),
             message: Mutex::new(None),
+            last_failure: Mutex::new(None),
         });
         let (shutdown, shutdown_rx) = watch::channel(false);
 
@@ -195,22 +287,19 @@ impl TorService {
 
     /// Current state, progress, and any message for the user.
     pub fn status(&self) -> Status {
-        let state = match self.shared.state.load(Ordering::SeqCst) {
-            s if s == State::Ready as u8 => State::Ready,
-            s if s == State::Failed as u8 => State::Failed,
-            _ => State::Bootstrapping,
-        };
-        let message = self
-            .shared
-            .message
+        self.shared.status()
+    }
+
+    /// What kind of failure the last connection ended in, in Arti's words
+    /// for the kind, if the last connection asked for failed. For finding
+    /// out why a node could not be reached: the kind names no relay and
+    /// no node.
+    pub fn last_failure(&self) -> Option<String> {
+        self.shared
+            .last_failure
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .clone();
-        Status {
-            state,
-            percent: self.shared.percent.load(Ordering::SeqCst),
-            message,
-        }
+            .clone()
     }
 
     /// The loopback port of the SOCKS listener for `purpose`.
@@ -319,27 +408,52 @@ impl Connector for TorConnector {
         // Until Tor is ready, refuse at once. Arti would otherwise hold the
         // request until bootstrap finishes, which can be never on a network
         // that blocks Tor, and the caller would hang instead of retrying.
-        if self.shared.state.load(Ordering::SeqCst) != State::Ready as u8 {
+        // A Tor that has lost its network is asked all the same: that it
+        // has its network back shows in nothing but a connection that gets
+        // through.
+        let state = self.shared.state.load(Ordering::SeqCst);
+        if state != State::Ready as u8 && state != State::Lost as u8 {
             return Err(ConnectFailure::General);
         }
-        self.client
+        let error = match self
+            .client
             .connect_with_prefs((onion_host, port), &self.prefs)
             .await
-            .map_err(|error| match error.kind() {
-                ErrorKind::OnionServiceNotFound
-                | ErrorKind::OnionServiceNotRunning
-                | ErrorKind::OnionServiceAddressInvalid
-                | ErrorKind::OnionServiceConnectionFailed
-                | ErrorKind::RemoteHostNotFound
-                | ErrorKind::RemoteConnectionRefused => ConnectFailure::HostUnreachable,
-                ErrorKind::TorNetworkTimeout | ErrorKind::RemoteNetworkTimeout => {
-                    ConnectFailure::TimedOut
-                }
-                ErrorKind::InvalidStreamTarget | ErrorKind::ForbiddenStreamTarget => {
-                    ConnectFailure::NotAllowed
-                }
-                _ => ConnectFailure::General,
-            })
+        {
+            Ok(stream) => {
+                self.shared.set_last_failure(None);
+                self.shared.network_reached();
+                return Ok(stream);
+            }
+            Err(error) => error,
+        };
+        let kind = error.kind();
+        self.shared.set_last_failure(Some(kind.to_string()));
+        match network_after(kind) {
+            Network::Lost => {
+                // The kind in Arti's words, not the error: the error names
+                // the relays that were tried.
+                self.shared.network_lost(kind.to_string());
+                return Err(ConnectFailure::NetworkUnreachable);
+            }
+            Network::Reached => self.shared.network_reached(),
+            Network::Unknown => {}
+        }
+        Err(match kind {
+            ErrorKind::OnionServiceNotFound
+            | ErrorKind::OnionServiceNotRunning
+            | ErrorKind::OnionServiceAddressInvalid
+            | ErrorKind::OnionServiceConnectionFailed
+            | ErrorKind::RemoteHostNotFound
+            | ErrorKind::RemoteConnectionRefused => ConnectFailure::HostUnreachable,
+            ErrorKind::TorNetworkTimeout | ErrorKind::RemoteNetworkTimeout => {
+                ConnectFailure::TimedOut
+            }
+            ErrorKind::InvalidStreamTarget | ErrorKind::ForbiddenStreamTarget => {
+                ConnectFailure::NotAllowed
+            }
+            _ => ConnectFailure::General,
+        })
     }
 }
 
@@ -371,6 +485,86 @@ mod tests {
             bridges: Bridges::none(),
         };
         (root, config)
+    }
+
+    fn shared_in(state: State) -> Shared {
+        Shared {
+            state: AtomicU8::new(state as u8),
+            percent: AtomicU8::new(100),
+            message: Mutex::new(None),
+            last_failure: Mutex::new(None),
+        }
+    }
+
+    /// The loss of the network is read from the connections asked for: one
+    /// that cannot get to the first relay makes a ready Tor lost, with
+    /// words for it, and the first answer from inside the Tor network
+    /// makes it ready again.
+    #[test]
+    fn a_ready_tor_is_lost_and_found_by_what_its_connections_say() {
+        let shared = shared_in(State::Ready);
+
+        shared.network_lost("error connecting to Tor".to_owned());
+        let status = shared.status();
+        assert_eq!(status.state, State::Lost);
+        assert_eq!(status.message.as_deref(), Some("error connecting to Tor"));
+
+        // Said again, it stays as it is.
+        shared.network_lost("something else".to_owned());
+        assert_eq!(
+            shared.status().message.as_deref(),
+            Some("error connecting to Tor")
+        );
+
+        shared.network_reached();
+        let status = shared.status();
+        assert_eq!(status.state, State::Ready);
+        assert_eq!(status.message, None);
+    }
+
+    /// Before its bootstrap has ended Tor has no network to lose, and a
+    /// Tor that could not start does not come to life through a
+    /// connection: both states stay what they are, with their messages.
+    #[test]
+    fn only_a_tor_that_was_ready_loses_its_network() {
+        for state in [State::Bootstrapping, State::Failed] {
+            let shared = shared_in(state);
+            shared.set_message(Some("why".to_owned()));
+            shared.network_lost("error connecting to Tor".to_owned());
+            assert_eq!(shared.status().state, state);
+            shared.network_reached();
+            let status = shared.status();
+            assert_eq!(status.state, state);
+            assert_eq!(status.message.as_deref(), Some("why"));
+        }
+    }
+
+    /// Which of Arti's kinds of failure say that the network is gone,
+    /// which that it is there, and which say neither. A timeout says
+    /// neither: reading it as a loss would blame Tor for every node that
+    /// is down, and reading it as an answer would call a network that
+    /// swallows everything a working one.
+    #[test]
+    fn a_failure_is_read_for_what_it_says_about_the_network() {
+        for kind in [ErrorKind::TorAccessFailed, ErrorKind::LocalNetworkError] {
+            assert_eq!(network_after(kind), Network::Lost, "{kind:?}");
+        }
+        for kind in [
+            ErrorKind::OnionServiceNotFound,
+            ErrorKind::OnionServiceNotRunning,
+            ErrorKind::RemoteConnectionRefused,
+        ] {
+            assert_eq!(network_after(kind), Network::Reached, "{kind:?}");
+        }
+        for kind in [
+            ErrorKind::TorNetworkTimeout,
+            ErrorKind::RemoteNetworkTimeout,
+            ErrorKind::OnionServiceConnectionFailed,
+            ErrorKind::TransientFailure,
+            ErrorKind::Internal,
+        ] {
+            assert_eq!(network_after(kind), Network::Unknown, "{kind:?}");
+        }
     }
 
     /// Starting must not wait for the network: the listeners come up at once

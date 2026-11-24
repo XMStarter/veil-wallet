@@ -54,7 +54,9 @@ that cannot lose the user's funds.
 
 - `native/` is one Cargo workspace. Run cargo from there.
   - `veil_tor`: embedded Tor client (Arti) with onion-only loopback SOCKS
-    listeners and a C interface.
+    listeners and a C interface. It reads the loss of its network from
+    the connections it is asked for (`State::Lost`); its README says how,
+    and what that cannot tell.
   - `veil_wallet`: wallet operations over the Monero wallet library. Its
     README lists library behaviours the crate guards against; read it
     before changing `wallet.rs`.
@@ -301,10 +303,10 @@ now" is no longer shown as a wrong password, a phrase that was never
 checked and cannot be read closes the wallet instead of opening Home,
 and locking or closing the window survives a failure of the backend.
 Left for tasks of their own, by the owner's decision: the Tor component
-reports itself ready from the end of its bootstrap on and does not
+reported itself ready from the end of its bootstrap on and did not
 notice a network that goes away afterwards, so the difference between a
-failure of Tor and of the node exists in the tests only (needs the `tor`
-level to work on); and the concept says that no node can link
+failure of Tor and of the node existed in the tests only (taken up after
+step 3.8, see the end of this section); and the concept says that no node can link
 synchronisation and spending, while the node synchronised with is asked
 for what a transaction is built from. Also open: a password change that
 fails after the keys file was rewritten is reported as failed although
@@ -352,8 +354,8 @@ time (shown on a private chain only, at the end of the scenario; not run
 there yet). Bridges changed
 in Settings take effect the next time the wallet is opened. Step 3.7 was
 merged on the owner's word after hosted CI had passed on Linux and
-Windows. Step 3.8, the app on Windows, is written and not yet accepted.
-Hosted CI, which already built the app for Windows, now makes that build
+Windows. Step 3.8, the app on Windows, is done; how it was accepted is
+told below. Hosted CI, which already built the app for Windows, now makes that build
 complete (`check.sh`: the core as a release build and the three libraries
 of Microsoft's C++ runtime next to `veil.exe`) and keeps it with the run
 as the artifact `veil-windows`; the owner allowed
@@ -382,8 +384,29 @@ for that walk were tried was not said; a second window on an open wallet
 and the auto-lock had never been seen with a real wallet before it. The
 two public faucets named at step 1.3 no longer served: one did not work
 and the other was blocked by the owner's antivirus as dangerous, so the
-coins came from the owner's own stagenet wallet. See the build plan in
-`docs/concept.md`.
+coins came from the owner's own stagenet wallet. Step 3.8 was merged on
+the owner's word after that. After it, the state of Tor when the network
+goes away, written and not yet tried on a real network. Arti's own status
+never goes back once it has connected, so `veil_tor` reads the loss from
+the connections it is asked for: one that fails on the way to the first
+relay makes a ready Tor `Lost`, one that gets through or is answered
+from inside the Tor network makes it ready again, and a timeout changes
+nothing, because it is also what a node that is not there looks like.
+`veil_core` then reports a failure as Tor's (`TorLost`, `tor_lost`), not
+as "no node answered", goes on asking every node through Tor, since a
+connection that gets through is the only sign of the network being back,
+and a session goes on synchronising on its timer meanwhile. A send that
+no node took is reported as not sent for Tor's reason; one whose outcome
+is unknown stays unknown. Home and Send say it in both languages. The
+stand-in loses its network the same way (`set_network`,
+`AfterCut::NetworkLost`), in place of the "not ready after a cut" it had,
+which a real Tor never does. The offline tests pass in a cloud session;
+the scenario on a private chain has a new end, a send confirmed with the
+network gone, not run yet. Not known: which kind of failure Arti gives
+when the owner's machine really loses its network. If it is only
+timeouts, the app will go on saying that no node answered, and the
+reading in `veil_tor::service::network_after` is the place to change.
+See the build plan in `docs/concept.md`.
 
 ## Environment notes
 

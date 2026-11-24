@@ -278,7 +278,11 @@ impl Session {
             core.close()?;
             return Ok(());
         }
-        let sent = pending.commit_through(&behind);
+        // If no node took it because Tor has lost its network, that is
+        // what is said, not that the nodes did not answer.
+        let sent = pending
+            .commit_through(&behind)
+            .map_err(|error| core.commit_failure(error));
         // Save whatever happened: after a broadcast the wallet knows which
         // of its coins are spent.
         let saved = core.close();
@@ -315,7 +319,11 @@ impl Session {
 
         eprintln!("Looking for a node...");
         let asked = Instant::now();
-        let height = core.settle_on_nodes(&candidates)?;
+        let settled = core.settle_on_nodes(&candidates);
+        if settled.is_err() {
+            say_what_tor_met(&core);
+        }
+        let height = settled?;
         eprintln!(
             "Node {} is at block {height} ({:.0?}).",
             core.nodes().sync(),
@@ -335,7 +343,9 @@ fn wait_for_tor(core: &Core) -> Result<(), Fail> {
     loop {
         let status = core.tor_status();
         match status.state {
-            State::Ready => {
+            // Lost is a state of a Tor that was ready, and what is asked
+            // of it next says so if it still is.
+            State::Ready | State::Lost => {
                 eprintln!("Tor is connected ({:.0?}).", started.elapsed());
                 return Ok(());
             }
@@ -396,6 +406,15 @@ fn read_bridges(file: &Path, named: Vec<TransportProgram>) -> Result<Bridges, Fa
     Ok(bridges)
 }
 
+/// After a failure to reach a node: what Tor's last connection ended in,
+/// in the Tor client's own words. It tells a node that is not there from
+/// a network that is not there, and names neither relay nor node.
+fn say_what_tor_met(core: &Core) {
+    if let Some(kind) = core.tor_last_failure() {
+        eprintln!("Tor's last connection failed with: {kind}.");
+    }
+}
+
 /// Synchronises and shows progress on the way.
 /// Synchronises through the first of `candidates` that carries it through.
 fn synchronise(core: &mut Core, candidates: &[OnionNode]) -> Result<SyncProgress, Fail> {
@@ -422,6 +441,9 @@ fn synchronise(core: &mut Core, candidates: &[OnionNode]) -> Result<SyncProgress
     });
     if on_terminal && reports > 0 {
         eprintln!();
+    }
+    if outcome.is_err() {
+        say_what_tor_met(core);
     }
     let progress = outcome?;
     if core.nodes().sync() != &first {

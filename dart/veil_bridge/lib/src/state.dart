@@ -37,6 +37,7 @@ abstract final class ProblemKind {
   static const invalidPhrase = 'invalid_phrase';
   static const torNotReady = 'tor_not_ready';
   static const torFailed = 'tor_failed';
+  static const torLost = 'tor_lost';
   static const noNode = 'no_node';
   static const invalidAddress = 'invalid_address';
   static const invalidAmount = 'invalid_amount';
@@ -59,6 +60,7 @@ abstract final class ProblemKind {
     invalidPhrase,
     torNotReady,
     torFailed,
+    torLost,
     noNode,
     invalidAddress,
     invalidAmount,
@@ -92,7 +94,10 @@ String _snake(String camel) => camel.replaceAllMapped(
 /// Where a session is in its life.
 enum Phase { opening, ready, closed, failed }
 
-enum TorState { bootstrapping, ready, failed }
+/// What Tor is doing. [lost]: it was connected and cannot reach its
+/// network now; it goes on trying, and the core says [ready] again once a
+/// connection gets through.
+enum TorState { bootstrapping, ready, failed, lost }
 
 class TorStatus {
   const TorStatus(this.state, this.percent, this.message);
@@ -102,7 +107,7 @@ class TorStatus {
   /// Bootstrap progress, 0 to 100.
   final int percent;
 
-  /// Why Tor is stuck or failed, when known.
+  /// Why Tor is stuck, failed or lost, when known.
   final String? message;
 }
 

@@ -231,6 +231,7 @@ fn kind_name(kind: ProblemKind) -> &'static str {
         ProblemKind::InvalidPhrase => "invalid_phrase",
         ProblemKind::TorNotReady => "tor_not_ready",
         ProblemKind::TorFailed => "tor_failed",
+        ProblemKind::TorLost => "tor_lost",
         ProblemKind::NoNode => "no_node",
         ProblemKind::InvalidAddress => "invalid_address",
         ProblemKind::InvalidAmount => "invalid_amount",
@@ -265,6 +266,7 @@ pub(crate) fn state_json(state: &SessionState) -> Value {
         State::Bootstrapping => "bootstrapping",
         State::Ready => "ready",
         State::Failed => "failed",
+        State::Lost => "lost",
     };
     let sync = match &state.sync {
         SyncState::NotYet => json!({ "name": "not_yet" }),

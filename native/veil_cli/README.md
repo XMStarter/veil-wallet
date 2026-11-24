@@ -46,6 +46,13 @@ directory; nobody vetted it, and most of it belongs to one operator. It is
 there so that the tool works out of the box, and it is not the list the app
 will ship.
 
+When no node can be reached, the tool also says what Tor's last connection
+failed with, in the Tor client's own words for the kind of failure
+(`Tor's last connection failed with: ...`). That tells a node that is not
+there from a network that is not there; it names no relay and no node. If
+Tor has lost its network, the failure itself says so, and a transaction
+that no node took is reported as not sent for that reason.
+
 `--node host.onion:port` names a node; give it twice to send through a
 different node than the one synchronised with. Only named nodes are used
 then.

@@ -9,7 +9,9 @@
 //!   Its wallet is pointed at that service's loopback listeners and at no
 //!   other address. While Tor is not ready, every call that needs a node
 //!   fails with [`CoreError::TorNotReady`] before the wallet is asked to do
-//!   anything. There is no direct connection to fall back to.
+//!   anything. If Tor loses its network later, calls fail with
+//!   [`CoreError::TorLost`] and go on being tried through Tor. There is no
+//!   direct connection to fall back to.
 //! * **Onion nodes only.** A node is an [`OnionNode`]. Nothing else can be
 //!   named.
 //! * **Sync and spend apart.** The wallet synchronises through one listener
@@ -51,6 +53,13 @@ pub enum CoreError {
     /// Tor could not start. Nothing was sent anywhere.
     #[error("Tor could not start: {}", message.as_deref().unwrap_or("no reason given"))]
     TorFailed { message: Option<String> },
+
+    /// Tor was ready and cannot reach its own network now, which is what
+    /// a device without a network looks like. No node is to blame. Tor
+    /// goes on trying with every call, and the first that gets through
+    /// ends this.
+    #[error("Tor cannot reach its network: {}", message.as_deref().unwrap_or("no reason given"))]
+    TorLost { message: Option<String> },
 
     /// Not `host.onion:port`.
     #[error("a node is written as host.onion:port")]
@@ -152,7 +161,7 @@ impl Core {
         }
     }
 
-    /// Fails unless Tor can carry traffic right now.
+    /// Fails unless Tor may be asked for a connection right now.
     fn require_tor(&self) -> Result<(), CoreError> {
         require_tor(self.transport.as_ref())
     }
@@ -160,6 +169,13 @@ impl Core {
     /// State of the Tor client, for display.
     pub fn tor_status(&self) -> Status {
         self.transport.status()
+    }
+
+    /// What kind of failure Tor's last connection ended in, if it failed,
+    /// in the Tor client's own words. For finding out why no node could
+    /// be reached; it names no relay and no node.
+    pub fn tor_last_failure(&self) -> Option<String> {
+        self.transport.last_failure()
     }
 
     pub fn nodes(&self) -> &Nodes {
@@ -208,11 +224,11 @@ impl Core {
                 Err(other) => return Err(other.into()),
             }
         }
-        self.require_tor()?;
-        Err(CoreError::NoNodeAnswered {
-            tried: candidates.len(),
+        Err(no_node_answered(
+            self.transport.as_ref(),
+            candidates.len(),
             last,
-        })
+        ))
     }
 
     /// Asks the sync node for the height of its chain. Scans nothing.
@@ -229,9 +245,9 @@ impl Core {
     ///
     /// If the connection is lost on the way, this fails with the wallet's
     /// [`NodeUnreachable`](veil_wallet::Error::NodeUnreachable), or with
-    /// [`CoreError::TorNotReady`] when it was Tor that dropped. What was
-    /// scanned until then is kept, and the next synchronisation continues
-    /// from there.
+    /// [`CoreError::TorLost`] when it was Tor that lost its network. What
+    /// was scanned until then is kept, and the next synchronisation
+    /// continues from there.
     pub fn sync(&mut self) -> Result<SyncProgress, CoreError> {
         self.sync_with_progress(&mut |_| {})
     }
@@ -256,8 +272,13 @@ impl Core {
     /// A node that cannot be reached, is not usable, or stops answering part
     /// way is left for the next candidate, which continues where the scan
     /// stopped. Nodes are chosen as in [`Core::settle_on_nodes`], and the
-    /// core stays on the node that finished. If Tor itself drops, no further
-    /// node is tried and the outcome is [`CoreError::TorNotReady`].
+    /// core stays on the node that finished.
+    ///
+    /// If Tor loses its network on the way, the candidates that are left
+    /// are asked all the same: only a connection that gets through shows
+    /// that the network is back, and each of them is such a try. If none
+    /// does, the outcome is [`CoreError::TorLost`], not a complaint about
+    /// the nodes.
     pub fn sync_with_any(
         &mut self,
         candidates: &[OnionNode],
@@ -309,11 +330,11 @@ impl Core {
                 Err(other) => return Err(other.into()),
             }
         }
-        self.require_tor()?;
-        Err(CoreError::NoNodeAnswered {
-            tried: attempt.candidates.len(),
-            last: std::mem::replace(&mut attempt.last, veil_wallet::Error::NodeUnreachable),
-        })
+        Err(no_node_answered(
+            self.transport.as_ref(),
+            attempt.candidates.len(),
+            std::mem::replace(&mut attempt.last, veil_wallet::Error::NodeUnreachable),
+        ))
     }
 
     /// How far the last synchronisation got. Contacts nothing.
@@ -353,9 +374,9 @@ impl Core {
     /// [`PendingSend::commit`] then hands the transaction to the broadcast
     /// node through the broadcast listener, and
     /// [`PendingSend::commit_through`] to the first node of
-    /// [`Core::broadcast_route`] that answers. If Tor has stopped in the
-    /// meantime, that listener refuses the connection and the commit fails;
-    /// nothing leaves any other way.
+    /// [`Core::broadcast_route`] that answers. If Tor has stopped or lost
+    /// its network in the meantime, that listener refuses the connection
+    /// and the commit fails; nothing leaves any other way.
     pub fn prepare_send(
         &mut self,
         to: &str,
@@ -424,6 +445,24 @@ impl Core {
             self.broadcast_route(candidates, None).into_iter().unzip();
         let found = self.wallet.first_that_answers(&nodes)?;
         Ok(found.map(|position| names[position].clone()))
+    }
+
+    /// What a failed [`PendingSend::commit_through`] is to be reported as.
+    ///
+    /// If no node took the transaction and Tor says that it has lost its
+    /// network, that is the reason, and the nodes are not to blame. An
+    /// outcome that is unknown stays unknown whatever Tor says: the
+    /// transaction may have gone out before the network did.
+    pub fn commit_failure(&self, error: veil_wallet::Error) -> CoreError {
+        if matches!(
+            error,
+            veil_wallet::Error::NoNodeToSendThrough { .. } | veil_wallet::Error::NodeUnreachable
+        ) {
+            if let Some(tor) = tor_trouble(self.transport.as_ref()) {
+                return tor;
+            }
+        }
+        error.into()
     }
 
     /// Whether the wallet was opened from its keys alone because its data
@@ -500,31 +539,55 @@ impl Core {
     }
 }
 
-/// Fails unless Tor can carry traffic right now.
-fn require_tor(transport: &dyn Transport) -> Result<(), CoreError> {
+/// What is wrong with Tor right now, if anything is.
+fn tor_trouble(transport: &dyn Transport) -> Option<CoreError> {
     let status = transport.status();
     match status.state {
-        State::Ready => Ok(()),
-        State::Bootstrapping => Err(CoreError::TorNotReady {
+        State::Ready => None,
+        State::Bootstrapping => Some(CoreError::TorNotReady {
             percent: status.percent,
             message: status.message,
         }),
-        State::Failed => Err(CoreError::TorFailed {
+        State::Failed => Some(CoreError::TorFailed {
+            message: status.message,
+        }),
+        State::Lost => Some(CoreError::TorLost {
             message: status.message,
         }),
     }
 }
 
+/// Fails unless Tor may be asked for a connection right now. A Tor that
+/// has lost its network may: asking is the only way to learn that the
+/// network is back.
+fn require_tor(transport: &dyn Transport) -> Result<(), CoreError> {
+    match tor_trouble(transport) {
+        None | Some(CoreError::TorLost { .. }) => Ok(()),
+        Some(trouble) => Err(trouble),
+    }
+}
+
 /// What to report when the wallet failed to get something from a node. If
-/// Tor has stopped being ready, that is the reason, and the node is not to
-/// blame.
+/// Tor has stopped being ready or has lost its network, that is the
+/// reason, and the node is not to blame.
 fn node_failure(transport: &dyn Transport, error: veil_wallet::Error) -> CoreError {
     if matches!(error, veil_wallet::Error::NodeUnreachable) {
-        if let Err(tor) = require_tor(transport) {
+        if let Some(tor) = tor_trouble(transport) {
             return tor;
         }
     }
     error.into()
+}
+
+/// What to report when every node that was tried has failed, the last of
+/// them with `last`: that Tor is the reason, if Tor says so now, and
+/// otherwise that no node answered.
+fn no_node_answered(
+    transport: &dyn Transport,
+    tried: usize,
+    last: veil_wallet::Error,
+) -> CoreError {
+    tor_trouble(transport).unwrap_or(CoreError::NoNodeAnswered { tried, last })
 }
 
 /// Whether `error` is a reason to try another node.

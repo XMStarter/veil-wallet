@@ -42,6 +42,8 @@ pub(crate) trait Connector: Send + Sync + 'static {
 pub(crate) enum ConnectFailure {
     /// Tor is not ready, or the failure has no more specific description.
     General,
+    /// Tor could not get to its own network.
+    NetworkUnreachable,
     /// The onion service could not be reached.
     HostUnreachable,
     /// The attempt timed out.
@@ -54,6 +56,7 @@ impl ConnectFailure {
     fn socks_status(self) -> SocksStatus {
         match self {
             ConnectFailure::General => SocksStatus::GENERAL_FAILURE,
+            ConnectFailure::NetworkUnreachable => SocksStatus::NETWORK_UNREACHABLE,
             ConnectFailure::HostUnreachable => SocksStatus::HOST_UNREACHABLE,
             ConnectFailure::TimedOut => SocksStatus::TTL_EXPIRED,
             ConnectFailure::NotAllowed => SocksStatus::NOT_ALLOWED,

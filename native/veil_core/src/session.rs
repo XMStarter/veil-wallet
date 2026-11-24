@@ -101,6 +101,9 @@ pub enum ProblemKind {
     TorNotReady,
     /// Tor could not start.
     TorFailed,
+    /// Tor was connected and cannot reach its network now. Nothing was
+    /// sent anywhere; it is tried again by itself.
+    TorLost,
     /// No node could be used: none answered, or the one in use stopped.
     NoNode,
     /// The destination is not an address of this network.
@@ -173,6 +176,7 @@ impl From<CoreError> for Problem {
         let kind = match &error {
             CoreError::TorNotReady { .. } => ProblemKind::TorNotReady,
             CoreError::TorFailed { .. } => ProblemKind::TorFailed,
+            CoreError::TorLost { .. } => ProblemKind::TorLost,
             CoreError::NoNodeAnswered { .. } => ProblemKind::NoNode,
             CoreError::Wallet(_) | CoreError::InvalidNode | CoreError::SameNode => {
                 ProblemKind::Other
@@ -858,7 +862,9 @@ fn run(
         }
 
         let tor = core.tor_status();
-        let ready = tor.state == State::Ready;
+        // A Tor that has lost its network is asked again like a ready
+        // one: a synchronisation that gets through is what ends the loss.
+        let ready = matches!(tor.state, State::Ready | State::Lost);
         shared.update(|state| state.tor = tor);
         if let Some(every) = config.sync_every {
             if !held && ready && last_sync.is_none_or(|at| at.elapsed() >= every) {
@@ -1455,17 +1461,24 @@ fn hold_for_review(
                     txids
                 });
                 let unknown = matches!(sent, Err(veil_wallet::Error::SendOutcomeUnknown));
-                // How it went and what it left in the wallet, in one
-                // change: nobody sees "sent" over the balance of before.
+                // How it went, what it left in the wallet, and what it
+                // showed about Tor, in one change: nobody sees "sent" over
+                // the balance of before, or a send that failed for Tor
+                // under a Tor that looks connected.
                 let seen = Seen::of(core);
+                let tor = core.tor_status();
+                let sent = sent.map_err(|error| core.commit_failure(error));
                 shared.update(|state| {
                     seen.show(state);
+                    state.tor = tor;
                     state.send = match sent {
                         Ok(txids) => SendState::Sent { txids },
-                        Err(veil_wallet::Error::SendOutcomeUnknown) => SendState::OutcomeUnknown {
-                            txids: ids.clone(),
-                            settled: false,
-                        },
+                        Err(CoreError::Wallet(veil_wallet::Error::SendOutcomeUnknown)) => {
+                            SendState::OutcomeUnknown {
+                                txids: ids.clone(),
+                                settled: false,
+                            }
+                        }
                         Err(error) => SendState::Failed(error.into()),
                     }
                 });
