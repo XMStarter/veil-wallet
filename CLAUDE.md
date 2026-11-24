@@ -184,13 +184,18 @@ can now be stopped: the session saves every two minutes of a scan, and any
 command, closing included, stops the scan, is dealt with, and the scan
 goes on. In the app: Home (balance, Tor and synchronisation in words,
 recent activity), Receive (QR code, address in groups of four, copy, new
-address), and the wallet synchronises by itself while open. The offline
-tests pass in a cloud session. The test that stops a scan with real
-blocks behind it (`a_long_scan_is_saved_on_the_way_gives_way_and_misses_nothing`
-in `veil_core`) has never run: it needs a daemon, and its timing rests on
-an estimate of the size of a thousand regtest blocks, so the first run on
-the owner's machine may call for tuning the line speed in it. Next after
-its acceptance is step 3.6, send. Not done: the app. See the build plan in
+address), and the wallet synchronises by itself while open. On the
+owner's machine, on commit `9e78eea`, the `offline` and `regtest` levels
+passed as Linux programs, the test that stops a scan with real blocks
+behind it included
+(`a_long_scan_is_saved_on_the_way_gives_way_and_misses_nothing` in
+`veil_core`), and `offline` passed as Windows programs. As Windows
+programs that one test failed in `regtest`, on a step of its own: it
+copied the keys file of an open wallet, which the wallet library keeps
+locked, and Windows lets nobody else read a locked file. The test now
+copies that file while the wallet is closed; the run that shows it pass
+on Windows is still owed, and so is a word on how the app itself behaved.
+Next after its acceptance is step 3.6, send. Not done: the app. See the build plan in
 `docs/concept.md`.
 
 ## Environment notes

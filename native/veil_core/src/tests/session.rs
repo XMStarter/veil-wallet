@@ -590,6 +590,11 @@ mod on_a_private_chain {
         let address = state.receive_address.clone().unwrap().address;
         let phrase = session.recovery_phrase().unwrap();
         assert_eq!(session.close().phase, Phase::Closed);
+        // The keys file is written once, at creation. Its copy for the
+        // wallet "killed" further down is taken now: while a wallet is
+        // open the library keeps that file locked, and on Windows a locked
+        // file cannot even be read by anyone else.
+        std::fs::copy(dir.file("user.keys"), dir.file("killed.keys")).unwrap();
 
         // It is paid early, and then the chain grows long.
         let (mut funder, _) =
@@ -628,9 +633,9 @@ mod on_a_private_chain {
             written(&data_file).is_some_and(|now| now != at_start)
         });
         assert!(saved, "nothing was saved: {:#?}", session.state());
-        // What a kill at this moment would leave behind.
+        // What a kill at this moment would leave behind: this data file,
+        // next to the keys file copied above.
         std::fs::copy(&data_file, dir.file("killed")).unwrap();
-        std::fs::copy(dir.file("user.keys"), dir.file("killed.keys")).unwrap();
         let state = session.state();
         assert_eq!(state.syncs_ended, 0, "saved only at the end: {state:#?}");
 
