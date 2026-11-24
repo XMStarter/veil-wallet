@@ -87,7 +87,7 @@ that cannot lose the user's funds.
   `native/veil_core/tests/fixtures`, which both sides test against.
 - `app/`: the app, written with Flutter, for Linux and Windows first. So
   far the way to an open wallet (create, recovery phrase, restore, unlock),
-  Home, and Receive.
+  Home, Receive, and Send.
   Screens talk to `WalletBackend` (`app/lib/core`), never to the core
   directly; tests use a backend that only pretends, and no test opens a
   real wallet, because that starts Tor. Read
@@ -194,7 +194,35 @@ wallet the owner confirmed that the synchronisation starts by itself once
 Tor is connected, that Receive shows the code and the address and Copy
 works, and that locking in the middle of a synchronisation takes seconds.
 The owner also reported that the QR code works. No payment has been
-received in the app yet. Next is step 3.6, send. Not done: the app. See the build plan in
+received in the app yet. Step 3.6, send, is done.
+In the app: a form (address, with paste and payment links, and an amount
+or everything), a review (address, amount, fee, total, a warning when
+coins from several addresses are combined), and the outcome. In the core:
+the review's total and source addresses, a lack of funds as a problem of
+its own, and a send whose outcome is unknown is looked for after every
+synchronisation, becomes sent when found, blocks other sends until then,
+and is settled, never failed, when a synchronisation five minutes later
+does not show it. The owner's acceptance run passed: the `offline` level
+as Linux and as Windows programs on commit `3c9a853`, and the `regtest`
+level both ways on commit `22f44f8`, which differs from it in one test of
+`veil_wallet`, one test of `veil_core`, and the change described next; the
+`offline` level was run on that last commit in a cloud session only. The
+runs found three things. An older test still expected the library's bare
+refusal where a lack of funds now has its own error. The session reported
+the end of a synchronisation in one change of the state and what it said
+about a lost send in the next, and a test, like an interface, could read
+the state in between; both are one change now. And the test of the
+synchronisation timer failed once as Windows programs while the machine
+was busy with the daemons, having passed on the same code before; its
+cause was not proven, it now waits as long as the other tests, and it
+passed in the next run. Shown on a private chain, on both systems: a
+transaction whose answer was lost is found among the node's waiting
+transactions before any block and reported as sent; no other send is built
+meanwhile; a send to a node that cannot be reached is reported as unknown,
+settled by a synchronisation, and sent again, paid once. The owner
+reported that sending works in the app. Not tried: a lost connection in
+the app itself, which cannot be brought about by hand. Next is step 3.7,
+settings. Not done: the app. See the build plan in
 `docs/concept.md`.
 
 ## Environment notes

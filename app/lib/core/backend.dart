@@ -8,6 +8,8 @@ export 'package:veil_bridge/veil_bridge.dart'
         Problem,
         ProblemKind,
         ReceiveAddress,
+        SendPhase,
+        SendStatus,
         SessionState,
         SyncPhase,
         SyncStatus,
@@ -25,6 +27,9 @@ class StartFailure implements Exception {
   @override
   String toString() => 'StartFailure($problem)';
 }
+
+/// The amount that stands for "all that can be spent, less the fee".
+const everything = 'all';
 
 /// What the screens need from the wallet. The app gives them the real one,
 /// which runs the core; tests give them one that only pretends.
@@ -52,6 +57,20 @@ abstract class WalletBackend {
   /// paid. Returns at once; the address appears in [state], or the reason
   /// there is none in its `lastProblem`.
   void newAddress();
+
+  /// Builds a transaction that pays [amount] to [to], for the user to
+  /// review. [amount] is a number as typed, or [everything]. Returns at
+  /// once: the transaction, or the reason there is none, appears in
+  /// [state] as its `send`. What is returned here is only a request the
+  /// core could not even read, such as an amount that is not a number.
+  Problem? prepareSend(String to, String amount);
+
+  /// Sends the transaction under review.
+  void confirmSend();
+
+  /// Drops the transaction under review or being prepared, or clears the
+  /// outcome of the last send.
+  void cancelSend();
 
   /// The recovery phrase of the open wallet.
   Future<String?> recoveryPhrase();

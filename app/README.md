@@ -11,9 +11,12 @@ Tor and the synchronisation are doing, in words, and the latest payments.
 From there Receive shows the address to be paid at, as a QR code and as
 text, and the wallet can be locked: it is saved and closed, Tor is
 stopped, and the app asks for the password. While the wallet is open it
-synchronises by itself, a minute after the last time. Sending and the
-settings come with build steps 3.6 and 3.7 of
-[docs/concept.md](../docs/concept.md). The network is stagenet.
+synchronises by itself, a minute after the last time. Send takes an
+address and an amount, shows the transaction with its fee and total for a
+last look, and then how it went: sent, or, if the connection was lost,
+not known, which the wallet then clears up by itself. The settings come
+with build step 3.7 of [docs/concept.md](../docs/concept.md). The network
+is stagenet.
 
 The app reaches the wallet only through the core
 ([`native/veil_core`](../native/veil_core)), which it loads as a shared
@@ -63,8 +66,8 @@ flutter test
 ```
 
 The tests draw the screens without a display, with the app's own fonts,
-and walk the whole way to an open wallet, and through Home and Receive,
-on a wallet that only pretends: no core, no files, no Tor. They also write
+and walk the whole way to an open wallet, and through Home, Receive and
+Send, on a wallet that only pretends: no core, no files, no Tor. They also write
 each screen as a picture to `build/screenshots/`, to look at without
 running the app.
 
@@ -104,6 +107,10 @@ stagenet nodes.
 - Receive has no Share. That is for Android too: a desktop has nothing to
   share into.
 - Home lists the latest twenty payments and has no way to the rest.
+- Send has no way to scan a code. That is for Android.
+- A send whose outcome is unknown is forgotten when the app is closed. The
+  wallet synchronises before it builds a send after a start, which shows
+  the transaction if it went out and has spread by then.
 - Closing the window or locking the wallet during a synchronisation waits
   for the blocks that are on their way, normally seconds. If the node has
   gone silent it waits until the wallet library gives up on it, which

@@ -41,6 +41,7 @@ abstract final class ProblemKind {
   static const invalidAmount = 'invalid_amount';
   static const invalidNode = 'invalid_node';
   static const zeroAmount = 'zero_amount';
+  static const notEnoughFunds = 'not_enough_funds';
   static const tooManyUnusedAddresses = 'too_many_unused_addresses';
   static const sendOutcomeUnknown = 'send_outcome_unknown';
   static const notNow = 'not_now';
@@ -58,6 +59,7 @@ abstract final class ProblemKind {
     invalidAmount,
     invalidNode,
     zeroAmount,
+    notEnoughFunds,
     tooManyUnusedAddresses,
     sendOutcomeUnknown,
     notNow,
@@ -183,7 +185,10 @@ class SendStatus {
     this.to,
     this.amount,
     this.fee,
+    this.total,
+    this.sourceAddresses,
     this.txids,
+    this.settled,
     this.problem,
   });
 
@@ -194,8 +199,23 @@ class SendStatus {
   final String? amount;
   final String? fee;
 
-  /// The transactions that were sent, when [phase] is [SendPhase.sent].
+  /// The amount and the fee together: what leaves the wallet.
+  final String? total;
+
+  /// The wallet's own addresses, by index, whose coins the transaction
+  /// under review spends. More than one means coins from different
+  /// addresses are spent together.
+  final List<int>? sourceAddresses;
+
+  /// The transactions that were sent, when [phase] is [SendPhase.sent], or
+  /// that may have been, when it is [SendPhase.outcomeUnknown].
   final List<String>? txids;
+
+  /// With [SendPhase.outcomeUnknown]: false while the core is still
+  /// looking for the transaction and takes no other send; true once a
+  /// synchronisation well after the attempt has not shown it. The core
+  /// turns the phase into [SendPhase.sent] by itself if it finds it.
+  final bool? settled;
   final Problem? problem;
 }
 
@@ -299,7 +319,11 @@ class SessionState {
         to: send['to'] as String?,
         amount: send['amount'] as String?,
         fee: send['fee'] as String?,
+        total: send['total'] as String?,
+        sourceAddresses: (send['source_addresses'] as List<dynamic>?)
+            ?.cast<int>(),
         txids: (send['txids'] as List<dynamic>?)?.cast<String>(),
+        settled: send['settled'] as bool?,
         problem: Problem.maybe(send['problem']),
       ),
       rebuiltFromKeys: json['rebuilt_from_keys'] as bool,

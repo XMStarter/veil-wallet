@@ -59,6 +59,8 @@ void main() {
     expect(state.send.to, state.receiveAddress!.address);
     expect(state.send.amount, '1.50');
     expect(state.send.fee, '0.00003066');
+    expect(state.send.total, '1.50003066');
+    expect(state.send.sourceAddresses, [1, 3]);
   });
 
   test('a state where things went wrong says what and why', () {
@@ -75,6 +77,8 @@ void main() {
     expect(state.receiveAddress, isNull);
     expect(state.history, isEmpty);
     expect(state.send.phase, SendPhase.outcomeUnknown);
+    expect(state.send.txids, ['c' * 64]);
+    expect(state.send.settled, isFalse);
     expect(state.rebuiltFromKeys, isTrue);
     expect(state.lastProblem, isNull);
   });

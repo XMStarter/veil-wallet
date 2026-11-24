@@ -80,7 +80,13 @@ runtime.
 4. **Receive.** QR code, the number of the address, the address itself,
    Copy, and a way to ask for a new address. Share comes with the phone:
    a desktop has nothing to share into.
-5. **Send.** Form, then a review screen, then a confirmation.
+5. **Send.** A form: the address, with Paste, and the amount, or
+   everything. Then a review: the address in groups of four, the amount,
+   the fee, the total, a warning if coins from several addresses are
+   combined, and the one button that sends. Then the outcome: sent, or not
+   known, which is a warning and never a failure. While a transaction is
+   being built or handed over, a line moves and words say what is waited
+   for.
 6. **Settings.** Tor status, node, bridges, password, auto-lock, show
    recovery phrase, theme, language.
 

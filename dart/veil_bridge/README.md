@@ -27,6 +27,10 @@ final last = session.close();
   its own.
 - A problem has a kind (`ProblemKind`) for the interface to put into its
   own words, and a detail in English for a log.
+- A send under review comes with its total and with the addresses whose
+  coins it spends. A send whose outcome is unknown comes with whether the
+  core has settled it; the core turns it into a sent one by itself when
+  it finds the transaction.
 - The network is stagenet. There is no other yet.
 
 ## Tests

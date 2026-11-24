@@ -69,6 +69,7 @@ fn start_with_password(
         transport: Box::new(move |_| Ok(Box::new(stand_in) as Box<dyn Transport>)),
         wallet: Box::new(|_| {}),
         save_every: crate::session::SAVE_EVERY,
+        send_settles_after: crate::session::SEND_SETTLES_AFTER,
     };
     Session::start_with(config, source, password, hooks)
 }
@@ -265,11 +266,23 @@ fn it_synchronises_by_itself_when_told_how_often() {
     wait(&session, |state| matches!(state.sync, SyncState::Failed(_)));
     let first = stand_in.requests().len();
     assert!(first > 0);
-    let tried_again = (0..100).any(|_| {
+    // How soon is not the point, and on a machine busy with other tests
+    // the wallet library can take many seconds over a node that is not
+    // there.
+    let began = std::time::Instant::now();
+    let tried_again = (0..SOON.as_millis() / 100).any(|_| {
         std::thread::sleep(Duration::from_millis(100));
         stand_in.requests().len() > first
     });
-    assert!(tried_again, "no second synchronisation within ten seconds");
+    assert!(
+        tried_again,
+        "no second synchronisation within {SOON:?}: {:#?}",
+        session.state()
+    );
+    eprintln!(
+        "the second synchronisation began after {:?}",
+        began.elapsed()
+    );
 }
 
 /// A session with two slow fake nodes behind its two candidates, in the
@@ -506,6 +519,9 @@ mod on_a_private_chain {
                 wallet.accept_regtest_chain();
             }),
             save_every,
+            // On a private chain a transaction that went out is in the
+            // node's pool at once; nothing has to be waited for.
+            send_settles_after: Duration::ZERO,
         };
         Session::start_with(config, source, PASSWORD, hooks)
     }
@@ -774,6 +790,18 @@ mod on_a_private_chain {
         // The paid address has been replaced by the next one.
         assert_eq!(state.receive_address.as_ref().map(|a| a.index), Some(2));
 
+        // --- A send the wallet cannot afford ----------------------------------
+        session.prepare_send(&payee_address, SendAmount::Exact("50".parse().unwrap()));
+        let state = wait(&session, |state| {
+            matches!(state.send, SendState::Review { .. } | SendState::Failed(_))
+        });
+        let SendState::Failed(problem) = &state.send else {
+            panic!("fifty were offered out of five: {:?}", state.send);
+        };
+        assert_eq!(problem.kind, ProblemKind::NotEnoughFunds, "{problem:?}");
+        session.cancel_send();
+        wait(&session, |state| state.send == SendState::Idle);
+
         // --- A send that is reviewed and cancelled --------------------------
         let amount: Amount = "1.5".parse().unwrap();
         stand_in.clear_requests();
@@ -785,6 +813,8 @@ mod on_a_private_chain {
             to,
             amount: shown,
             fee: shown_fee,
+            total,
+            source_addresses,
         } = state.send.clone()
         else {
             panic!("the transaction was not built: {:?}", state.send);
@@ -792,6 +822,9 @@ mod on_a_private_chain {
         assert_eq!(to, payee_address);
         assert_eq!(shown, amount);
         assert!(!shown_fee.is_zero());
+        assert_eq!(Some(total), amount.checked_add(shown_fee));
+        // Everything the wallet has came in at its first address.
+        assert_eq!(source_addresses, [1]);
         // While a transaction is under review, other commands wait.
         session.new_address();
         let state = wait(&session, |state| state.last_problem.is_some());
@@ -872,13 +905,44 @@ mod on_a_private_chain {
         let state = wait(&session, |state| {
             !matches!(state.send, SendState::Review { .. } | SendState::Sending)
         });
-        assert_eq!(state.send, SendState::OutcomeUnknown);
+        let SendState::OutcomeUnknown {
+            txids: lost,
+            settled,
+        } = state.send.clone()
+        else {
+            panic!("the send was not reported as unknown: {:?}", state.send);
+        };
+        assert!(!settled);
+        assert_eq!(lost.len(), 1);
         assert_eq!(stand_in.cuts(), 1, "the send was not cut");
         // Nothing is recorded yet.
         assert_eq!(state.balance.total, after_first);
         assert_eq!(outgoing(&state), 1);
 
-        // The next synchronisation after a block shows that it went out.
+        // Until the wallet has looked for it, it builds no other send: a
+        // second one could pay twice.
+        session.prepare_send(&payee_address, SendAmount::Exact(amount));
+        let state = wait(&session, |state| state.last_problem.is_some());
+        assert_eq!(
+            state.last_problem.map(|problem| problem.kind),
+            Some(ProblemKind::NotNow)
+        );
+        assert!(matches!(state.send, SendState::OutcomeUnknown { .. }));
+
+        // The next synchronisation finds it among the transactions the
+        // node is holding, before any block, and says that it was sent.
+        let state = synchronised(&session);
+        assert_eq!(
+            state.send,
+            SendState::Sent {
+                txids: lost.clone()
+            }
+        );
+        assert_eq!(outgoing(&state), 2);
+        session.cancel_send();
+        wait(&session, |state| state.send == SendState::Idle);
+
+        // Once it is in a block, the funds are what one payment leaves.
         daemon.add_blocks(UNLOCK_BLOCKS + 1, &funder_address);
         let state = synchronised(&session);
         let after_second = after_first
@@ -887,24 +951,86 @@ mod on_a_private_chain {
             .unwrap();
         assert_eq!(state.balance.total, after_second);
         assert_eq!(outgoing(&state), 2);
-        // The outcome stays on show until the interface clears it.
-        assert_eq!(state.send, SendState::OutcomeUnknown);
+
+        // --- A send that never reaches the node -------------------------------
+        // The wallet library says the same for it as for a lost answer, so
+        // it is reported the same way: unknown.
+        session.prepare_send(&payee_address, SendAmount::Exact(amount));
+        let state = wait(&session, |state| {
+            matches!(state.send, SendState::Review { .. } | SendState::Failed(_))
+        });
+        assert!(
+            matches!(state.send, SendState::Review { .. }),
+            "the transaction was not built: {:?}",
+            state.send
+        );
+        stand_in.unroute(BROADCAST_HOST, BROADCAST_PORT);
+        session.confirm_send();
+        let state = wait(&session, |state| {
+            !matches!(state.send, SendState::Review { .. } | SendState::Sending)
+        });
+        let SendState::OutcomeUnknown { txids: never, .. } = state.send.clone() else {
+            panic!("the send was not reported as unknown: {:?}", state.send);
+        };
+        stand_in.route(BROADCAST_HOST, BROADCAST_PORT, daemon.rpc_port());
+
+        // A synchronisation does not find it. On this chain there is
+        // nothing to wait for, so that settles it: still not called failed,
+        // but the wallet takes a new send from here on.
+        let state = synchronised(&session);
+        assert_eq!(
+            state.send,
+            SendState::OutcomeUnknown {
+                txids: never,
+                settled: true
+            }
+        );
+        assert_eq!(state.balance.total, after_second);
+        assert_eq!(outgoing(&state), 2);
+
+        session.prepare_send(&payee_address, SendAmount::Exact(amount));
+        let state = wait(&session, |state| {
+            matches!(state.send, SendState::Review { .. } | SendState::Failed(_))
+        });
+        let SendState::Review { fee: third_fee, .. } = state.send else {
+            panic!("the transaction was not built: {:?}", state.send);
+        };
+        session.confirm_send();
+        let state = wait(&session, |state| {
+            !matches!(state.send, SendState::Review { .. } | SendState::Sending)
+        });
+        assert!(
+            matches!(state.send, SendState::Sent { .. }),
+            "the transaction was not sent: {:?}",
+            state.send
+        );
+        daemon.add_blocks(UNLOCK_BLOCKS + 1, &funder_address);
+        let state = synchronised(&session);
+        let in_the_end = after_second
+            .checked_sub(amount)
+            .and_then(|rest| rest.checked_sub(third_fee))
+            .unwrap();
+        assert_eq!(state.balance.total, in_the_end);
+        assert_eq!(outgoing(&state), 3);
         assert_eq!(session.close().phase, Phase::Closed);
 
         payee.connect(&direct).unwrap();
         payee.refresh().unwrap();
         assert_eq!(
             payee.balance().total,
-            amount.checked_add(amount).unwrap(),
-            "the payee was paid twice in all, once per send"
+            amount
+                .checked_add(amount)
+                .and_then(|sum| sum.checked_add(amount))
+                .unwrap(),
+            "the payee was paid three times in all, once per send that went out"
         );
 
         // --- The same wallet in a new session -------------------------------
         let session = start_on_chain(config, &stand_in, WalletSource::Open);
         let state = opened(&session);
         assert_eq!(state.phase, Phase::Ready, "{state:#?}");
-        assert_eq!(state.balance.total, after_second);
-        assert_eq!(outgoing(&state), 2);
+        assert_eq!(state.balance.total, in_the_end);
+        assert_eq!(outgoing(&state), 3);
         assert_eq!(state.sync, SyncState::NotYet);
     }
 }

@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:veil/app.dart';
 import 'package:veil/core/backend.dart';
-import 'package:veil_bridge/veil_bridge.dart';
 
 /// Loads the app's own typefaces, so that tests lay text out as the app
 /// does and not in the test framework's stand-in font.
@@ -69,6 +68,7 @@ class FakeBackend implements WalletBackend {
     String? locked,
     ReceiveAddress? address,
     List<Transfer>? history,
+    SendStatus? send,
     bool? rebuilt,
     Problem? lastProblem,
   }) {
@@ -86,7 +86,7 @@ class FakeBackend implements WalletBackend {
       balanceLocked: locked ?? now.balanceLocked,
       receiveAddress: address ?? now.receiveAddress,
       history: history ?? now.history,
-      send: const SendStatus(SendPhase.idle),
+      send: send ?? now.send,
       rebuiltFromKeys: rebuilt ?? now.rebuiltFromKeys,
       // Cleared by the next command, as in the core.
       lastProblem: lastProblem,
@@ -138,6 +138,96 @@ class FakeBackend implements WalletBackend {
       );
     } else {
       report(address: ReceiveAddress(index + 1, testAddresses[index]));
+    }
+  }
+
+  /// What the next send that is confirmed ends as.
+  SendPhase sendEndsAs = SendPhase.sent;
+
+  /// What the wallet charges for a transaction.
+  static const fee = '0.00003066';
+
+  /// The amount a send of everything comes to, and its total.
+  static const everythingAmount = '10.49996934';
+
+  @override
+  Problem? prepareSend(String to, String amount) {
+    calls.add('prepare $amount to $to');
+    if (amount != everything && double.tryParse(amount) == null) {
+      return const Problem(ProblemKind.invalidAmount, 'not an amount');
+    }
+    // The pretended wallet knows its test addresses and nothing else.
+    if (!testAddresses.contains(to)) {
+      report(
+        send: const SendStatus(
+          SendPhase.failed,
+          problem: Problem(ProblemKind.invalidAddress, 'not an address'),
+        ),
+      );
+    } else if (amount != everything && double.parse(amount) == 0) {
+      report(
+        send: const SendStatus(
+          SendPhase.failed,
+          problem: Problem(ProblemKind.zeroAmount, 'zero'),
+        ),
+      );
+    } else if (amount != everything && double.parse(amount) > 10) {
+      report(
+        send: const SendStatus(
+          SendPhase.failed,
+          problem: Problem(ProblemKind.notEnoughFunds, 'not enough money'),
+        ),
+      );
+    } else {
+      // Amounts as the core would write them; the test wallet's sums are
+      // fixed, because nothing on this side calculates with money.
+      final all = amount == everything;
+      report(
+        send: SendStatus(
+          SendPhase.review,
+          to: to,
+          amount: all ? everythingAmount : '1.50',
+          fee: fee,
+          total: all ? '10.50' : '1.50003066',
+          sourceAddresses: all ? const [0, 1, 3] : const [1],
+        ),
+      );
+    }
+    return null;
+  }
+
+  @override
+  void confirmSend() {
+    calls.add('confirm send');
+    report(
+      send: switch (sendEndsAs) {
+        SendPhase.sent => SendStatus(SendPhase.sent, txids: ['a' * 64]),
+        SendPhase.outcomeUnknown => SendStatus(
+          SendPhase.outcomeUnknown,
+          txids: ['a' * 64],
+          settled: false,
+        ),
+        _ => const SendStatus(
+          SendPhase.failed,
+          problem: Problem(ProblemKind.other, 'the node refused it'),
+        ),
+      },
+    );
+  }
+
+  @override
+  void cancelSend() {
+    calls.add('cancel send');
+    final send = _state.value?.send;
+    if (send == null) return;
+    // As in the core: an outcome that is unknown and not settled stays.
+    if (send.phase == SendPhase.outcomeUnknown && send.settled != true) {
+      report(
+        send: send,
+        lastProblem: const Problem(ProblemKind.notNow, 'not known yet'),
+      );
+    } else {
+      report(send: const SendStatus(SendPhase.idle));
     }
   }
 
@@ -255,4 +345,45 @@ bool enabled(WidgetTester tester, String label) {
     matching: find.bySubtype<ButtonStyleButton>(),
   );
   return tester.widget<ButtonStyleButton>(button.first).onPressed != null;
+}
+
+/// Opens the wallet on the device and lands on Home.
+Future<FakeBackend> openWallet(WidgetTester tester, String language) async {
+  final backend = FakeBackend(hasWallet: true, confirmed: true);
+  await pumpApp(tester, language, backend: backend);
+  await type(tester, language == 'ru' ? 'Пароль' : 'Password', testPassword);
+  await press(tester, language == 'ru' ? 'Открыть кошелёк' : 'Open wallet');
+  return backend;
+}
+
+/// Stands in for the system's clipboard, holding [text], and returns what
+/// is put into it.
+List<String> clipboard(WidgetTester tester, {String? text}) {
+  final copied = <String>[];
+  final messenger = tester.binding.defaultBinaryMessenger;
+  messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+    if (call.method == 'Clipboard.setData') {
+      copied.add((call.arguments as Map<Object?, Object?>)['text']! as String);
+    }
+    if (call.method == 'Clipboard.getData') {
+      return text == null ? null : <String, Object?>{'text': text};
+    }
+    return null;
+  });
+  addTearDown(
+    () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+  );
+  return copied;
+}
+
+/// Whether [text] is on the screen, in plain text or inside styled text.
+Finder shown(String text) => find.textContaining(text, findRichText: true);
+
+/// Presses the button labelled [label] and draws one frame, for screens
+/// that then show progress, which never comes to rest.
+Future<void> pressOnce(WidgetTester tester, String label) async {
+  final button = find.text(label.toUpperCase());
+  await tester.ensureVisible(button);
+  await tester.tap(button);
+  await tester.pump();
 }

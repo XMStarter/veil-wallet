@@ -18,7 +18,11 @@
   "receive_address": null,
   "revision": 7,
   "send": {
-    "name": "outcome_unknown"
+    "name": "outcome_unknown",
+    "settled": false,
+    "txids": [
+      "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    ]
   },
   "sync": {
     "name": "failed",

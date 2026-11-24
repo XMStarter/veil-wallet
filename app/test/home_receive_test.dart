@@ -6,37 +6,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:veil/screens/receive_screen.dart';
 import 'package:veil/widgets/address_text.dart';
 import 'package:veil/widgets/qr_view.dart';
-import 'package:veil_bridge/veil_bridge.dart';
+import 'package:veil/core/backend.dart';
 
 import 'support.dart';
-
-/// Opens the wallet on the device and lands on Home.
-Future<FakeBackend> openWallet(WidgetTester tester, String language) async {
-  final backend = FakeBackend(hasWallet: true, confirmed: true);
-  await pumpApp(tester, language, backend: backend);
-  await type(tester, language == 'ru' ? 'Пароль' : 'Password', testPassword);
-  await press(tester, language == 'ru' ? 'Открыть кошелёк' : 'Open wallet');
-  return backend;
-}
-
-/// Stands in for the system's clipboard and returns what is put into it.
-List<String> clipboard(WidgetTester tester) {
-  final copied = <String>[];
-  final messenger = tester.binding.defaultBinaryMessenger;
-  messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
-    if (call.method == 'Clipboard.setData') {
-      copied.add((call.arguments as Map<Object?, Object?>)['text']! as String);
-    }
-    return null;
-  });
-  addTearDown(
-    () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
-  );
-  return copied;
-}
-
-/// Whether [text] is on the screen, in plain text or inside styled text.
-Finder shown(String text) => find.textContaining(text, findRichText: true);
 
 void main() {
   setUpAll(loadFonts);
@@ -228,13 +200,6 @@ void main() {
     expect(top('+3.00'), lessThan(top('−0.15')));
     expect(top('−0.15'), lessThan(top('+12.50')));
     expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('sending is not offered before it is built', (tester) async {
-    await openWallet(tester, 'en');
-    expect(enabled(tester, 'Send'), isFalse);
-    expect(find.text('Sending is not built yet.'), findsOneWidget);
-    expect(enabled(tester, 'Receive'), isTrue);
   });
 
   testWidgets('receive shows the address as a code and as text to check', (

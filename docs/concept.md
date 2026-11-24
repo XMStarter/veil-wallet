@@ -83,17 +83,25 @@ if, at build time, Arti cannot run bridges on Android.
 ## Sending
 
 - The user pastes or scans an address, enters an amount, and sees a review
-  screen with the fee and the total before anything is sent.
+  screen with the fee and the total before anything is sent. A payment
+  link, `monero:` followed by an address, is read like an address, with
+  its amount if it names one. (Scanning comes with the phone.)
 - The address is shown in groups of four characters with the beginning and
   the end highlighted, so it is easy to compare with the original.
 - If the connection is lost while a transaction is being handed to the
-  node, the wallet does not know whether it went out. It says so, and asks
-  the user to wait for the next synchronisation, which shows the
-  transaction if it did. It never reports such a send as failed, because a
-  second send could then pay twice.
-- When choosing which coins to spend, the wallet prefers coins that arrived
-  at a single subaddress. If coins from different addresses must be combined,
-  it warns the user, because combining them can link those addresses.
+  node, the wallet does not know whether it went out. It says so, and
+  looks for the transaction after every synchronisation, in blocks and
+  among the transactions nodes are still holding. If it finds it, the
+  payment is shown as sent. Until then it sends nothing else, because a
+  second send could pay twice. If a synchronisation five minutes or more
+  after the attempt still does not show it, the wallet says that it most
+  likely never went out and lets the user send again, with the warning
+  that the recipient is paid twice if the first one arrives after all. It
+  never reports such a send as failed by itself.
+- The wallet library chooses which coins to spend and takes them from a
+  single subaddress as long as that one holds enough. If coins from
+  different addresses have to be combined, the review says so, because
+  combining them can link those addresses.
 
 ## Recovery phrase and storage
 
@@ -176,7 +184,9 @@ run where is set out in [development.md](development.md).
       wallet is open. With it, in the core: a synchronisation that can be
       stopped and that saves along the way.
    6. *Send:* form, review, confirmation, and the case where the outcome is
-      not known.
+      not known. With it, in the core: the total and the addresses whose
+      coins are spent, for the review; a lack of funds as a problem of its
+      own kind; and the search for a transaction whose outcome is unknown.
    7. *Settings:* node, bridges, password, auto-lock, recovery phrase,
       theme, language.
    8. *The app on Windows:* the build from hosted CI with the wallet library

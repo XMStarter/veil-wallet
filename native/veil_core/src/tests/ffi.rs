@@ -242,6 +242,8 @@ fn sample_states() -> [(&'static str, SessionState); 2] {
             to: ADDRESS.to_owned(),
             amount: amount("1.5"),
             fee: amount("0.00003066"),
+            total: amount("1.50003066"),
+            source_addresses: vec![1, 3],
         },
         rebuilt_from_keys: false,
         last_problem: Some(problem(
@@ -269,7 +271,10 @@ fn sample_states() -> [(&'static str, SessionState); 2] {
         },
         receive_address: None,
         history: Vec::new(),
-        send: SendState::OutcomeUnknown,
+        send: SendState::OutcomeUnknown {
+            txids: vec!["c".repeat(64)],
+            settled: false,
+        },
         rebuilt_from_keys: true,
         last_problem: None,
     };
@@ -413,6 +418,7 @@ fn a_session_is_driven_through_the_interface_from_start_to_close() {
         transport: Box::new(move |_| Ok(Box::new(transport) as Box<dyn Transport>)),
         wallet: Box::new(|_| {}),
         save_every: crate::session::SAVE_EVERY,
+        send_settles_after: crate::session::SEND_SETTLES_AFTER,
     };
     let handle = start_with(&config_json(&dir, "create"), PASSWORD, None, hooks).unwrap();
 
