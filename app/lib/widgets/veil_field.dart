@@ -30,6 +30,10 @@ class VeilField extends StatelessWidget {
   final bool monospace;
   final int lines;
   final bool numeric;
+
+  /// False while what was typed is being worked on: it cannot be changed
+  /// then. The field keeps the keyboard all the same, so that after a
+  /// refusal the user types on without having to click it again.
   final bool enabled;
   final bool autofocus;
   final ValueChanged<String>? onChanged;
@@ -37,14 +41,16 @@ class VeilField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const border = OutlineInputBorder(
-      borderRadius: BorderRadius.all(Radius.circular(VeilSizes.cornerRadius)),
-      borderSide: BorderSide(color: VeilColors.fieldBorder),
+    final palette = VeilPalette.of(context);
+    const corners = BorderRadius.all(Radius.circular(VeilSizes.cornerRadius));
+    final border = OutlineInputBorder(
+      borderRadius: corners,
+      borderSide: BorderSide(color: palette.fieldBorder),
     );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: VeilText.secondary),
+        Text(label, style: VeilText.secondaryIn(context)),
         const SizedBox(height: 6),
         TextField(
           controller: controller,
@@ -57,29 +63,39 @@ class VeilField extends StatelessWidget {
           maxLines: secret ? 1 : lines,
           minLines: secret ? 1 : lines,
           keyboardType: numeric ? TextInputType.number : null,
-          enabled: enabled,
+          readOnly: !enabled,
           autofocus: autofocus,
           onChanged: onChanged,
           onSubmitted: onSubmitted,
           style: monospace ? VeilText.address : VeilText.body,
-          cursorColor: VeilColors.ink,
-          decoration: const InputDecoration(
+          cursorColor: palette.ink,
+          decoration: InputDecoration(
             filled: true,
-            fillColor: VeilColors.field,
+            fillColor: palette.field,
             isDense: true,
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 14,
+            ),
             border: border,
             enabledBorder: border,
             disabledBorder: border,
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.all(
-                Radius.circular(VeilSizes.cornerRadius),
-              ),
-              borderSide: BorderSide(color: VeilColors.ink, width: 2),
+              borderRadius: corners,
+              borderSide: BorderSide(color: palette.ink, width: 2),
             ),
           ),
         ),
       ],
     );
   }
+}
+
+/// Marks everything typed into [field], so that the next key replaces it:
+/// for a password that was refused.
+void markAll(TextEditingController field) {
+  field.selection = TextSelection(
+    baseOffset: 0,
+    extentOffset: field.text.length,
+  );
 }

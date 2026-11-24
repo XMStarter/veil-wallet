@@ -73,6 +73,12 @@ class _RestoreScreenState extends State<RestoreScreen> {
         _working = false;
         _problem = failure.problem;
       });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _working = false;
+        _problem = unforeseen(error);
+      });
     }
   }
 
@@ -106,7 +112,7 @@ class _RestoreScreenState extends State<RestoreScreen> {
         const SizedBox(height: 6),
         Text(
           '${text.restoreWordCount(_wordCount)}. ${text.restorePhraseHint}',
-          style: VeilText.secondary,
+          style: VeilText.secondaryIn(context),
         ),
         if (_wordCount == 25) ...[
           const SizedBox(height: 16),

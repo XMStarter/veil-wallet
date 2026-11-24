@@ -72,6 +72,10 @@ pub struct MoneroC {
     pub MONERO_Wallet_errorString: unsafe extern "C" fn(
         wallet_ptr: *mut ::std::os::raw::c_void,
     ) -> *const ::std::os::raw::c_char,
+    pub MONERO_Wallet_setPassword: unsafe extern "C" fn(
+        wallet_ptr: *mut ::std::os::raw::c_void,
+        password: *const ::std::os::raw::c_char,
+    ) -> bool,
     pub MONERO_Wallet_address: unsafe extern "C" fn(
         wallet_ptr: *mut ::std::os::raw::c_void,
         accountIndex: u64,
@@ -154,6 +158,15 @@ pub struct MoneroC {
     pub MONERO_Wallet_history: unsafe extern "C" fn(
         wallet_ptr: *mut ::std::os::raw::c_void,
     ) -> *mut ::std::os::raw::c_void,
+    pub MONERO_Wallet_setCacheAttribute: unsafe extern "C" fn(
+        wallet_ptr: *mut ::std::os::raw::c_void,
+        key: *const ::std::os::raw::c_char,
+        val: *const ::std::os::raw::c_char,
+    ) -> bool,
+    pub MONERO_Wallet_getCacheAttribute: unsafe extern "C" fn(
+        wallet_ptr: *mut ::std::os::raw::c_void,
+        key: *const ::std::os::raw::c_char,
+    ) -> *const ::std::os::raw::c_char,
     pub MONERO_WalletManager_openWallet: unsafe extern "C" fn(
         wm_ptr: *mut ::std::os::raw::c_void,
         path: *const ::std::os::raw::c_char,
@@ -286,6 +299,9 @@ impl MoneroC {
         let MONERO_Wallet_errorString = __library
             .get(b"MONERO_Wallet_errorString\0")
             .map(|sym| *sym)?;
+        let MONERO_Wallet_setPassword = __library
+            .get(b"MONERO_Wallet_setPassword\0")
+            .map(|sym| *sym)?;
         let MONERO_Wallet_address = __library.get(b"MONERO_Wallet_address\0").map(|sym| *sym)?;
         let MONERO_Wallet_nettype = __library.get(b"MONERO_Wallet_nettype\0").map(|sym| *sym)?;
         let MONERO_Wallet_stop = __library.get(b"MONERO_Wallet_stop\0").map(|sym| *sym)?;
@@ -345,6 +361,12 @@ impl MoneroC {
             .get(b"MONERO_Wallet_createTransaction\0")
             .map(|sym| *sym)?;
         let MONERO_Wallet_history = __library.get(b"MONERO_Wallet_history\0").map(|sym| *sym)?;
+        let MONERO_Wallet_setCacheAttribute = __library
+            .get(b"MONERO_Wallet_setCacheAttribute\0")
+            .map(|sym| *sym)?;
+        let MONERO_Wallet_getCacheAttribute = __library
+            .get(b"MONERO_Wallet_getCacheAttribute\0")
+            .map(|sym| *sym)?;
         let MONERO_WalletManager_openWallet = __library
             .get(b"MONERO_WalletManager_openWallet\0")
             .map(|sym| *sym)?;
@@ -402,6 +424,7 @@ impl MoneroC {
             MONERO_Wallet_seed,
             MONERO_Wallet_status,
             MONERO_Wallet_errorString,
+            MONERO_Wallet_setPassword,
             MONERO_Wallet_address,
             MONERO_Wallet_nettype,
             MONERO_Wallet_stop,
@@ -427,6 +450,8 @@ impl MoneroC {
             MONERO_Wallet_addSubaddress,
             MONERO_Wallet_createTransaction,
             MONERO_Wallet_history,
+            MONERO_Wallet_setCacheAttribute,
+            MONERO_Wallet_getCacheAttribute,
             MONERO_WalletManager_openWallet,
             MONERO_WalletManager_recoveryWallet,
             MONERO_WalletManager_createWalletFromPolyseed,
@@ -590,6 +615,13 @@ impl MoneroC {
         wallet_ptr: *mut ::std::os::raw::c_void,
     ) -> *const ::std::os::raw::c_char {
         (self.MONERO_Wallet_errorString)(wallet_ptr)
+    }
+    pub unsafe fn MONERO_Wallet_setPassword(
+        &self,
+        wallet_ptr: *mut ::std::os::raw::c_void,
+        password: *const ::std::os::raw::c_char,
+    ) -> bool {
+        (self.MONERO_Wallet_setPassword)(wallet_ptr, password)
     }
     pub unsafe fn MONERO_Wallet_address(
         &self,
@@ -783,6 +815,21 @@ impl MoneroC {
         wallet_ptr: *mut ::std::os::raw::c_void,
     ) -> *mut ::std::os::raw::c_void {
         (self.MONERO_Wallet_history)(wallet_ptr)
+    }
+    pub unsafe fn MONERO_Wallet_setCacheAttribute(
+        &self,
+        wallet_ptr: *mut ::std::os::raw::c_void,
+        key: *const ::std::os::raw::c_char,
+        val: *const ::std::os::raw::c_char,
+    ) -> bool {
+        (self.MONERO_Wallet_setCacheAttribute)(wallet_ptr, key, val)
+    }
+    pub unsafe fn MONERO_Wallet_getCacheAttribute(
+        &self,
+        wallet_ptr: *mut ::std::os::raw::c_void,
+        key: *const ::std::os::raw::c_char,
+    ) -> *const ::std::os::raw::c_char {
+        (self.MONERO_Wallet_getCacheAttribute)(wallet_ptr, key)
     }
     pub unsafe fn MONERO_WalletManager_openWallet(
         &self,

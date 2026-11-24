@@ -15,20 +15,17 @@ class Notice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = VeilPalette.of(context);
     return Container(
       decoration: BoxDecoration(
-        color: VeilColors.surface,
+        color: palette.surface,
         border: warning
-            ? const Border(
-                left: BorderSide(color: VeilColors.threadCrimson, width: 3),
-              )
+            ? Border(left: BorderSide(color: palette.threadCrimson, width: 3))
             : null,
       ),
       padding: const EdgeInsets.all(12),
-      child: Text(
-        text,
-        style: VeilText.secondary.copyWith(color: VeilColors.ink),
-      ),
+      // In ink, not muted: a notice is to be read.
+      child: Text(text, style: VeilText.secondary.copyWith(color: palette.ink)),
     );
   }
 }
@@ -45,7 +42,9 @@ class ProblemText extends StatelessWidget {
       padding: const EdgeInsets.only(top: 8),
       child: Text(
         text,
-        style: VeilText.secondary.copyWith(color: VeilColors.threadCrimson),
+        style: VeilText.secondary.copyWith(
+          color: VeilPalette.of(context).threadCrimson,
+        ),
       ),
     );
   }

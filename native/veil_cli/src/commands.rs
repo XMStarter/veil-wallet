@@ -253,7 +253,9 @@ impl Session {
         synchronise(&mut core, &candidates)?;
 
         let sync_node = core.nodes().sync().clone();
-        let broadcast_node = core.nodes().broadcast().clone();
+        // Where the transaction may go: the first of these that answers.
+        let (route, behind): (Vec<OnionNode>, Vec<_>) =
+            core.broadcast_route(&candidates, None).into_iter().unzip();
         let pending = core.prepare_send(to, amount)?;
         let total = pending
             .amount()
@@ -263,10 +265,10 @@ impl Session {
         println!("Amount:  {} XMR", pending.amount());
         println!("Fee:     {} XMR", pending.fee());
         println!("Total:   {total} XMR");
-        if broadcast_node == sync_node {
+        if route.len() == 1 {
             println!("Through: the node synchronised with, on a separate Tor circuit");
         } else {
-            println!("Through: {broadcast_node}");
+            println!("Through: {}, or the next node that answers", route[0]);
         }
 
         let answer = prompt::line("Send it? Type yes to confirm: ")?;
@@ -276,12 +278,18 @@ impl Session {
             core.close()?;
             return Ok(());
         }
-        let sent = pending.commit();
+        let sent = pending.commit_through(&behind);
         // Save whatever happened: after a broadcast the wallet knows which
         // of its coins are spent.
         let saved = core.close();
-        for txid in sent? {
+        let (txids, position) = sent?;
+        for txid in txids {
             println!("Sent. Transaction {txid}");
+        }
+        if route[position] == sync_node {
+            println!("It went through the node synchronised with; no other answered.");
+        } else {
+            println!("It went through {}.", route[position]);
         }
         saved?;
         Ok(())

@@ -24,56 +24,62 @@ abstract final class VeilSizes {
   static const progressLine = 2.0;
 }
 
-/// The light theme, the default. No gradients, no shadows, and no
-/// animation except progress.
-ThemeData veilTheme() {
+/// The theme: light, the default, or dark. No gradients, no shadows, and
+/// no animation except progress. Its colours are one [VeilPalette], which
+/// it also carries for the screens to ask for.
+ThemeData veilTheme({bool dark = false}) {
+  final palette = dark ? VeilPalette.dark : VeilPalette.light;
   const shape = RoundedRectangleBorder(
     borderRadius: BorderRadius.all(Radius.circular(VeilSizes.cornerRadius)),
   );
   const buttonSize = Size(VeilSizes.minTouchTarget, VeilSizes.buttonHeight);
+  final scheme = (dark ? const ColorScheme.dark() : const ColorScheme.light())
+      .copyWith(
+        primary: palette.ink,
+        onPrimary: palette.ground,
+        secondary: palette.threadNavy,
+        onSecondary: palette.ground,
+        error: palette.threadCrimson,
+        onError: palette.ground,
+        surface: palette.ground,
+        onSurface: palette.ink,
+        outline: palette.fieldBorder,
+        outlineVariant: palette.hairline,
+      );
+  TextStyle ink(TextStyle style) => style.copyWith(color: palette.ink);
   return ThemeData(
     useMaterial3: true,
-    brightness: Brightness.light,
-    scaffoldBackgroundColor: VeilColors.ground,
-    colorScheme: const ColorScheme.light(
-      primary: VeilColors.ink,
-      onPrimary: VeilColors.ground,
-      secondary: VeilColors.threadNavy,
-      onSecondary: VeilColors.ground,
-      error: VeilColors.threadCrimson,
-      onError: VeilColors.ground,
-      surface: VeilColors.ground,
-      onSurface: VeilColors.ink,
-      outline: VeilColors.fieldBorder,
-      outlineVariant: VeilColors.hairline,
-    ),
+    brightness: dark ? Brightness.dark : Brightness.light,
+    extensions: [palette],
+    scaffoldBackgroundColor: palette.ground,
+    colorScheme: scheme,
     fontFamily: VeilFonts.interface,
-    textTheme: const TextTheme(
-      headlineMedium: VeilText.title,
-      displaySmall: VeilText.amount,
-      bodyLarge: VeilText.body,
-      bodyMedium: VeilText.body,
-      bodySmall: VeilText.secondary,
+    textTheme: TextTheme(
+      headlineMedium: ink(VeilText.title),
+      displaySmall: ink(VeilText.amount),
+      bodyLarge: ink(VeilText.body),
+      bodyMedium: ink(VeilText.body),
+      bodySmall: VeilText.secondary.copyWith(color: palette.muted),
       labelLarge: VeilText.button,
     ),
     splashFactory: NoSplash.splashFactory,
-    dividerTheme: const DividerThemeData(
-      color: VeilColors.hairline,
+    dividerTheme: DividerThemeData(
+      color: palette.hairline,
       thickness: 1,
       space: 1,
     ),
-    appBarTheme: const AppBarTheme(
-      backgroundColor: VeilColors.ground,
-      foregroundColor: VeilColors.ink,
+    appBarTheme: AppBarTheme(
+      backgroundColor: palette.ground,
+      foregroundColor: palette.ink,
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: true,
-      titleTextStyle: VeilText.title,
+      titleTextStyle: ink(VeilText.title),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: VeilColors.ink,
-        foregroundColor: VeilColors.ground,
+        backgroundColor: palette.ink,
+        foregroundColor: palette.ground,
         minimumSize: buttonSize,
         fixedSize: const Size.fromHeight(VeilSizes.buttonHeight),
         shape: shape,
@@ -83,18 +89,18 @@ ThemeData veilTheme() {
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        foregroundColor: VeilColors.ink,
+        foregroundColor: palette.ink,
         minimumSize: buttonSize,
         fixedSize: const Size.fromHeight(VeilSizes.buttonHeight),
         shape: shape,
-        side: const BorderSide(color: VeilColors.ink),
+        side: BorderSide(color: palette.ink),
         textStyle: VeilText.button,
       ),
     ),
     // The quiet button: words only.
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        foregroundColor: VeilColors.ink,
+        foregroundColor: palette.ink,
         minimumSize: const Size(
           VeilSizes.minTouchTarget,
           VeilSizes.minTouchTarget,
@@ -103,9 +109,9 @@ ThemeData veilTheme() {
         textStyle: VeilText.button,
       ),
     ),
-    progressIndicatorTheme: const ProgressIndicatorThemeData(
-      color: VeilColors.ink,
-      linearTrackColor: VeilColors.hairline,
+    progressIndicatorTheme: ProgressIndicatorThemeData(
+      color: palette.ink,
+      linearTrackColor: palette.hairline,
       linearMinHeight: VeilSizes.progressLine,
     ),
   );

@@ -19,11 +19,22 @@ See [`../wallet_lib`](../wallet_lib) for the library itself.
   unused, far below the 200 a restored wallet looks ahead, so a restore
   always finds every payment.
 - **Exact amounts.** `Amount` is an integer number of atomic units. Parsing
-  rejects anything ambiguous instead of rounding.
+  rejects anything ambiguous instead of rounding. A comma is taken as a
+  decimal separator, except where it could as well be grouping thousands
+  (`1,250`): that is refused, and the same digits with a point are taken
+  as they stand.
 - **No accidental "send everything".** Sending the whole balance is a
   separate, explicit choice; an amount of zero is an error.
 - **Review before sending.** `prepare_send` builds and signs a transaction
   and reports its fee. Nothing is broadcast until `commit`.
+- **A node is asked before it is given a transaction.**
+  `PendingSend::commit_through` takes the nodes to try in order and hands
+  the transaction to the first that answers. If none does, it fails with
+  `NoNodeToSendThrough`, and nothing has left the device.
+- **One payment, one transaction.** A payment that the library would
+  split into several transactions is refused with `SeveralTransactions`.
+  The library sends such transactions one after another and stops at the
+  first that fails, which would leave a payment that went out in part.
 - **Secrets are wiped.** Recovery phrases and passwords are zeroed in memory
   after use and never appear in debug output or error messages.
 - **On Windows, nothing rides in with the library.** Windows would look for
@@ -46,11 +57,12 @@ Found while testing against the real library. Each has a test.
 | On Windows, a wallet in a folder whose name is not ASCII is not recognised as existing | Before creating or restoring, the system is asked as well as the library, and either answer refuses; a Veil patch makes the library read paths as UTF-8 |
 | Unloading the library after a wallet was opened waits for ever on Windows: its clean-up joins threads that cannot finish while it runs | The library is loaded once and never unloaded |
 | A wallet whose data file is damaged does not open at all, although its keys file is intact | `open` sets the unreadable file aside and opens the wallet from its keys; `was_rebuilt_from_keys` says so, and the next synchronisation finds the funds again |
-| A start height changed after the wallet was made is forgotten when the wallet is closed: it lives in the keys file, which is written once | Documented on `set_restore_height`, and nothing in Veil depends on it: the height that counts is given at creation or restore, and a test checks that it is still there after reopening. Tests on a private chain set it again each time they open a wallet |
+| A start height changed after the wallet was made is forgotten when the wallet is closed: it lives in the keys file, which is written when the wallet is made and again only when its password is changed | Documented on `set_restore_height`, and nothing in Veil depends on it: the height that counts is given at creation or restore, and a test checks that it is still there after reopening. Tests on a private chain set it again each time they open a wallet |
 | A connection lost while a transaction is handed over is reported like a node that was never reached, though the node may have the transaction | `commit` fails with `SendOutcomeUnknown`, which says to synchronise and check the history before sending again. The wallet records nothing; the next synchronisation shows the transaction if it went out |
 | A connection lost in the middle of a refresh is reported as a line of text | `refresh` fails with `NodeUnreachable`, the same as for a node that never answered. While blocks are being downloaded the library first asks again three times by itself, so a single lost connection there is not an error at all |
 | A refresh cannot be left while it waits for a node: the library's stop takes effect between two batches of blocks. A stop asked for before the refresh has got going is forgotten | `refresh_until` asks for the stop again every fiftieth of a second until the refresh returns, and reports `SyncStopped` if blocks are left; what was scanned is kept. A request the node never answers still has to run into the library's timeout |
 | The library's record of the last block scanned is not reset when a refresh starts | Progress is reported only once that record has moved, so a report always means that this refresh has scanned something |
+| The password the library keeps for an open wallet is empty when the wallet was created or restored in this session, and the keys file, which could tell, is locked while the wallet is open and on Windows cannot be read then | `is_password` compares with the password the wallet was opened with, which `Wallet` keeps in memory, wiped when it is dropped. `change_password` does not need the old one from the library: the keys are held decrypted, and a test changes the password of a wallet made in the same session and opens it with the new one |
 | Building or sending a transaction switches on a thread that synchronises the wallet every ten seconds through whichever node is set | Every wallet is opened with that thread switched off (a Veil patch to the library); the regtest scenario in `veil_core` checks that nothing is contacted |
 
 The library also encrypts its connection to a node with TLS whenever the

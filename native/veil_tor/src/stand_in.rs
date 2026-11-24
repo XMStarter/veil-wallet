@@ -68,6 +68,13 @@ pub enum CutPoint {
     /// the opening of an exchange and smaller than a transaction, this is a
     /// transaction that reached the node while its sender never learned so.
     AfterRequestBytes(usize),
+    /// When the wallet has sent this many bytes. They reach the node; what
+    /// the wallet sends after them does not, and the connection is closed
+    /// at once. With a number larger than the opening of an exchange and a
+    /// first question, and smaller than those and a transaction together,
+    /// this is a transaction cut off on its way: the node never has it,
+    /// and its sender cannot know that.
+    BeforeMoreRequestBytes(usize),
 }
 
 /// A cut that has been asked for and has not happened yet.
@@ -133,6 +140,27 @@ impl Shared {
         cut.seen += count;
         if cut.seen >= limit {
             armed.take()
+        } else {
+            None
+        }
+    }
+
+    /// Counts `count` bytes on their way to `host:port` for a cut that
+    /// stops a request part way. Returns the armed cut, and how many of
+    /// these bytes may still pass, if this is where it happens.
+    fn request_cut_off(&self, host: &str, port: u16, count: usize) -> Option<(Cut, usize)> {
+        let mut armed = lock(&self.cut);
+        let cut = armed.as_mut()?;
+        let CutPoint::BeforeMoreRequestBytes(limit) = cut.at else {
+            return None;
+        };
+        if cut.host != host || cut.port != port {
+            return None;
+        }
+        let before = cut.seen;
+        cut.seen += count;
+        if cut.seen >= limit {
+            armed.take().map(|cut| (cut, limit - before))
         } else {
             None
         }
@@ -401,6 +429,13 @@ async fn relay(
                         continue;
                     }
                 };
+                if let Some((cut, pass)) = shared.request_cut_off(&host, port, count) {
+                    let _ = to_node.write_all(&request[..pass]).await;
+                    // The rest of the request goes nowhere, and dropping
+                    // both ends closes the connection.
+                    shared.after(&cut);
+                    return;
+                }
                 if to_node.write_all(&request[..count]).await.is_err() {
                     break;
                 }
@@ -640,6 +675,51 @@ mod tests {
         assert_eq!(
             node_received.recv_timeout(Duration::from_secs(10)).unwrap(),
             b"0123456789abcdefghij"
+        );
+        assert_eq!(read_to_close(&mut stream), b"", "no answer comes back");
+        assert_eq!(stand_in.cuts(), 1);
+    }
+
+    /// A local server that reads until its one connection is closed and
+    /// then reports everything it was sent.
+    fn serve_and_report(received: std::sync::mpsc::Sender<Vec<u8>>) -> u16 {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            let Ok((mut stream, _)) = listener.accept() else {
+                return;
+            };
+            let mut all = Vec::new();
+            let _ = stream.read_to_end(&mut all);
+            let _ = received.send(all);
+        });
+        port
+    }
+
+    #[test]
+    fn a_request_can_be_cut_off_before_the_node_has_all_of_it() {
+        let (received, node_received) = std::sync::mpsc::channel();
+        let stand_in = StandIn::start().unwrap();
+        stand_in.route(ONION, 18081, serve_and_report(received));
+        stand_in.cut_once(
+            ONION,
+            18081,
+            CutPoint::BeforeMoreRequestBytes(14),
+            AfterCut::NodeReachable,
+        );
+
+        let (mut stream, _) = socks4a(stand_in.socks_port(Purpose::Sync), ONION, 18081);
+        // The first part is short of the mark and passes whole. The second
+        // crosses it: four of its bytes pass, the rest never arrive.
+        stream.write_all(b"0123456789").unwrap();
+        stream.flush().unwrap();
+        std::thread::sleep(Duration::from_millis(100));
+        assert_eq!(stand_in.cuts(), 0);
+        let _ = stream.write_all(b"abcdefghij");
+
+        assert_eq!(
+            node_received.recv_timeout(Duration::from_secs(10)).unwrap(),
+            b"0123456789abcd"
         );
         assert_eq!(read_to_close(&mut stream), b"", "no answer comes back");
         assert_eq!(stand_in.cuts(), 1);

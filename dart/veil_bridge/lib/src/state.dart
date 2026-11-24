@@ -40,8 +40,11 @@ abstract final class ProblemKind {
   static const invalidAddress = 'invalid_address';
   static const invalidAmount = 'invalid_amount';
   static const invalidNode = 'invalid_node';
+  static const invalidBridge = 'invalid_bridge';
+  static const transportMissing = 'transport_missing';
   static const zeroAmount = 'zero_amount';
   static const notEnoughFunds = 'not_enough_funds';
+  static const severalTransactions = 'several_transactions';
   static const tooManyUnusedAddresses = 'too_many_unused_addresses';
   static const sendOutcomeUnknown = 'send_outcome_unknown';
   static const notNow = 'not_now';
@@ -58,8 +61,11 @@ abstract final class ProblemKind {
     invalidAddress,
     invalidAmount,
     invalidNode,
+    invalidBridge,
+    transportMissing,
     zeroAmount,
     notEnoughFunds,
+    severalTransactions,
     tooManyUnusedAddresses,
     sendOutcomeUnknown,
     notNow,
@@ -227,6 +233,7 @@ class SessionState {
     required this.phaseProblem,
     required this.tor,
     required this.node,
+    required this.ownNodes,
     required this.sync,
     required this.syncsEnded,
     required this.balanceTotal,
@@ -236,6 +243,7 @@ class SessionState {
     required this.history,
     required this.send,
     required this.rebuiltFromKeys,
+    required this.notSaved,
     required this.lastProblem,
   });
 
@@ -249,6 +257,10 @@ class SessionState {
 
   /// The node synchronised with last, as `host.onion:port`.
   final String? node;
+
+  /// The user's own nodes, as `host.onion:port`, in the order to try
+  /// them. Empty while the nodes the session was started with are used.
+  final List<String> ownNodes;
   final SyncStatus sync;
 
   /// How many synchronisations have ended since the session started.
@@ -273,6 +285,11 @@ class SessionState {
   /// from its keys. Its funds show again after a synchronisation.
   final bool rebuiltFromKeys;
 
+  /// Why the wallet could not be written to disk the last time that was
+  /// tried; null once a save has worked again. While it is set, what the
+  /// wallet has learned since its last good save is in memory only.
+  final Problem? notSaved;
+
   /// Why the last command did nothing, when the reason has no place of its
   /// own in the state.
   final Problem? lastProblem;
@@ -294,6 +311,7 @@ class SessionState {
         tor['message'] as String?,
       ),
       node: json['node'] as String?,
+      ownNodes: (json['own_nodes'] as List<dynamic>).cast<String>(),
       sync: SyncStatus(
         _named(SyncPhase.values, sync['name'], 'state of synchronisation'),
         walletHeight: sync['wallet_height'] as int?,
@@ -327,6 +345,7 @@ class SessionState {
         problem: Problem.maybe(send['problem']),
       ),
       rebuiltFromKeys: json['rebuilt_from_keys'] as bool,
+      notSaved: Problem.maybe(json['not_saved']),
       lastProblem: Problem.maybe(json['last_problem']),
     );
   }

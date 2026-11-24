@@ -68,8 +68,10 @@ class FakeBackend implements WalletBackend {
     String? locked,
     ReceiveAddress? address,
     List<Transfer>? history,
+    List<String>? ownNodes,
     SendStatus? send,
     bool? rebuilt,
+    Problem? notSaved,
     Problem? lastProblem,
   }) {
     final now = _state.value!;
@@ -79,6 +81,7 @@ class FakeBackend implements WalletBackend {
       phaseProblem: null,
       tor: tor ?? now.tor,
       node: null,
+      ownNodes: ownNodes ?? now.ownNodes,
       sync: sync ?? now.sync,
       syncsEnded: now.syncsEnded,
       balanceTotal: total ?? now.balanceTotal,
@@ -88,6 +91,7 @@ class FakeBackend implements WalletBackend {
       history: history ?? now.history,
       send: send ?? now.send,
       rebuiltFromKeys: rebuilt ?? now.rebuiltFromKeys,
+      notSaved: notSaved ?? now.notSaved,
       // Cleared by the next command, as in the core.
       lastProblem: lastProblem,
     );
@@ -106,8 +110,20 @@ class FakeBackend implements WalletBackend {
     required String password,
     String? phrase,
     int? restoreHeight,
+    bool withoutBridges = false,
   }) async {
-    calls.add('start ${source.name}');
+    calls.add(
+      'start ${source.name}${withoutBridges ? ' without bridges' : ''}',
+    );
+    // Bridges whose program has gone missing keep Tor from starting.
+    if (!withoutBridges &&
+        bridgesBroken &&
+        _settings.value.bridges.isNotEmpty) {
+      throw const StartFailure(
+        Problem(ProblemKind.transportMissing, 'no program for obfs4'),
+      );
+    }
+    await _work();
     final failure = failNext;
     failNext = null;
     if (failure != null) throw StartFailure(failure);
@@ -123,6 +139,98 @@ class FakeBackend implements WalletBackend {
     hasWallet = true;
     if (source == WalletSource.restore) confirmed = true;
     _state.value = _newSession(++_revision);
+  }
+
+  /// Whether the bridges in the settings have stopped working.
+  bool bridgesBroken = false;
+  final _settings = ValueNotifier<AppSettings>(const AppSettings());
+
+  @override
+  ValueListenable<AppSettings> get settings => _settings;
+
+  @override
+  Future<void> loadSettings() async {}
+
+  @override
+  Future<void> saveSettings(AppSettings settings) async {
+    calls.add('save settings');
+    _settings.value = settings;
+  }
+
+  @override
+  Problem? checkBridges(List<String> lines) {
+    for (final (number, line) in lines.indexed) {
+      // The pretended core knows two transports and a plain bridge.
+      final first = line.split(' ').first;
+      if (first == 'snowflake') {
+        return const Problem(
+          ProblemKind.transportMissing,
+          'none of its programs (snowflake-client) is installed',
+        );
+      }
+      if (first != 'obfs4' && !first.contains(':')) {
+        return Problem(
+          ProblemKind.invalidBridge,
+          'bridge line ${number + 1} is not a bridge',
+        );
+      }
+    }
+    return null;
+  }
+
+  @override
+  Problem? setNodes(List<String> nodes) {
+    calls.add('set nodes ${nodes.join(',')}');
+    if (nodes.any((node) => !node.contains('.onion:'))) {
+      return const Problem(ProblemKind.invalidNode, 'not a node');
+    }
+    report(ownNodes: nodes);
+    return null;
+  }
+
+  /// Thrown by the next call that waits for the wallet, whichever it is:
+  /// a failure of a kind nobody foresaw.
+  Object? breakNext;
+
+  /// How long the wallet takes over a call that waits for it. The real
+  /// one takes long enough for the screen to be drawn meanwhile.
+  Duration takes = Duration.zero;
+
+  Future<void> _work() async {
+    if (takes > Duration.zero) await Future<void>.delayed(takes);
+    final broken = breakNext;
+    breakNext = null;
+    if (broken != null) throw broken;
+  }
+
+  /// The wallet cannot be asked about its password: it is busy with a
+  /// transaction, as the real one can be.
+  bool busy = false;
+
+  @override
+  Future<bool?> isPassword(String password) async {
+    await _work();
+    if (busy) return null;
+    return _state.value == null ? null : password == this.password;
+  }
+
+  @override
+  Future<Problem?> changePassword(String old, String next) async {
+    await _work();
+    calls.add('change password');
+    if (old != password) {
+      return const Problem(ProblemKind.wrongPassword, 'wrong password');
+    }
+    password = next;
+    return null;
+  }
+
+  @override
+  Future<void> removeWallet() async {
+    calls.add('remove wallet');
+    _state.value = null;
+    hasWallet = false;
+    confirmed = false;
   }
 
   @override
@@ -150,6 +258,10 @@ class FakeBackend implements WalletBackend {
   /// The amount a send of everything comes to, and its total.
   static const everythingAmount = '10.49996934';
 
+  /// The wallet's funds are in so many small coins that a payment would
+  /// take more than one transaction.
+  bool manySmallCoins = false;
+
   @override
   Problem? prepareSend(String to, String amount) {
     calls.add('prepare $amount to $to');
@@ -169,6 +281,13 @@ class FakeBackend implements WalletBackend {
         send: const SendStatus(
           SendPhase.failed,
           problem: Problem(ProblemKind.zeroAmount, 'zero'),
+        ),
+      );
+    } else if (manySmallCoins) {
+      report(
+        send: const SendStatus(
+          SendPhase.failed,
+          problem: Problem(ProblemKind.severalTransactions, 'needs 2'),
         ),
       );
     } else if (amount != everything && double.parse(amount) > 10) {
@@ -220,6 +339,26 @@ class FakeBackend implements WalletBackend {
     calls.add('cancel send');
     final send = _state.value?.send;
     if (send == null) return;
+    // As in the core: only what has gone nowhere is cancelled. A send
+    // that went out, or may have, stays as it is.
+    switch (send.phase) {
+      case SendPhase.review || SendPhase.preparing || SendPhase.failed:
+        report(send: const SendStatus(SendPhase.idle));
+      case SendPhase.outcomeUnknown when send.settled != true:
+        report(
+          send: send,
+          lastProblem: const Problem(ProblemKind.notNow, 'not known yet'),
+        );
+      default:
+        break;
+    }
+  }
+
+  @override
+  void clearSend() {
+    calls.add('clear send');
+    final send = _state.value?.send;
+    if (send == null) return;
     // As in the core: an outcome that is unknown and not settled stays.
     if (send.phase == SendPhase.outcomeUnknown && send.settled != true) {
       report(
@@ -232,8 +371,19 @@ class FakeBackend implements WalletBackend {
   }
 
   @override
+  void sync() {
+    calls.add('sync');
+    if (_state.value != null) {
+      report(sync: const SyncStatus(SyncPhase.running));
+    }
+  }
+
+  /// The wallet gives no recovery phrase when asked.
+  bool noPhrase = false;
+
+  @override
   Future<String?> recoveryPhrase() async =>
-      _state.value == null ? null : testPhrase;
+      _state.value == null || noPhrase ? null : testPhrase;
 
   @override
   Future<bool> phraseConfirmed() async => confirmed;
@@ -244,10 +394,21 @@ class FakeBackend implements WalletBackend {
     confirmed = true;
   }
 
+  /// What closing reports, if the wallet cannot be saved then.
+  Problem? notSavedOnClose;
+
+  /// Thrown by the next close, after the wallet is gone from the state:
+  /// a failure of a kind nobody foresaw.
+  Object? breakClose;
+
   @override
-  Future<void> close() async {
+  Future<Problem?> close() async {
     calls.add('close');
     _state.value = null;
+    final broken = breakClose;
+    breakClose = null;
+    if (broken != null) throw broken;
+    return notSavedOnClose;
   }
 }
 
@@ -259,6 +420,7 @@ SessionState _newSession(int revision) => SessionState(
   phaseProblem: null,
   tor: const TorStatus(TorState.bootstrapping, 15, null),
   node: null,
+  ownNodes: const [],
   sync: const SyncStatus(SyncPhase.notYet),
   syncsEnded: 0,
   balanceTotal: '0.00',
@@ -268,6 +430,7 @@ SessionState _newSession(int revision) => SessionState(
   history: const [],
   send: const SendStatus(SendPhase.idle),
   rebuiltFromKeys: false,
+  notSaved: null,
   lastProblem: null,
 );
 
@@ -335,6 +498,39 @@ Future<void> press(WidgetTester tester, String label) async {
   await tester.ensureVisible(button);
   await tester.tap(button);
   await tester.pumpAndSettle();
+}
+
+/// Presses the button labelled [label] and waits for a wallet that takes
+/// its time ([FakeBackend.takes]) to answer, with the screen drawn while
+/// it works, as it is in the app.
+Future<void> pressAndWait(WidgetTester tester, String label) async {
+  final button = find.text(label.toUpperCase());
+  await tester.ensureVisible(button);
+  await tester.tap(button);
+  await tester.pump();
+  await tester.pump(const Duration(seconds: 1));
+  await tester.pumpAndSettle();
+}
+
+/// Types [text] on the keyboard as it is, without choosing a field first:
+/// it goes to whichever field has the keyboard, and nowhere if none has.
+Future<void> typeOn(WidgetTester tester, String text) async {
+  expect(
+    tester.testTextInput.hasAnyClients,
+    isTrue,
+    reason: 'no field has the keyboard',
+  );
+  tester.testTextInput.enterText(text);
+  await tester.pumpAndSettle();
+}
+
+/// Whether everything typed into the only field on the screen is marked,
+/// so that the next key replaces it.
+bool allMarked(WidgetTester tester) {
+  final field = tester.widget<TextField>(find.byType(TextField)).controller!;
+  return field.text.isNotEmpty &&
+      field.selection.start == 0 &&
+      field.selection.end == field.text.length;
 }
 
 /// Whether the button labelled [label] can be pressed.

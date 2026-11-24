@@ -47,7 +47,7 @@ class PhraseScreen extends StatelessWidget {
         Notice(text.phraseNotice, warning: true),
         const SizedBox(height: 16),
         Container(
-          color: VeilColors.surface,
+          color: VeilPalette.of(context).surface,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -79,7 +79,9 @@ class _NumberedWord extends StatelessWidget {
             width: 28,
             child: Text(
               '$number',
-              style: VeilText.address.copyWith(color: VeilColors.muted),
+              style: VeilText.address.copyWith(
+                color: VeilPalette.of(context).muted,
+              ),
             ),
           ),
           Flexible(

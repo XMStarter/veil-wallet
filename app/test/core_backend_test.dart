@@ -5,7 +5,9 @@
 // Needs the core built as a shared library (`cargo build -p veil_core` in
 // native/, or VEIL_CORE_LIB) and is skipped without it.
 
+import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:veil/core/backend.dart';
@@ -103,4 +105,145 @@ void main() {
     },
     skip: skip,
   );
+
+  test(
+    'a wallet that does not open fails the same way with the app listening',
+    () async {
+      // In the app, screens listen to the backend, and what listens leads
+      // to things that cannot be handed to another isolate: timers, the
+      // window. The backend closes a failed session on another isolate,
+      // and nothing of the app may travel with that call.
+      final backend = CoreBackend(paths());
+      final watcher = _Watcher();
+      backend.state.addListener(watcher.changed);
+      backend.settings.addListener(watcher.changed);
+      addTearDown(watcher.stop);
+      for (var attempt = 0; attempt < 2; attempt++) {
+        await expectLater(
+          backend.start(WalletSource.open, password: 'correct horse battery'),
+          throwsA(isA<StartFailure>()),
+        );
+      }
+      expect(backend.state.value, isNull);
+      expect(Directory(paths().torStateDir).existsSync(), isFalse);
+      await backend.close();
+    },
+    skip: skip,
+  );
+
+  test(
+    'settings are kept in a file, and a damaged one costs only them',
+    () async {
+      final backend = CoreBackend(paths());
+      await backend.loadSettings();
+      expect(
+        backend.settings.value.autoLockMinutes,
+        AppSettings.defaultAutoLock,
+      );
+      expect(backend.settings.value.bridges, isEmpty);
+
+      const plain = '192.0.2.55:443 316E643333645F6D79216558614D3931657A5F5F';
+      await backend.saveSettings(
+        const AppSettings(language: 'ru', dark: true, bridges: [plain]),
+      );
+      // Another start of the app reads them back.
+      final again = CoreBackend(paths());
+      await again.loadSettings();
+      expect(again.settings.value.language, 'ru');
+      expect(again.settings.value.dark, isTrue);
+      expect(again.settings.value.bridges, [plain]);
+
+      await File(paths().settingsFile).writeAsString('{ not json');
+      final damaged = CoreBackend(paths());
+      await damaged.loadSettings();
+      expect(damaged.settings.value.language, isNull);
+      expect(damaged.settings.value.bridges, isEmpty);
+    },
+  );
+
+  test('bridges are checked by the core itself', () {
+    final backend = CoreBackend(paths());
+    const plain = '192.0.2.55:443 316E643333645F6D79216558614D3931657A5F5F';
+    expect(backend.checkBridges(const [plain]), isNull);
+    expect(
+      backend.checkBridges(const ['nonsense'])?.kind,
+      ProblemKind.invalidBridge,
+    );
+    expect(
+      backend.checkBridges(const ['conjure $plain'])?.kind,
+      ProblemKind.transportMissing,
+    );
+  }, skip: skip);
+
+  test(
+    'bridges that are not bridges keep a wallet from being started with them',
+    () async {
+      final backend = CoreBackend(paths());
+      await backend.saveSettings(const AppSettings(bridges: ['nonsense']));
+      await expectLater(
+        backend.start(WalletSource.open, password: 'correct horse battery'),
+        throwsA(
+          isA<StartFailure>().having(
+            (f) => f.problem.kind,
+            'kind',
+            ProblemKind.invalidBridge,
+          ),
+        ),
+      );
+      // Without them the start gets as far as the wallet, which is not
+      // there: a different failure.
+      await expectLater(
+        backend.start(
+          WalletSource.open,
+          password: 'correct horse battery',
+          withoutBridges: true,
+        ),
+        throwsA(
+          isA<StartFailure>().having(
+            (f) => f.problem.kind,
+            'kind',
+            isNot(ProblemKind.invalidBridge),
+          ),
+        ),
+      );
+      await backend.close();
+    },
+    skip: skip,
+  );
+
+  test('removing the wallet takes its folder and nothing else', () async {
+    final backend = CoreBackend(paths());
+    final wallet = Directory(paths().walletDir);
+    await wallet.create(recursive: true);
+    // What a wallet leaves in its folder, by name; no wallet is opened.
+    for (final name in ['wallet', 'wallet.keys', 'wallet.unreadable-1']) {
+      await File('${wallet.path}/$name').writeAsString('x');
+    }
+    await backend.confirmPhrase();
+    await backend.saveSettings(const AppSettings(language: 'ru'));
+    expect(await backend.walletExists(), isTrue);
+
+    await backend.removeWallet();
+    expect(await backend.walletExists(), isFalse);
+    expect(wallet.existsSync(), isFalse);
+    expect(await backend.phraseConfirmed(), isFalse);
+    // How the app is set to behave is not the wallet's.
+    expect(File(paths().settingsFile).existsSync(), isTrue);
+    // Removing what is not there is nothing.
+    await backend.removeWallet();
+  });
+}
+
+/// Stands for a screen: it listens, and holds what a screen holds.
+class _Watcher {
+  final Timer _timer = Timer.periodic(const Duration(hours: 1), (_) {});
+  final ReceivePort _port = ReceivePort();
+  int changes = 0;
+
+  void changed() => changes++;
+
+  void stop() {
+    _timer.cancel();
+    _port.close();
+  }
 }

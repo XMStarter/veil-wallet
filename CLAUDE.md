@@ -82,12 +82,16 @@ that cannot lose the user's funds.
     `daemons` is a diagnosis of the test daemon, not a check. With
     `--windows` in front, the levels are built for Windows on Linux and run
     as Windows programs through WSL.
+  - `accept.sh`: the owner's acceptance run in one command, step after
+    step: the latest commits, `check.sh` as Linux and as Windows programs,
+    the logs to send, then the app. It starts a daemon, so it is not for
+    a cloud session, where only `--no-pull --no-app offline` may be tried.
 - `dart/veil_bridge`: the Dart side of the core. It calls the C interface
   in `veil_core/src/ffi.rs`; the state crosses as JSON, pinned by
   `native/veil_core/tests/fixtures`, which both sides test against.
 - `app/`: the app, written with Flutter, for Linux and Windows first. So
   far the way to an open wallet (create, recovery phrase, restore, unlock),
-  Home, Receive, and Send.
+  Home, Receive, Send, and Settings.
   Screens talk to `WalletBackend` (`app/lib/core`), never to the core
   directly; tests use a backend that only pretends, and no test opens a
   real wallet, because that starts Tor. Read
@@ -221,8 +225,122 @@ transactions before any block and reported as sent; no other send is built
 meanwhile; a send to a node that cannot be reached is reported as unknown,
 settled by a synchronisation, and sent again, paid once. The owner
 reported that sending works in the app. Not tried: a lost connection in
-the app itself, which cannot be brought about by hand. Next is step 3.7,
-settings. Not done: the app. See the build plan in
+the app itself, which cannot be brought about by hand. Step 3.7,
+settings, is done; what its acceptance took is told below. In the app: a Settings screen
+with the user's own node, Tor bridges, the password, the auto-lock (one to
+sixty minutes, never off, and never in the middle of a synchronisation),
+the recovery phrase shown again for the password, language, a dark theme,
+and the wallet removed from the device for the password; colours now come
+from `VeilPalette.of(context)`. In the core: the password checked and
+changed (`Wallet` keeps the one it was opened with in memory, because the
+library's own copy is empty for a wallet made in the same session), the
+user's own nodes and a send whose outcome is unknown kept in the wallet's
+data file as encrypted notes, bridges through the C interface with their
+programs looked for by `veil_core::transports` (moved from `veil_cli`),
+and a check of bridge lines that starts nothing. The owner asked for the
+removal of the wallet and for the unknown send to be remembered on disk
+as part of this step. The offline tests pass in a cloud session. On the
+owner's machine, on commit `9cbd182`, everything passed as Linux and as
+Windows programs, the changed password and the notes in the wallet
+included, except one thing in two tests: a session reported its wallet
+open and, in a second change of the state, the send an earlier session
+had left unknown, and the tests read the state in between. It is one
+change now, said last. That failure stopped the `offline` level before
+it built the app, so the app the owner then started was the one of the
+step before, without Settings. On commit `8d27d89` the `offline` and
+`regtest` levels passed as Linux and as Windows programs, a session
+closed and opened again while a send was unknown included. In the app
+with a real wallet the owner then confirmed the changed password, the
+phrase shown for the password, theme and language kept over a restart,
+and the removal of the wallet; the auto-lock was not checked; and with a
+wrong password the app hung. Which screen was not said. Found for it,
+with tests that fail without the fix: on the screen that opens the
+wallet, the backend closed the refused session on another isolate with a
+function made inside one of its methods, which took the backend and,
+through its listeners, the screens along, so the call failed with an
+error the screen did not catch and it said "opening" for ever (the tests
+had nobody listening to the backend). Fixed with it: screens show any
+failure and go on; a password field keeps the keyboard through a
+refusal; and the C interface no longer locks the handle for the whole of
+a call that waits, which froze the window while a password was checked
+during a synchronisation. The owner confirmed that a wrong password no
+longer hangs the app, and the run on that commit, `e7acc48`, passed at
+the `offline` and `regtest` levels both ways. The owner then
+asked for a review of the whole code for faults and for things that only
+look as if they worked, and for the findings to be fixed. Fixed after
+it, with offline tests unless said otherwise: a send whose outcome is
+unknown was written into the wallet but saved only by the next
+synchronisation or by closing, so a kill in between lost it; it is saved
+at once now (shown on a private chain only, by a copy of the data file
+taken while the session is open). A wallet that cannot be written to disk
+says so in the state (`not_saved`), on Home, and on the screen that
+closing leads to; before, nothing showed it. A cancel that arrives when
+the transaction has just gone out no longer takes "sent" off the state:
+`cancel_send` drops only what has gone nowhere, and `clear_send` is the
+new command for an outcome the user has seen (private chain only). A
+transaction is built only after a synchronisation of the same session
+that finished; otherwise the session synchronises first, and a send fails
+with the synchronisation it waited for. A new wallet's files are written
+after Tor has started, not before. A payment that would need several
+transactions is refused (`SeveralTransactions`): the library would send
+them one by one and stop at the first failure. A wallet opened from its
+keys alone waits to be told before it goes to any node, because the
+user's own nodes were in the lost file, and says so. An amount with a
+comma and exactly three digits after it (`1,250`) is refused as
+ambiguous; with a point it is taken as it stands. Changes of the state
+that belong together are one change in two more places. In the app: "not
+now" is no longer shown as a wrong password, a phrase that was never
+checked and cannot be read closes the wallet instead of opening Home,
+and locking or closing the window survives a failure of the backend.
+Left for tasks of their own, by the owner's decision: the Tor component
+reports itself ready from the end of its bootstrap on and does not
+notice a network that goes away afterwards, so the difference between a
+failure of Tor and of the node exists in the tests only (needs the `tor`
+level to work on); and the concept says that no node can link
+synchronisation and spending, while the node synchronised with is asked
+for what a transaction is built from. Also open: a password change that
+fails after the keys file was rewritten is reported as failed although
+the new password is in force; and `VEIL_CORE_LIB` and `VEIL_WALLET_LIB`
+still name the libraries in a release build. On commit `3208ff8` the
+owner's run passed at the `offline` and `regtest` levels as Linux and as
+Windows programs, the scenario on a private chain included with its two
+new checks: the data file as a kill would leave it knows of the send
+whose outcome is unknown, and a cancel sent right after a confirmation
+leaves the send shown as sent. In the app the owner then got "outcome
+unknown" for an ordinary send, where sends had gone through at step 3.6.
+Nothing on the way of a transaction to its node had changed since then.
+The owner asked each of the four public stagenet nodes with `veil sync
+--node`: two did not answer. The node a transaction goes to was the
+candidate after the one synchronised with, never asked anything before
+the send, so with two of four down about every second session could not
+send, and the library reports a node that is not there like a lost
+answer. Now `PendingSend::commit_through` asks each node of
+`Core::broadcast_route` whether it is there before handing it the
+transaction, passes over those that do not answer, uses the node
+synchronised with if no other answers, and fails as not sent if none
+does. Offline tests show which node is asked and chosen; that a payment
+goes out that way is in the scenario on a private chain, which also has
+a new kind of cut in the stand-in for a transaction that never arrives
+(`BeforeMoreRequestBytes`). On commit `2d187fc`, which adds only
+`accept.sh` to that, the owner's run passed at the `offline` and
+`regtest` levels as Linux and as Windows programs, the reworked scenario
+included, and the owner reported that sending works in the app again.
+As Windows programs the `offline` level failed the first time in one
+test, `a_wallet_survives_being_killed_while_it_saves`, on its first
+line: loading the wallet DLL ended with Windows error 995, an operation
+aborted, after about half a minute. Nothing under test had run; the same
+test passed minutes later in the same run at the `regtest` level, and
+the level passed when run again. The cause was not found; it has
+happened once. The auto-lock was never tried in the app with a real
+wallet: the owner left it to be checked without one, and its tests on the
+wallet that only pretends were widened for that (a key counts as use; it
+locks from any screen and leaves no phrase on show; a wallet opened again
+locks again; the default is five minutes). They pass, and they say
+nothing about a real window's clicks and keys. A synchronisation still starts with the first candidate every
+time, so a first node that is down costs every synchronisation the time
+it takes to find that out. Bridges changed
+in Settings take effect the next time the wallet is opened. Next after
+its acceptance is step 3.8, the app on Windows. Not done: the app. See the build plan in
 `docs/concept.md`.
 
 ## Environment notes
@@ -234,6 +352,10 @@ settings. Not done: the app. See the build plan in
   does not start there. The machine's antivirus (ESET) flags the wallet DLL
   and `monerod.exe` as a coin miner; the owner has to allow each after it
   is rebuilt, and a run made while its question is open fails on loading.
+  Once, loading the DLL failed there with Windows error 995 (operation
+  aborted) in one test and worked in every other; if it comes back, the
+  first thing to try is loading it from a Windows disk, not over the WSL
+  file share.
   Each run of `veil.exe` takes 15 to 20 seconds there before it does
   anything, from loading over the WSL file share and being scanned. Tor connects
   from that machine without bridges, so the `bridges` level shows there

@@ -12,10 +12,10 @@ import 'paths.dart';
 /// The wallet, run by the native core.
 ///
 /// Starting a session, giving it commands and reading its state return at
-/// once. The two calls that wait for the session's thread, the recovery
-/// phrase and closing, are made on another isolate, so the interface never
-/// stands still. Neither waits for a synchronisation to end: the core
-/// stops one for them.
+/// once. The calls that wait for the session's thread (the recovery
+/// phrase, the password checked or changed, and closing) are made on
+/// another isolate, so the interface never stands still. None waits for a
+/// synchronisation to end: the core stops one for them.
 class CoreBackend implements WalletBackend {
   CoreBackend(this._paths);
 
@@ -25,6 +25,7 @@ class CoreBackend implements WalletBackend {
   Timer? _watch;
   int _seen = -1;
   final _state = ValueNotifier<SessionState?>(null);
+  final _settings = ValueNotifier<AppSettings>(const AppSettings());
 
   /// How often the state's revision is looked at.
   static const _watchEvery = Duration(milliseconds: 200);
@@ -45,6 +46,7 @@ class CoreBackend implements WalletBackend {
     required String password,
     String? phrase,
     int? restoreHeight,
+    bool withoutBridges = false,
   }) async {
     await close();
     for (final library in [_paths.coreLibrary, _paths.walletLibrary]) {
@@ -64,6 +66,7 @@ class CoreBackend implements WalletBackend {
           torCacheDir: _paths.torCacheDir,
           source: source,
           restoreHeight: restoreHeight,
+          bridges: withoutBridges ? const [] : _settings.value.bridges,
           syncEvery: _syncEvery,
         ),
         password: password,
@@ -72,6 +75,27 @@ class CoreBackend implements WalletBackend {
     } on VeilException catch (refused) {
       throw StartFailure(refused.problem);
     }
+    final SessionState state;
+    try {
+      state = await _opened(session);
+      if (source == WalletSource.restore) {
+        await confirmPhrase();
+      }
+    } catch (_) {
+      // Whatever went wrong, the session is not left running, with Tor
+      // and perhaps a wallet, and nobody knowing of it.
+      await _away(_paths.coreLibrary, session.address, _close);
+      rethrow;
+    }
+    _session = session;
+    _seen = state.revision;
+    _state.value = state;
+    _watch = Timer.periodic(_watchEvery, (_) => _look());
+  }
+
+  /// Waits for [session] to have its wallet open, and returns the state
+  /// it is in then; throws a [StartFailure] with the reason if it has not.
+  Future<SessionState> _opened(VeilSession session) async {
     // Opening a wallet takes a moment: its password is stretched on purpose.
     var state = session.state();
     while (state.phase == Phase.opening) {
@@ -79,22 +103,11 @@ class CoreBackend implements WalletBackend {
       state = session.state();
     }
     if (state.phase != Phase.ready) {
-      final address = session.address;
-      final library = _paths.coreLibrary;
-      await Isolate.run(
-        () => VeilSession.fromAddress(VeilCore.open(library), address).close(),
-      );
       throw StartFailure(
         state.phaseProblem ?? const Problem(ProblemKind.other, 'not opened'),
       );
     }
-    if (source == WalletSource.restore) {
-      await confirmPhrase();
-    }
-    _session = session;
-    _seen = state.revision;
-    _state.value = state;
-    _watch = Timer.periodic(_watchEvery, (_) => _look());
+    return state;
   }
 
   void _look() {
@@ -105,6 +118,69 @@ class CoreBackend implements WalletBackend {
       _seen = revision;
       _state.value = session.state();
     }
+  }
+
+  @override
+  ValueListenable<AppSettings> get settings => _settings;
+
+  @override
+  Future<void> loadSettings() async {
+    _settings.value = await AppSettings.load(_paths.settingsFile);
+  }
+
+  @override
+  Future<void> saveSettings(AppSettings settings) async {
+    await settings.save(_paths.settingsFile);
+    _settings.value = settings;
+  }
+
+  @override
+  Problem? checkBridges(List<String> lines) {
+    if (!File(_paths.coreLibrary).existsSync()) {
+      return Problem(libraryMissing, _paths.coreLibrary);
+    }
+    return (_core ??= VeilCore.open(_paths.coreLibrary)).checkBridges(lines);
+  }
+
+  @override
+  Problem? setNodes(List<String> nodes) {
+    try {
+      _session?.setNodes(nodes);
+      return null;
+    } on VeilException catch (refused) {
+      return refused.problem;
+    }
+  }
+
+  @override
+  Future<bool?> isPassword(String password) async {
+    final session = _session;
+    if (session == null) return null;
+    return _waited(
+      _away(_paths.coreLibrary, session.address, _IsPassword(password).call),
+    );
+  }
+
+  @override
+  Future<Problem?> changePassword(String old, String next) async {
+    final session = _session;
+    if (session == null) {
+      return const Problem(ProblemKind.notNow, 'no wallet is open');
+    }
+    return _waited(
+      _away(
+        _paths.coreLibrary,
+        session.address,
+        _ChangePassword(old, next).call,
+      ),
+    );
+  }
+
+  @override
+  Future<void> removeWallet() async {
+    await close();
+    final dir = Directory(_paths.walletDir);
+    if (await dir.exists()) await dir.delete(recursive: true);
   }
 
   @override
@@ -127,17 +203,16 @@ class CoreBackend implements WalletBackend {
   void cancelSend() => _session?.cancelSend();
 
   @override
+  void clearSend() => _session?.clearSend();
+
+  @override
+  void sync() => _session?.sync();
+
+  @override
   Future<String?> recoveryPhrase() async {
     final session = _session;
     if (session == null) return null;
-    final address = session.address;
-    final library = _paths.coreLibrary;
-    return Isolate.run(
-      () => VeilSession.fromAddress(
-        VeilCore.open(library),
-        address,
-      ).recoveryPhrase(),
-    );
+    return _waited(_away(_paths.coreLibrary, session.address, _phrase));
   }
 
   @override
@@ -159,19 +234,75 @@ class CoreBackend implements WalletBackend {
           .writeAsString(jsonEncode({'phrase_confirmed': true}), flush: true);
 
   @override
-  Future<void> close() async {
+  Future<Problem?> close() async {
     _watch?.cancel();
     _watch = null;
     final session = _session;
     _session = null;
     _state.value = null;
-    if (session == null) return;
-    final address = session.address;
-    final library = _paths.coreLibrary;
-    await Isolate.run(
-      () => VeilSession.fromAddress(VeilCore.open(library), address).close(),
-    );
+    if (session == null) return null;
+    // Closing releases the session. A call still under way on another
+    // isolate gets its answer first.
+    while (_underWay.isNotEmpty) {
+      await Future.wait(_underWay.toList());
+    }
+    final last = await _away(_paths.coreLibrary, session.address, _close);
+    // A session that could not save its wallet on closing says so with
+    // its last state. The wallet is closed either way.
+    return last.phase == Phase.failed
+        ? last.phaseProblem ?? const Problem(ProblemKind.other, 'not saved')
+        : null;
   }
+
+  /// Calls that wait for the session's thread and have not returned yet.
+  final Set<Future<void>> _underWay = {};
+
+  /// Keeps [call] on record until it has returned, for [close] to wait for.
+  Future<T> _waited<T>(Future<T> call) {
+    late final Future<void> record;
+    record = call.then<void>((_) {}, onError: (_) {}).whenComplete(() {
+      _underWay.remove(record);
+    });
+    _underWay.add(record);
+    return call;
+  }
+}
+
+/// Makes [call] on the session at [address] on another isolate: for the
+/// calls that wait for the session's thread, which the main isolate, the
+/// one that draws, must never do.
+///
+/// A function of the library and not a method of the backend, on purpose.
+/// What is handed to another isolate takes along everything it can reach,
+/// and a function made inside a method can reach the backend, through it
+/// whoever listens to the backend, and so the screens, which cannot be
+/// handed over: the call then fails before it is made. From here nothing
+/// of the backend is in reach. [call] has to be a function of the library
+/// too, or a method of an object that holds only what the call needs.
+Future<T> _away<T>(String library, int address, T Function(VeilSession) call) =>
+    Isolate.run(
+      () => call(VeilSession.fromAddress(VeilCore.open(library), address)),
+    );
+
+SessionState _close(VeilSession session) => session.close();
+
+String? _phrase(VeilSession session) => session.recoveryPhrase();
+
+class _IsPassword {
+  const _IsPassword(this.password);
+
+  final String password;
+
+  bool? call(VeilSession session) => session.isPassword(password);
+}
+
+class _ChangePassword {
+  const _ChangePassword(this.old, this.next);
+
+  final String old;
+  final String next;
+
+  Problem? call(VeilSession session) => session.changePassword(old, next);
 }
 
 /// A kind of problem only this side can have: a native part of the app is

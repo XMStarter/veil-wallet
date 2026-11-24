@@ -136,7 +136,8 @@ class _SendScreenState extends State<SendScreen> {
     final aboutAmount =
         kind == ProblemKind.invalidAmount ||
         kind == ProblemKind.zeroAmount ||
-        kind == ProblemKind.notEnoughFunds;
+        kind == ProblemKind.notEnoughFunds ||
+        kind == ProblemKind.severalTransactions;
     return VeilScreen(
       title: text.sendTitle,
       actions: [
@@ -187,7 +188,7 @@ class _SendScreenState extends State<SendScreen> {
           const SizedBox(height: 8),
           Text(
             text.homeAvailable(state.balanceUnlocked),
-            style: VeilText.secondary,
+            style: VeilText.secondaryIn(context),
           ),
         ],
         VeilQuietButton(
@@ -199,8 +200,15 @@ class _SendScreenState extends State<SendScreen> {
                   _refused = null;
                 }),
         ),
+        // A send that failed for a reason of this kind, a node that is not
+        // there or a refusal, has not gone out, and that is said: the user
+        // has just pressed Send and has to know where the money is.
         if (problem != null && !aboutAddress && !aboutAmount)
-          ProblemText(problemWords(text, problem)),
+          ProblemText(
+            send.phase == SendPhase.failed && _refused == null
+                ? '${problemWords(text, problem)} ${text.sendNothingSent}'
+                : problemWords(text, problem),
+          ),
         if (preparing) ...[
           const SizedBox(height: 16),
           const LinearProgressIndicator(),
@@ -209,7 +217,7 @@ class _SendScreenState extends State<SendScreen> {
             state?.sync.phase == SyncPhase.running
                 ? text.sendWaitingForSync
                 : text.sendPreparing,
-            style: VeilText.secondary,
+            style: VeilText.secondaryIn(context),
             textAlign: TextAlign.center,
           ),
         ],
@@ -234,10 +242,10 @@ class _SendScreenState extends State<SendScreen> {
         ),
       ],
       children: [
-        Text(text.reviewTo.toUpperCase(), style: VeilText.heading),
+        Text(text.reviewTo.toUpperCase(), style: VeilText.headingIn(context)),
         const SizedBox(height: 8),
         Container(
-          color: VeilColors.surface,
+          color: VeilPalette.of(context).surface,
           padding: const EdgeInsets.all(12),
           child: AddressText(send.to ?? ''),
         ),
@@ -257,7 +265,7 @@ class _SendScreenState extends State<SendScreen> {
           const SizedBox(height: 8),
           Text(
             text.reviewSending,
-            style: VeilText.secondary,
+            style: VeilText.secondaryIn(context),
             textAlign: TextAlign.center,
           ),
         ] else
@@ -273,7 +281,7 @@ class _SendScreenState extends State<SendScreen> {
         VeilButton(
           label: text.sentDone,
           onPressed: () {
-            widget.backend.cancelSend();
+            widget.backend.clearSend();
             Navigator.of(context).pop();
           },
         ),
@@ -294,7 +302,7 @@ class _SendScreenState extends State<SendScreen> {
         if (settled)
           VeilButton(
             label: text.unknownUnderstood,
-            onPressed: widget.backend.cancelSend,
+            onPressed: widget.backend.clearSend,
           ),
         VeilQuietButton(
           label: text.unknownBack,

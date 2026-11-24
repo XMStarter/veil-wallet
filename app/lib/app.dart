@@ -1,21 +1,27 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'core/backend.dart';
 import 'l10n/app_localizations.dart';
+import 'screens/navigation.dart';
+import 'screens/problem_words.dart';
 import 'screens/start_screen.dart';
 import 'screens/unlock_screen.dart';
 import 'theme/theme.dart';
 
-/// The app. Its language follows the device and falls back to English.
+/// The app. Its language follows the device and falls back to English,
+/// unless the settings name one.
 class VeilApp extends StatefulWidget {
   const VeilApp({super.key, required this.backend, this.locale});
 
   /// The wallet behind the screens.
   final WalletBackend backend;
 
-  /// Fixes the language, for tests. The app itself leaves it to the device.
+  /// Fixes the language, for tests. The app itself leaves it to the
+  /// settings and the device.
   final Locale? locale;
 
   @override
@@ -23,8 +29,21 @@ class VeilApp extends StatefulWidget {
 }
 
 class _VeilAppState extends State<VeilApp> {
-  late final Future<bool> _walletExists = widget.backend.walletExists();
+  late final Future<bool> _walletExists = _begin();
   late final AppLifecycleListener _lifecycle;
+  final _navigator = GlobalKey<NavigatorState>();
+
+  /// Runs out when the wallet has not been used for as long as the
+  /// settings say.
+  Timer? _idle;
+
+  /// How often an auto-lock that was put off looks again.
+  static const _lookAgain = Duration(seconds: 5);
+
+  Future<bool> _begin() async {
+    await widget.backend.loadSettings();
+    return widget.backend.walletExists();
+  }
 
   @override
   void initState() {
@@ -32,36 +51,116 @@ class _VeilAppState extends State<VeilApp> {
     // Closing the window saves the wallet and stops Tor first.
     _lifecycle = AppLifecycleListener(
       onExitRequested: () async {
-        await widget.backend.close();
+        try {
+          await widget.backend.close();
+        } catch (_) {
+          // Nothing more can be done for the wallet, and a window that
+          // will not close helps nobody.
+        }
         return AppExitResponse.exit;
       },
     );
+    widget.backend.settings.addListener(_settingsChanged);
+    widget.backend.state.addListener(_walletChanged);
+    HardwareKeyboard.instance.addHandler(_key);
   }
 
   @override
   void dispose() {
+    _idle?.cancel();
+    HardwareKeyboard.instance.removeHandler(_key);
+    widget.backend.state.removeListener(_walletChanged);
+    widget.backend.settings.removeListener(_settingsChanged);
     _lifecycle.dispose();
     super.dispose();
   }
 
+  void _settingsChanged() {
+    setState(() {});
+    _used();
+  }
+
+  bool _key(KeyEvent event) {
+    _used();
+    // Only watched, never taken: the key goes on to whoever it is for.
+    return false;
+  }
+
+  /// The wallet was opened or closed, or its state changed. Opening it
+  /// starts the time to the auto-lock and closing it ends it; a change of
+  /// state is not use, or a wallet that synchronises every minute by
+  /// itself would never lock.
+  void _walletChanged() {
+    final open = widget.backend.state.value != null;
+    if (open && _idle == null) {
+      _used();
+    } else if (!open) {
+      _idle?.cancel();
+      _idle = null;
+    }
+  }
+
+  /// The wallet was used just now: the time to the auto-lock starts
+  /// again. Without an open wallet there is nothing to lock and no timer.
+  void _used() {
+    _idle?.cancel();
+    _idle = null;
+    if (widget.backend.state.value == null) return;
+    _idle = Timer(
+      Duration(minutes: widget.backend.settings.value.autoLockMinutes),
+      _lockIfIdle,
+    );
+  }
+
+  /// Locks the wallet, unless it is in the middle of a synchronisation:
+  /// a long first one would never finish if the wallet were closed under
+  /// it every few minutes. Then it looks again shortly.
+  Future<void> _lockIfIdle() async {
+    final state = widget.backend.state.value;
+    if (state == null) return;
+    if (state.sync.phase == SyncPhase.running) {
+      _idle = Timer(_lookAgain, _lockIfIdle);
+      return;
+    }
+    Problem? notSaved;
+    try {
+      notSaved = await widget.backend.close();
+    } catch (error) {
+      notSaved = unforeseen(error);
+    }
+    final navigator = _navigator.currentState;
+    if (navigator == null || !mounted) return;
+    navigator.pushAndRemoveUntil(
+      at<void>(UnlockScreen(backend: widget.backend, notSaved: notSaved)),
+      (_) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      onGenerateTitle: (context) => AppLocalizations.of(context)!.appName,
-      debugShowCheckedModeBanner: false,
-      theme: veilTheme(),
-      locale: widget.locale,
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      // English first: it is what an unsupported language falls back to.
-      supportedLocales: const [Locale('en'), Locale('ru')],
-      home: FutureBuilder<bool>(
-        future: _walletExists,
-        builder: (context, found) {
-          if (!found.hasData) return const Scaffold();
-          return found.data!
-              ? UnlockScreen(backend: widget.backend)
-              : StartScreen(backend: widget.backend);
-        },
+    final language = widget.backend.settings.value.language;
+    return Listener(
+      // A touch or a click anywhere counts as use.
+      onPointerDown: (_) => _used(),
+      behavior: HitTestBehavior.translucent,
+      child: MaterialApp(
+        navigatorKey: _navigator,
+        onGenerateTitle: (context) => AppLocalizations.of(context)!.appName,
+        debugShowCheckedModeBanner: false,
+        theme: veilTheme(dark: widget.backend.settings.value.dark),
+        locale: widget.locale ?? (language == null ? null : Locale(language)),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        // English first: it is what an unsupported language falls back to.
+        supportedLocales: const [Locale('en'), Locale('ru')],
+        home: FutureBuilder<bool>(
+          future: _walletExists,
+          builder: (context, found) {
+            if (!found.hasData) return const Scaffold();
+            return found.data!
+                ? UnlockScreen(backend: widget.backend)
+                : StartScreen(backend: widget.backend);
+          },
+        ),
       ),
     );
   }

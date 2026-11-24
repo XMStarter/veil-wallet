@@ -72,6 +72,39 @@ void main() {
     );
   }, skip: skip);
 
+  test('bridges are checked without starting anything', () {
+    const plain = '192.0.2.55:443 316E643333645F6D79216558614D3931657A5F5F';
+    expect(core.checkBridges(const []), isNull);
+    expect(core.checkBridges(const [plain, '', '# a comment']), isNull);
+    expect(
+      core.checkBridges(const [plain, 'nonsense'])?.kind,
+      ProblemKind.invalidBridge,
+    );
+    expect(
+      core.checkBridges(const ['conjure $plain'])?.kind,
+      ProblemKind.transportMissing,
+    );
+    // A start with bridges that are not bridges is refused the same way.
+    final withBridges = SessionConfig(
+      walletLibrary: 'a',
+      walletPath: 'b',
+      torStateDir: 'c',
+      torCacheDir: 'd',
+      bridges: const ['nonsense'],
+      source: WalletSource.open,
+    );
+    expect(
+      () => core.start(withBridges, password: 'p'),
+      throwsA(
+        isA<VeilException>().having(
+          (e) => e.problem.kind,
+          'kind',
+          ProblemKind.invalidBridge,
+        ),
+      ),
+    );
+  }, skip: skip);
+
   test('a session that cannot open its wallet says so and closes', () async {
     // The wallet library named here does not exist, so the session fails
     // before it opens a wallet or starts Tor.
@@ -92,6 +125,7 @@ void main() {
     session.sync();
     session.newAddress();
     session.cancelSend();
+    session.clearSend();
     // An amount that is not a number is refused on the spot.
     expect(
       () => session.prepareSend('7abc', 'much'),
@@ -104,6 +138,19 @@ void main() {
       ),
     );
     expect(session.recoveryPhrase(), isNull);
+    // Nor can a session without a wallet say anything about its password.
+    expect(session.isPassword('p'), isNull);
+    expect(session.changePassword('p', 'q')?.kind, ProblemKind.notNow);
+    expect(
+      () => session.setNodes(['node.example.com:38089']),
+      throwsA(
+        isA<VeilException>().having(
+          (e) => e.problem.kind,
+          'kind',
+          ProblemKind.invalidNode,
+        ),
+      ),
+    );
 
     // The same session, reached by its address as another isolate would.
     final again = VeilSession.fromAddress(core, session.address);

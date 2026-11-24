@@ -29,6 +29,8 @@ void main() {
     expect(state.sync.nodeHeight, 2256644);
     expect(state.sync.blocksLeft, 6644);
     expect(state.syncsEnded, 3);
+    expect(state.ownNodes, hasLength(2));
+    expect(state.ownNodes.first, state.node);
     // Amounts stay the text the core wrote, to the last digit.
     expect(state.balanceTotal, '12.345678901234');
     expect(state.balanceUnlocked, '10.50');
@@ -36,6 +38,7 @@ void main() {
     expect(state.receiveAddress!.index, 3);
     expect(state.receiveAddress!.address, hasLength(95));
     expect(state.rebuiltFromKeys, isFalse);
+    expect(state.notSaved, isNull);
     expect(state.lastProblem!.kind, ProblemKind.notNow);
 
     expect(state.history, hasLength(2));
@@ -80,6 +83,8 @@ void main() {
     expect(state.send.txids, ['c' * 64]);
     expect(state.send.settled, isFalse);
     expect(state.rebuiltFromKeys, isTrue);
+    expect(state.notSaved!.kind, ProblemKind.other);
+    expect(state.notSaved!.detail, contains('wallet.new'));
     expect(state.lastProblem, isNull);
   });
 
@@ -102,6 +107,7 @@ void main() {
       torStateDir: '/data/tor/state',
       torCacheDir: '/data/tor/cache',
       nodes: ['abc.onion:38089'],
+      bridges: ['obfs4 192.0.2.55:443 AA cert=x iat-mode=0'],
       source: WalletSource.restore,
       restoreHeight: 1234567,
       syncEvery: Duration(minutes: 2),
@@ -113,6 +119,7 @@ void main() {
       'wallet_path': '/data/wallet',
       'tor': {'state_dir': '/data/tor/state', 'cache_dir': '/data/tor/cache'},
       'nodes': ['abc.onion:38089'],
+      'bridges': ['obfs4 192.0.2.55:443 AA cert=x iat-mode=0'],
       'restore_height': 1234567,
       'sync_every_seconds': 120,
     });

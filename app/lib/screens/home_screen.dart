@@ -9,8 +9,10 @@ import '../widgets/notice.dart';
 import '../widgets/veil_button.dart';
 import '../widgets/veil_screen.dart';
 import 'navigation.dart';
+import 'problem_words.dart';
 import 'receive_screen.dart';
 import 'send_screen.dart';
+import 'settings_screen.dart';
 import 'status_words.dart';
 import 'unlock_screen.dart';
 
@@ -73,9 +75,19 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _lock() async {
     if (_locking) return;
     setState(() => _locking = true);
-    await widget.backend.close();
+    Problem? notSaved;
+    try {
+      notSaved = await widget.backend.close();
+    } catch (error) {
+      // The wallet is closed as far as the app can tell; what went wrong
+      // is said where closing leads, not left as "closing" for ever.
+      notSaved = unforeseen(error);
+    }
     if (!mounted) return;
-    openAlone(context, UnlockScreen(backend: widget.backend));
+    openAlone(
+      context,
+      UnlockScreen(backend: widget.backend, notSaved: notSaved),
+    );
   }
 
   @override
@@ -98,6 +110,12 @@ class _HomeScreenState extends State<HomeScreen> {
               : () => open(context, SendScreen(backend: widget.backend)),
         ),
         VeilQuietButton(
+          label: text.homeSettings,
+          onPressed: _locking
+              ? null
+              : () => open(context, SettingsScreen(backend: widget.backend)),
+        ),
+        VeilQuietButton(
           label: _locking ? text.lockWorking : text.lockAction,
           onPressed: _locking ? null : _lock,
         ),
@@ -113,9 +131,27 @@ class _HomeScreenState extends State<HomeScreen> {
                 _balance(text, state),
                 const SizedBox(height: 20),
                 _status(text, state),
+                if (state.notSaved != null) ...[
+                  const SizedBox(height: 16),
+                  Notice(
+                    '${text.homeNotSaved} '
+                    '${text.problemDetail(state.notSaved!.detail)}',
+                    warning: true,
+                  ),
+                ],
                 if (state.rebuiltFromKeys) ...[
                   const SizedBox(height: 16),
                   Notice(text.homeRebuilt, warning: true),
+                  // Nothing has been synchronised yet: the wallet waits
+                  // to be told, or to be given nodes in Settings.
+                  if (state.sync.phase == SyncPhase.notYet) ...[
+                    const SizedBox(height: 8),
+                    Notice(text.homeRebuiltWaiting),
+                    VeilQuietButton(
+                      label: text.homeRebuiltSync,
+                      onPressed: _locking ? null : widget.backend.sync,
+                    ),
+                  ],
                 ],
                 // A payment in doubt is said here too, not only on the
                 // screen it happened on.
@@ -155,7 +191,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 4),
               Text(
                 text.homeBalanceShow,
-                style: VeilText.secondary,
+                style: VeilText.secondaryIn(context),
                 textAlign: TextAlign.center,
               ),
             ] else ...[
@@ -170,12 +206,12 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 4),
               Text(
                 text.homeAvailable(state.balanceUnlocked),
-                style: VeilText.secondary,
+                style: VeilText.secondaryIn(context),
                 textAlign: TextAlign.center,
               ),
               Text(
                 text.homePending(state.balanceLocked),
-                style: VeilText.secondary,
+                style: VeilText.secondaryIn(context),
                 textAlign: TextAlign.center,
               ),
               // The amounts are those of the last synchronisation that
@@ -183,7 +219,7 @@ class _HomeScreenState extends State<HomeScreen> {
               if (state.sync.phase != SyncPhase.done)
                 Text(
                   text.homeBalanceStale,
-                  style: VeilText.secondary,
+                  style: VeilText.secondaryIn(context),
                   textAlign: TextAlign.center,
                 ),
             ],
@@ -197,7 +233,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _status(AppLocalizations text, SessionState state) {
     final running = state.sync.phase == SyncPhase.running;
     return Container(
-      color: VeilColors.surface,
+      color: VeilPalette.of(context).surface,
       padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -228,13 +264,16 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Widget> _activity(AppLocalizations text, SessionState state) {
     final latest = state.history.reversed.take(_recent).toList();
     return [
-      Text(text.homeActivity.toUpperCase(), style: VeilText.heading),
+      Text(text.homeActivity.toUpperCase(), style: VeilText.headingIn(context)),
       const SizedBox(height: 8),
       const Divider(),
       if (latest.isEmpty)
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Text(text.homeNoActivity, style: VeilText.secondary),
+          child: Text(
+            text.homeNoActivity,
+            style: VeilText.secondaryIn(context),
+          ),
         ),
       for (final transfer in latest) ...[
         _ActivityRow(transfer: transfer, hidden: _hidden),
@@ -274,10 +313,10 @@ class _ActivityRow extends StatelessWidget {
     // apart without it.
     final sign = incoming ? '+' : '−';
     final colour = transfer.failed
-        ? VeilColors.muted
+        ? VeilPalette.of(context).muted
         : incoming
-        ? VeilColors.threadNavy
-        : VeilColors.threadCrimson;
+        ? VeilPalette.of(context).threadNavy
+        : VeilPalette.of(context).threadCrimson;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
@@ -290,7 +329,7 @@ class _ActivityRow extends StatelessWidget {
                   incoming ? text.activityReceived : text.activitySent,
                   style: VeilText.body,
                 ),
-                Text(_when(text), style: VeilText.secondary),
+                Text(_when(text), style: VeilText.secondaryIn(context)),
               ],
             ),
           ),

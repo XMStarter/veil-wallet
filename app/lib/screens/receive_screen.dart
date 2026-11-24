@@ -99,12 +99,12 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
               const SizedBox(height: 16),
               Text(
                 text.receiveAddressNumber(receive.index).toUpperCase(),
-                style: VeilText.heading,
+                style: VeilText.headingIn(context),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
               Container(
-                color: VeilColors.surface,
+                color: VeilPalette.of(context).surface,
                 padding: const EdgeInsets.all(12),
                 child: AddressText(receive.address),
               ),
@@ -112,7 +112,7 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
                 const SizedBox(height: 8),
                 Text(
                   text.receiveCopied,
-                  style: VeilText.secondary,
+                  style: VeilText.secondaryIn(context),
                   textAlign: TextAlign.center,
                 ),
               ],

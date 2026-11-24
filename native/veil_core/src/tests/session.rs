@@ -14,12 +14,15 @@ use super::{
 };
 use crate::session::Hooks;
 use crate::{
-    OnionNode, Phase, ProblemKind, SendState, Session, SessionConfig, SessionState, SyncState,
-    WalletSource,
+    OnionNode, Phase, Problem, ProblemKind, SendState, Session, SessionConfig, SessionState,
+    SyncState, WalletSource,
 };
 
 /// Longer than anything here takes; a wait that runs this long has failed.
 const SOON: Duration = Duration::from_secs(60);
+
+/// A third onion name, for a node of the user's own.
+const OWN_HOST: &str = "vww6ybal4bd7szmgncyruucpgfkqahzddi37ktceo3ah7ngmcopnpyyd.onion";
 
 /// The configuration of a session whose wallet is `name` in `dir`, or
 /// `None`, which skips the test, when there is no wallet library.
@@ -285,6 +288,154 @@ fn it_synchronises_by_itself_when_told_how_often() {
     );
 }
 
+#[test]
+fn the_password_is_checked_and_changed_through_the_session() {
+    let dir = TempDir::new("session-password");
+    let Some(config) = config(&dir, "w") else {
+        return;
+    };
+    let stand_in = StandIn::start().unwrap();
+    let new = "a new and longer password";
+    let session = start(config.clone(), &stand_in, WalletSource::Create);
+    let address = opened(&session).receive_address;
+
+    assert_eq!(session.is_password(PASSWORD), Ok(true));
+    assert_eq!(session.is_password("not the password"), Ok(false));
+    // With the wrong old password nothing changes.
+    let refused = session
+        .change_password("not the password", new)
+        .unwrap_err();
+    assert_eq!(refused.kind, ProblemKind::WrongPassword);
+    assert_eq!(session.is_password(PASSWORD), Ok(true));
+    session.change_password(PASSWORD, new).unwrap();
+    assert_eq!(session.is_password(new), Ok(true));
+    assert_eq!(session.is_password(PASSWORD), Ok(false));
+    assert_eq!(session.close().phase, Phase::Closed);
+
+    // The old one opens nothing any more; the new one opens the same wallet.
+    let session = start(config.clone(), &stand_in, WalletSource::Open);
+    assert_eq!(
+        failed_with(&opened(&session).phase),
+        Some(ProblemKind::WrongPassword)
+    );
+    let session = start_with_password(config, &stand_in, WalletSource::Open, new);
+    let state = opened(&session);
+    assert_eq!(state.phase, Phase::Ready, "{state:#?}");
+    assert_eq!(state.receive_address, address);
+    assert!(!state.rebuilt_from_keys);
+}
+
+#[test]
+fn nodes_of_the_users_own_are_used_and_remembered_in_the_wallet() {
+    let dir = TempDir::new("session-own-nodes");
+    let Some(config) = config(&dir, "w") else {
+        return;
+    };
+    let stand_in = StandIn::start().unwrap();
+    let own = OnionNode::new(OWN_HOST, 18089).unwrap();
+    let session = start(config.clone(), &stand_in, WalletSource::Create);
+    assert!(opened(&session).own_nodes.is_empty());
+
+    // Set, the node is asked at once, and it alone. Nothing is reachable
+    // here, so the synchronisation fails; who was asked is what counts.
+    session.set_nodes(vec![own.clone()]);
+    let state = wait(&session, |state| state.syncs_ended == 1);
+    assert_eq!(state.own_nodes, vec![own.clone()]);
+    assert_eq!(state.last_problem, None);
+    let requests = stand_in.requests();
+    assert!(!requests.is_empty());
+    assert!(
+        requests.iter().all(|request| request.host == OWN_HOST),
+        "{requests:?}"
+    );
+    assert_eq!(session.close().phase, Phase::Closed);
+
+    // It is not in a file of its own, and not readable in the wallet's.
+    for file in std::fs::read_dir(dir.file("")).unwrap() {
+        let bytes = std::fs::read(file.unwrap().path()).unwrap_or_default();
+        let name = OWN_HOST.as_bytes();
+        assert!(!bytes.windows(name.len()).any(|window| window == name));
+    }
+
+    // The next session is started with the same nodes as the first, and
+    // goes to the user's own all the same: the wallet remembers it.
+    stand_in.clear_requests();
+    let session = start(config, &stand_in, WalletSource::Open);
+    let state = opened(&session);
+    assert_eq!(state.own_nodes, vec![own]);
+    session.sync();
+    wait(&session, |state| state.syncs_ended == 1);
+    assert!(stand_in
+        .requests()
+        .iter()
+        .all(|request| request.host == OWN_HOST));
+
+    // Taken back, the session's nodes are used again.
+    stand_in.clear_requests();
+    session.set_nodes(Vec::new());
+    let state = wait(&session, |state| state.syncs_ended == 2);
+    assert!(state.own_nodes.is_empty());
+    let requests = stand_in.requests();
+    assert!(requests.iter().any(|request| request.host == SYNC_HOST));
+    assert!(requests.iter().all(|request| request.host != OWN_HOST));
+    assert_eq!(session.close().phase, Phase::Closed);
+}
+
+#[test]
+fn a_send_left_unknown_by_an_earlier_session_is_taken_up_again() {
+    let dir = TempDir::new("session-remembered-send");
+    let Some(config) = config(&dir, "w") else {
+        return;
+    };
+    let stand_in = StandIn::start().unwrap();
+    let session = start(config.clone(), &stand_in, WalletSource::Create);
+    let address = opened(&session).receive_address.unwrap().address;
+    assert_eq!(session.close().phase, Phase::Closed);
+
+    // What a session writes into the wallet when the answer to a send is
+    // lost: when, and the transaction's id. Here it is put there by hand;
+    // that a session writes it is shown on a private chain.
+    let txid = "ab".repeat(32);
+    let left = |note: String| -> Session {
+        let transport = stand_in.clone();
+        let hooks = Hooks {
+            transport: Box::new(move |_| Ok(Box::new(transport) as Box<dyn Transport>)),
+            wallet: Box::new(move |wallet| {
+                wallet.set_note("veil.unknown_send", &note).unwrap();
+            }),
+            save_every: crate::session::SAVE_EVERY,
+            send_settles_after: crate::session::SEND_SETTLES_AFTER,
+        };
+        Session::start_with(config.clone(), WalletSource::Open, PASSWORD, hooks)
+    };
+    let session = left(format!("1795400000 {txid}"));
+    let state = opened(&session);
+    assert_eq!(
+        state.send,
+        SendState::OutcomeUnknown {
+            txids: vec![txid.clone()],
+            settled: false
+        }
+    );
+    // As before the app was closed: no other send is built.
+    session.prepare_send(&address, SendAmount::Everything);
+    let state = wait(&session, |state| state.last_problem.is_some());
+    assert_eq!(
+        state.last_problem.map(|problem| problem.kind),
+        Some(ProblemKind::NotNow)
+    );
+    assert!(matches!(state.send, SendState::OutcomeUnknown { .. }));
+    assert!(stand_in.requests().is_empty());
+    assert_eq!(session.close().phase, Phase::Closed);
+
+    // A record that cannot be read is no record.
+    for nonsense in ["", "soon", "1795400000", "1795400000 not-hex", "x abcd"] {
+        let session = left(nonsense.to_owned());
+        assert_eq!(opened(&session).send, SendState::Idle, "{nonsense:?}");
+        assert_eq!(session.close().phase, Phase::Closed);
+    }
+}
+
 /// A session with two slow fake nodes behind its two candidates, in the
 /// middle of a synchronisation: the first node has been asked for blocks
 /// and is taking its time.
@@ -454,6 +605,153 @@ fn a_send_that_cannot_be_built_touches_no_node() {
     session.cancel_send();
     wait(&session, |state| state.send == SendState::Idle);
     assert!(stand_in.requests().is_empty());
+
+    // Nor is a node asked about an amount of nothing; and having seen
+    // that, the user clears it.
+    let address = session.state().receive_address.unwrap().address;
+    session.prepare_send(&address, SendAmount::Exact(Amount::ZERO));
+    let state = wait(&session, |state| matches!(state.send, SendState::Failed(_)));
+    let SendState::Failed(problem) = &state.send else {
+        unreachable!()
+    };
+    assert_eq!(problem.kind, ProblemKind::ZeroAmount, "{problem:?}");
+    assert_eq!(state.syncs_ended, 0);
+    session.clear_send();
+    wait(&session, |state| state.send == SendState::Idle);
+    assert!(stand_in.requests().is_empty());
+}
+
+#[test]
+fn a_transaction_is_built_only_from_a_wallet_level_with_a_node() {
+    let dir = TempDir::new("session-send-level");
+    let Some(config) = config(&dir, "w") else {
+        return;
+    };
+    let stand_in = StandIn::start().unwrap();
+    let session = start(config, &stand_in, WalletSource::Create);
+    let address = opened(&session).receive_address.unwrap().address;
+    let one: Amount = "1".parse().unwrap();
+
+    // Nothing has been synchronised in this session, so a send that could
+    // be one makes the wallet synchronise first. There is no node here:
+    // the synchronisation fails, and the send with it, for the same
+    // reason and in the same change of the state. Nothing was built from
+    // a wallet that does not know the chain.
+    session.prepare_send(&address, SendAmount::Exact(one));
+    let state = wait(&session, |state| {
+        state.syncs_ended == 1 || matches!(state.send, SendState::Failed(_))
+    });
+    assert_eq!(state.syncs_ended, 1, "{state:#?}");
+    let SyncState::Failed(why) = &state.sync else {
+        panic!("{state:#?}");
+    };
+    assert_eq!(why.kind, ProblemKind::NoNode);
+    assert_eq!(state.send, SendState::Failed(why.clone()), "{state:#?}");
+
+    // The next attempt synchronises again: a failure is not remembered as
+    // knowing the chain.
+    session.clear_send();
+    wait(&session, |state| state.send == SendState::Idle);
+    session.prepare_send(&address, SendAmount::Exact(one));
+    let state = wait(&session, |state| state.syncs_ended == 2);
+    assert!(matches!(state.send, SendState::Failed(_)), "{state:#?}");
+    assert_eq!(session.close().phase, Phase::Closed);
+}
+
+#[test]
+fn a_wallet_is_not_made_when_tor_does_not_start() {
+    let dir = TempDir::new("session-no-tor");
+    let Some(config) = config(&dir, "w") else {
+        return;
+    };
+    let keys_file = dir.file("w.keys");
+    let without_tor = |source: WalletSource| {
+        let hooks = Hooks {
+            transport: Box::new(|_| {
+                Err(Problem {
+                    kind: ProblemKind::TorFailed,
+                    detail: "no Tor in this test".into(),
+                })
+            }),
+            wallet: Box::new(|_| {}),
+            save_every: crate::session::SAVE_EVERY,
+            send_settles_after: crate::session::SEND_SETTLES_AFTER,
+        };
+        Session::start_with(config.clone(), source, PASSWORD, hooks)
+    };
+
+    // Tor fails to start. No wallet is left behind that nobody has seen
+    // the recovery phrase of, and that would be in the way of trying
+    // again.
+    let session = without_tor(WalletSource::Create);
+    let state = opened(&session);
+    assert_eq!(failed_with(&state.phase), Some(ProblemKind::TorFailed));
+    drop(session);
+    assert!(!config.wallet_path.exists());
+    assert!(!keys_file.exists());
+
+    // Trying again, with Tor, makes the wallet.
+    let stand_in = StandIn::start().unwrap();
+    let session = start(config.clone(), &stand_in, WalletSource::Create);
+    assert_eq!(opened(&session).phase, Phase::Ready);
+    let phrase = session.recovery_phrase().unwrap();
+    assert_eq!(session.close().phase, Phase::Closed);
+    assert!(keys_file.exists());
+
+    // A wallet that is there is reported before Tor is asked for: the
+    // failure is the wallet's, not Tor's.
+    let session = without_tor(WalletSource::Restore {
+        phrase,
+        restore_height: 0,
+    });
+    let state = opened(&session);
+    assert_eq!(failed_with(&state.phase), Some(ProblemKind::WalletExists));
+}
+
+#[test]
+fn a_wallet_that_cannot_be_saved_says_so_until_it_can() {
+    let dir = TempDir::new("session-not-saved");
+    let Some(config) = config(&dir, "w") else {
+        return;
+    };
+    let stand_in = StandIn::start().unwrap();
+    let session = start(config.clone(), &stand_in, WalletSource::Create);
+    assert_eq!(opened(&session).not_saved, None);
+    let own = |port| vec![OnionNode::new(OWN_HOST, port).unwrap()];
+
+    // The wallet library writes the data file under another name first
+    // and then gives it the wallet's. A folder of that other name is in
+    // its way on every system, whoever runs the test.
+    let in_the_way = dir.file("w.new");
+    std::fs::create_dir(&in_the_way).unwrap();
+
+    // Setting nodes saves the wallet. It cannot, and the state says so
+    // for as long as that is true, not only until the next command.
+    session.set_nodes(own(18081));
+    let state = wait(&session, |state| state.not_saved.is_some());
+    assert_eq!(state.own_nodes, own(18081));
+    session.new_address();
+    let state = wait(&session, |state| {
+        state.receive_address.as_ref().is_some_and(|a| a.index == 2)
+    });
+    assert!(state.not_saved.is_some(), "{state:#?}");
+
+    // Once it can be written again, the next save clears it.
+    std::fs::remove_dir(&in_the_way).unwrap();
+    session.set_nodes(own(18089));
+    let state = wait(&session, |state| state.own_nodes == own(18089));
+    let state = if state.not_saved.is_some() {
+        wait(&session, |state| state.not_saved.is_none())
+    } else {
+        state
+    };
+    assert_eq!(state.not_saved, None);
+
+    // A wallet that cannot be saved on closing says that too.
+    std::fs::create_dir(&in_the_way).unwrap();
+    let state = session.close();
+    assert!(matches!(state.phase, Phase::Failed(_)), "{state:#?}");
+    std::fs::remove_dir(&in_the_way).unwrap();
 }
 
 #[test]
@@ -470,11 +768,26 @@ fn a_damaged_data_file_is_reported_and_the_wallet_opens() {
     let intact = std::fs::read(&config.wallet_path).unwrap();
     std::fs::write(&config.wallet_path, &intact[..intact.len() / 2]).unwrap();
 
-    let session = start(config, &stand_in, WalletSource::Open);
+    // Told to synchronise by itself, as the app tells it.
+    let mut by_itself = config;
+    by_itself.sync_every = Some(Duration::from_millis(100));
+    let session = start(by_itself, &stand_in, WalletSource::Open);
     let state = opened(&session);
     assert_eq!(state.phase, Phase::Ready, "{state:#?}");
     assert!(state.rebuilt_from_keys);
     assert_eq!(state.receive_address, address);
+
+    // With the data file went the user's own nodes, if there were any.
+    // The wallet does not go to the public ones by itself: it waits to be
+    // told to synchronise, or to be given nodes.
+    std::thread::sleep(Duration::from_secs(1));
+    assert_eq!(session.state().sync, SyncState::NotYet);
+    assert!(stand_in.requests().is_empty(), "{:?}", stand_in.requests());
+    session.sync();
+    wait(&session, |state| state.syncs_ended >= 1);
+    assert!(!stand_in.requests().is_empty());
+    // From then on it synchronises by itself again.
+    wait(&session, |state| state.syncs_ended >= 2);
 }
 
 /// The session with funds, on a private chain. Needs a Monero daemon
@@ -493,9 +806,16 @@ mod on_a_private_chain {
     /// and the confirmations that unlock received funds.
     const INITIAL_BLOCKS: u64 = 130;
     const UNLOCK_BLOCKS: u64 = 10;
-    /// More than the wallet sends to open an exchange with a node, less
-    /// than a transaction.
-    const MID_TRANSACTION: CutPoint = CutPoint::AfterRequestBytes(2500);
+    /// More than the wallet sends to open an exchange with a node and to
+    /// ask whether it is there, which it does before it hands a
+    /// transaction over; less than those and a transaction together.
+    const MID_TRANSACTION: CutPoint = CutPoint::AfterRequestBytes(2800);
+
+    /// The same place, for a cut that stops the transaction there: what
+    /// came before it, the opening of the exchange and the question
+    /// whether the node is there, has arrived, and the transaction has
+    /// not.
+    const CUT_OFF_MID_TRANSACTION: CutPoint = CutPoint::BeforeMoreRequestBytes(2800);
 
     /// A session whose wallet scans from the first block of the private
     /// chain and accepts that chain's rules, each time it is opened.
@@ -850,7 +1170,13 @@ mod on_a_private_chain {
             panic!("the transaction was not built: {:?}", state.send);
         };
         stand_in.clear_requests();
+        // Confirmed, and cancelled in the same breath, as a second click
+        // can do before the screen has caught up: the transaction goes
+        // out, and the cancel that comes too late does not take "sent"
+        // off the state. The password is asked about only to know that
+        // the session has dealt with the cancel.
         session.confirm_send();
+        session.cancel_send();
         let state = wait(&session, |state| {
             !matches!(state.send, SendState::Review { .. } | SendState::Sending)
         });
@@ -858,6 +1184,14 @@ mod on_a_private_chain {
             panic!("the transaction was not sent: {:?}", state.send);
         };
         assert_eq!(txids.len(), 1);
+        assert_eq!(session.is_password(PASSWORD), Ok(true));
+        assert_eq!(
+            session.state().send,
+            SendState::Sent {
+                txids: txids.clone()
+            },
+            "a late cancel took a sent transaction off the state"
+        );
         let requests = stand_in.requests();
         assert!(
             requests
@@ -865,7 +1199,8 @@ mod on_a_private_chain {
                 .any(|r| r.purpose == Purpose::Broadcast && r.host == BROADCAST_HOST),
             "{requests:?}"
         );
-        session.cancel_send();
+        session.clear_send();
+        wait(&session, |state| state.send == SendState::Idle);
 
         daemon.add_blocks(UNLOCK_BLOCKS + 1, &funder_address);
         let state = synchronised(&session);
@@ -939,7 +1274,7 @@ mod on_a_private_chain {
             }
         );
         assert_eq!(outgoing(&state), 2);
-        session.cancel_send();
+        session.clear_send();
         wait(&session, |state| state.send == SendState::Idle);
 
         // Once it is in a block, the funds are what one payment leaves.
@@ -953,8 +1288,11 @@ mod on_a_private_chain {
         assert_eq!(outgoing(&state), 2);
 
         // --- A send that never reaches the node -------------------------------
-        // The wallet library says the same for it as for a lost answer, so
-        // it is reported the same way: unknown.
+        // The node says that it is there, and the connection is cut while
+        // the transaction is on its way to it: part of it arrives, which
+        // is nothing a node can use. The wallet library says the same for
+        // it as for a lost answer, so it is reported the same way:
+        // unknown.
         session.prepare_send(&payee_address, SendAmount::Exact(amount));
         let state = wait(&session, |state| {
             matches!(state.send, SendState::Review { .. } | SendState::Failed(_))
@@ -964,7 +1302,12 @@ mod on_a_private_chain {
             "the transaction was not built: {:?}",
             state.send
         );
-        stand_in.unroute(BROADCAST_HOST, BROADCAST_PORT);
+        stand_in.cut_once(
+            BROADCAST_HOST,
+            BROADCAST_PORT,
+            CUT_OFF_MID_TRANSACTION,
+            AfterCut::NodeReachable,
+        );
         session.confirm_send();
         let state = wait(&session, |state| {
             !matches!(state.send, SendState::Review { .. } | SendState::Sending)
@@ -972,7 +1315,47 @@ mod on_a_private_chain {
         let SendState::OutcomeUnknown { txids: never, .. } = state.send.clone() else {
             panic!("the send was not reported as unknown: {:?}", state.send);
         };
-        stand_in.route(BROADCAST_HOST, BROADCAST_PORT, daemon.rpc_port());
+        assert_eq!(stand_in.cuts(), 2, "the transaction was not cut off");
+
+        // The wallet has written that down already, not only in memory: a
+        // copy of its data file as it is on disk now is what a killed app
+        // or a power cut would leave. The password is asked about only to
+        // know that the session has finished with the send. The keys file
+        // is locked while the wallet is open, so its copy is made further
+        // down, once the wallet is closed; it does not change.
+        assert_eq!(session.is_password(PASSWORD), Ok(true));
+        assert_eq!(session.state().not_saved, None);
+        std::fs::copy(dir.file("user"), dir.file("killed")).unwrap();
+
+        // Closing the app does not make the wallet forget it: the next
+        // session knows of the same send, and that it is still open.
+        assert_eq!(session.close().phase, Phase::Closed);
+        std::fs::copy(dir.file("user.keys"), dir.file("killed.keys")).unwrap();
+        let mut as_killed = config.clone();
+        as_killed.wallet_path = dir.file("killed");
+        let killed = start_on_chain(as_killed, &stand_in, WalletSource::Open);
+        let state = opened(&killed);
+        assert_eq!(state.phase, Phase::Ready, "{state:#?}");
+        assert!(!state.rebuilt_from_keys);
+        assert_eq!(
+            state.send,
+            SendState::OutcomeUnknown {
+                txids: never.clone(),
+                settled: false
+            },
+            "the wallet as a kill would have left it does not know of the send"
+        );
+        assert_eq!(killed.close().phase, Phase::Closed);
+
+        let session = start_on_chain(config.clone(), &stand_in, WalletSource::Open);
+        let state = opened(&session);
+        assert_eq!(
+            state.send,
+            SendState::OutcomeUnknown {
+                txids: never.clone(),
+                settled: false
+            }
+        );
 
         // A synchronisation does not find it. On this chain there is
         // nothing to wait for, so that settles it: still not called failed,
@@ -995,6 +1378,14 @@ mod on_a_private_chain {
         let SendState::Review { fee: third_fee, .. } = state.send else {
             panic!("the transaction was not built: {:?}", state.send);
         };
+        // This time the node for sending is down, as public nodes often
+        // are. It is asked whether it is there before anything is handed
+        // to it, does not answer, and the transaction goes to the next
+        // node that does: here the one synchronised with, there being no
+        // third, through the broadcast listener all the same. Sent, and
+        // nothing unknown about it.
+        stand_in.unroute(BROADCAST_HOST, BROADCAST_PORT);
+        stand_in.clear_requests();
         session.confirm_send();
         let state = wait(&session, |state| {
             !matches!(state.send, SendState::Review { .. } | SendState::Sending)
@@ -1004,6 +1395,15 @@ mod on_a_private_chain {
             "the transaction was not sent: {:?}",
             state.send
         );
+        let mut asked: Vec<String> = stand_in
+            .requests()
+            .into_iter()
+            .filter(|request| request.purpose == Purpose::Broadcast)
+            .map(|request| request.host)
+            .collect();
+        asked.dedup();
+        assert_eq!(asked, [BROADCAST_HOST, SYNC_HOST]);
+        stand_in.route(BROADCAST_HOST, BROADCAST_PORT, daemon.rpc_port());
         daemon.add_blocks(UNLOCK_BLOCKS + 1, &funder_address);
         let state = synchronised(&session);
         let in_the_end = after_second

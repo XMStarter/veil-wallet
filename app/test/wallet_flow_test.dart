@@ -254,6 +254,42 @@ void main() {
     expect(backend.startedWith, WalletSource.open);
   });
 
+  testWidgets('after a wrong password the next one is typed straight away', (
+    tester,
+  ) async {
+    final backend = FakeBackend(hasWallet: true, confirmed: true);
+    await pumpApp(tester, 'en', backend: backend);
+    backend.takes = const Duration(milliseconds: 300);
+    // The field has the keyboard from the start, and keeps it through a
+    // refusal, with the refused password marked to be typed over.
+    await typeOn(tester, 'not the password');
+    await pressAndWait(tester, 'Open wallet');
+    expect(find.text('Wrong password.'), findsOneWidget);
+    expect(allMarked(tester), isTrue);
+    await typeOn(tester, 'nor this one');
+    await pressAndWait(tester, 'Open wallet');
+    expect(find.text('Wrong password.'), findsOneWidget);
+    await typeOn(tester, testPassword);
+    await pressAndWait(tester, 'Open wallet');
+    expect(find.text('WALLET'), findsOneWidget);
+  });
+
+  testWidgets('a failure nobody foresaw is shown, and the screen goes on', (
+    tester,
+  ) async {
+    final backend = FakeBackend(hasWallet: true, confirmed: true);
+    await pumpApp(tester, 'en', backend: backend);
+    backend.breakNext = ArgumentError('something that cannot happen');
+    await type(tester, 'Password', testPassword);
+    await press(tester, 'Open wallet');
+    // Not "Opening…" for ever: what happened is said, and the wallet can
+    // be opened by trying again.
+    expect(find.textContaining('something that cannot happen'), findsOneWidget);
+    expect(enabled(tester, 'Open wallet'), isTrue);
+    await press(tester, 'Open wallet');
+    expect(find.text('WALLET'), findsOneWidget);
+  });
+
   testWidgets('a wallet whose phrase was never checked shows it again first', (
     tester,
   ) async {
@@ -265,7 +301,9 @@ void main() {
     expect(find.text(words.first), findsOneWidget);
   });
 
-  testWidgets('a wallet rebuilt from its keys says so', (tester) async {
+  testWidgets('a wallet rebuilt from its keys says so, and waits to be told', (
+    tester,
+  ) async {
     final backend = FakeBackend(hasWallet: true, confirmed: true);
     await pumpApp(tester, 'en', backend: backend);
     await type(tester, 'Password', testPassword);
@@ -273,6 +311,89 @@ void main() {
     backend.tor(TorState.ready, rebuilt: true);
     await tester.pumpAndSettle();
     expect(find.textContaining('opened from its keys'), findsOneWidget);
+    // A node of the user's own went with the file. The wallet says so,
+    // and does not go to the public nodes before it is told to.
+    expect(find.textContaining('set it again in Settings'), findsOneWidget);
+    expect(backend.calls, isNot(contains('sync')));
+    await press(tester, 'Synchronise with the public nodes');
+    expect(backend.calls.last, 'sync');
+    // Once it synchronises there is nothing left to ask.
+    expect(find.text('SYNCHRONISE WITH THE PUBLIC NODES'), findsNothing);
+    expect(find.textContaining('opened from its keys'), findsOneWidget);
+  });
+
+  testWidgets('the warnings on Home fit the window in Russian too', (
+    tester,
+  ) async {
+    final backend = await openWallet(tester, 'ru');
+    backend.report(
+      rebuilt: true,
+      notSaved: const Problem(ProblemKind.other, 'failed to save file'),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('открыт по ключам'), findsOneWidget);
+    expect(find.textContaining('не удалось сохранить на диск'), findsOneWidget);
+    expect(find.text('СИНХРОНИЗИРОВАТЬ ЧЕРЕЗ ПУБЛИЧНЫЕ УЗЛЫ'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a phrase that was never checked is not skipped', (tester) async {
+    // The wallet's phrase was never checked, and now it cannot be read.
+    // The wallet is not opened as if nothing were owed: it is closed, the
+    // screen says so, and the next attempt shows the phrase.
+    final backend = FakeBackend(hasWallet: true, confirmed: false);
+    await pumpApp(tester, 'en', backend: backend);
+    backend.noPhrase = true;
+    await type(tester, 'Password', testPassword);
+    await press(tester, 'Open wallet');
+    expect(find.text('WALLET'), findsNothing);
+    expect(find.textContaining('no recovery phrase'), findsOneWidget);
+    expect(backend.state.value, isNull);
+    expect(backend.calls.last, 'close');
+
+    backend.noPhrase = false;
+    await press(tester, 'Open wallet');
+    expect(find.text('RECOVERY PHRASE'), findsOneWidget);
+  });
+
+  testWidgets('a wallet that could not be saved says so, open and closed', (
+    tester,
+  ) async {
+    final backend = await openWallet(tester, 'en');
+    expect(find.textContaining('could not be saved'), findsNothing);
+    backend.report(
+      notSaved: const Problem(ProblemKind.other, 'no space left on device'),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('could not be saved to disk'), findsOneWidget);
+    expect(find.textContaining('no space left on device'), findsOneWidget);
+
+    // Locked like that, the screen it leads to says what was lost.
+    backend.notSavedOnClose = const Problem(ProblemKind.other, 'disk full');
+    await press(tester, 'Lock wallet');
+    expect(find.text('OPEN WALLET'), findsOneWidget);
+    expect(
+      find.textContaining('could not be saved when it was closed'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('disk full'), findsOneWidget);
+  });
+
+  testWidgets('locking that fails does not leave the screen closing for ever', (
+    tester,
+  ) async {
+    final backend = await openWallet(tester, 'en');
+    backend.breakClose = StateError('the session was closed already');
+    await press(tester, 'Lock wallet');
+    expect(find.text('OPEN WALLET'), findsOneWidget);
+    expect(
+      find.textContaining('the session was closed already'),
+      findsOneWidget,
+    );
+    // And the wallet opens again from there.
+    await type(tester, 'Password', testPassword);
+    await press(tester, 'Open wallet');
+    expect(find.text('WALLET'), findsOneWidget);
   });
 
   testWidgets('every screen fits the window, in Russian too', (tester) async {

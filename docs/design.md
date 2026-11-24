@@ -39,7 +39,24 @@ Navy and crimson are the two threads of the veil in the logo. Incoming and
 outgoing amounts also carry a plus or minus sign and a label, so they can be
 told apart without colour.
 
-The light theme is the default. A dark theme is available in Settings.
+The light theme is the default. A dark theme is available in Settings: the
+logo turned over, milk-white on charcoal, with the two threads lightened
+until they read on it.
+
+| Token | Dark value |
+|---|---|
+| Ground | `#1B1C1F` |
+| Surface | `#26272B` |
+| Field | `#121315` |
+| Ink | `#EDECE8` |
+| Muted | `#A3A4A8` |
+| Hairline | `#3A3B40` |
+| Field border | `#7C7D82` |
+| Thread navy | `#8FA5DB` |
+| Thread crimson | `#E08A9B` |
+| Gold | `#C7A566` |
+
+A QR code stays dark on white in both themes: that is what scanners read.
 
 ## Type
 
@@ -87,8 +104,11 @@ runtime.
    known, which is a warning and never a failure. While a transaction is
    being built or handed over, a line moves and words say what is waited
    for.
-6. **Settings.** Tor status, node, bridges, password, auto-lock, show
-   recovery phrase, theme, language.
+6. **Settings.** One line for each thing, saying how it stands and leading
+   to where it is changed: Tor status, node, bridges, password, auto-lock,
+   show recovery phrase, language, theme, and removing the wallet. A choice
+   among a few is a list in which the one in force says so in a word.
+   Removing the wallet and showing the phrase ask for the password.
 
 ## Language
 
