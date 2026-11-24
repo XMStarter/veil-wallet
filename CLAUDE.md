@@ -259,7 +259,9 @@ had nobody listening to the backend). Fixed with it: screens show any
 failure and go on; a password field keeps the keyboard through a
 refusal; and the C interface no longer locks the handle for the whole of
 a call that waits, which froze the window while a password was checked
-during a synchronisation. Not confirmed by the owner yet. The owner then
+during a synchronisation. The owner confirmed that a wrong password no
+longer hangs the app, and the run on that commit, `e7acc48`, passed at
+the `offline` and `regtest` levels both ways. The owner then
 asked for a review of the whole code for faults and for things that only
 look as if they worked, and for the findings to be fixed. Fixed after
 it, with offline tests unless said otherwise: a send whose outcome is
@@ -295,7 +297,13 @@ synchronisation and spending, while the node synchronised with is asked
 for what a transaction is built from. Also open: a password change that
 fails after the keys file was rewritten is reported as failed although
 the new password is in force; and `VEIL_CORE_LIB` and `VEIL_WALLET_LIB`
-still name the libraries in a release build. Bridges changed
+still name the libraries in a release build. On commit `3208ff8` the
+owner's run passed at the `offline` and `regtest` levels as Linux and as
+Windows programs, the scenario on a private chain included with its two
+new checks: the data file as a kill would leave it knows of the send
+whose outcome is unknown, and a cancel sent right after a confirmation
+leaves the send shown as sent. Not reported from the app yet: the
+auto-lock, and anything of what the review changed. Bridges changed
 in Settings take effect the next time the wallet is opened. Next after
 its acceptance is step 3.8, the app on Windows. Not done: the app. See the build plan in
 `docs/concept.md`.
