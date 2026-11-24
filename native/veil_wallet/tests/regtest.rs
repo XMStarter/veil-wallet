@@ -144,12 +144,13 @@ fn receive_on_fresh_addresses_send_and_restore() {
     let mut bob = new_wallet(&lib, &dir.file("bob"), &daemon);
     let bob_address = bob.receive_address().unwrap();
 
-    // More than she has: refused when building, nothing is sent.
+    // More than she has: refused when building, for that reason, and
+    // nothing is sent.
     assert!(matches!(
         alice
             .prepare_send(&bob_address.address, SendAmount::Exact(xmr("1000")))
             .err(),
-        Some(Error::Wallet(_))
+        Some(Error::NotEnoughFunds(_))
     ));
 
     let (sent, fee, payment_ids) = send(

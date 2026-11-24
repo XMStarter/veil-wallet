@@ -202,8 +202,14 @@ the review's total and source addresses, a lack of funds as a problem of
 its own, and a send whose outcome is unknown is now looked for after every
 synchronisation, becomes sent when found, blocks other sends until then,
 and is settled, never failed, when a synchronisation five minutes later
-does not show it. The offline tests pass in a cloud session. The scenario
-on a private chain was rewritten for this and has not run: it asserts
+does not show it. On the owner's machine, on commit `3c9a853`, the
+`offline` level passed as Linux and as Windows programs. The `regtest`
+level stopped at an older test of `veil_wallet` that still expected the
+library's bare refusal where a lack of funds now has its own error; that
+the test saw the new error on a real chain, on both systems, is the first
+confirmation of that mapping. The test is corrected. Because the level
+stops at the first failure, the scenario
+on a private chain that was rewritten for this step has still not run: it asserts
 that a transaction whose answer was lost is found in the node's pool
 before any block, which rests on reading the wallet library's source, and
 that a send to an unreachable node is reported as unknown. Next after its
