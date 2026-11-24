@@ -87,6 +87,11 @@ C functions (`src/ffi.rs`). What crosses them is text:
 | `veil_session_close(handle)` | Saves, closes, stops Tor, and returns the last state |
 | `veil_string_free(text)` | Frees any other text the interface returned |
 
+Reading the revision or the state and giving a command never wait: not
+for the network, and not for a call on another thread that does wait for
+the session's thread (the phrase, the password, closing). The handle is
+locked only for as long as it takes to get hold of the session.
+
 The password and a recovery phrase are arguments of their own and never
 part of the JSON, and the phrase never appears in the state. Amounts cross
 as text, exact to the last digit, so that the other side shows them and

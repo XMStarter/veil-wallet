@@ -6,9 +6,11 @@
 //! travel as arguments of their own and never inside that text.
 //!
 //! Every function is safe to call from any thread. Reading the state and
-//! giving a command never wait for the network; closing a session and
-//! asking for the recovery phrase wait for the session's thread. A null
-//! handle is accepted everywhere. Panics never cross this boundary.
+//! giving a command never wait, neither for the network nor for a call
+//! that does wait and is under way on another thread. Closing a session,
+//! asking for the recovery phrase, and checking or changing the password
+//! wait for the session's thread. A null handle is accepted everywhere.
+//! Panics never cross this boundary.
 //!
 //! The format is described in the crate's README, and the state as it
 //! crosses the interface is pinned by the files in `tests/fixtures`, which
@@ -18,7 +20,7 @@ use std::ffi::{c_char, CStr, CString};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;
 use std::ptr;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde_json::{json, Map, Value};
@@ -33,8 +35,11 @@ use crate::{
 
 /// Opaque handle to a session.
 pub struct VeilSession {
-    /// `None` once the session has been closed through the handle.
-    session: Mutex<Option<Session>>,
+    /// `None` once the session has been closed through the handle. Shared,
+    /// so that a call holds the lock only for as long as it takes to get
+    /// hold of the session: one that waits for the session's thread must
+    /// not keep another thread from reading the state meanwhile.
+    session: Mutex<Option<Arc<Session>>>,
 }
 
 /// A command as it arrives in text.
@@ -390,7 +395,7 @@ unsafe fn from_c<'a>(pointer: *const c_char) -> Option<&'a str> {
 /// # Safety
 ///
 /// `handle` must be null or a live handle from `veil_session_start`.
-unsafe fn with_session<T>(
+pub(crate) unsafe fn with_session<T>(
     handle: *const VeilSession,
     fallback: T,
     read: impl FnOnce(&Session) -> T,
@@ -400,8 +405,12 @@ unsafe fn with_session<T>(
         return fallback;
     };
     let outcome = catch_unwind(AssertUnwindSafe(|| {
-        let session = handle.session.lock().unwrap_or_else(|e| e.into_inner());
-        session.as_ref().map(read)
+        let session = handle
+            .session
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        session.map(|session| read(&session))
     }));
     match outcome {
         Ok(Some(value)) => value,
@@ -419,7 +428,7 @@ pub(crate) fn start_with(
     let (config, source) = parse_start(config, phrase)?;
     let session = Session::start_with(config, source, password, hooks);
     Ok(Box::into_raw(Box::new(VeilSession {
-        session: Mutex::new(Some(session)),
+        session: Mutex::new(Some(Arc::new(session))),
     })))
 }
 
@@ -702,7 +711,7 @@ pub unsafe extern "C" fn veil_session_close(handle: *mut VeilSession) -> *mut c_
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .take();
-        session.map(|session| state_json(&session.close()).to_string())
+        session.map(|session| state_json(&session.end()).to_string())
     }));
     match closed {
         Ok(Some(state)) => to_c(state),

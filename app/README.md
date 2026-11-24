@@ -80,6 +80,17 @@ running the app.
 without opening a wallet. It needs `cargo build -p veil_core` in `native/`
 and is skipped without it.
 
+Two things the tests of step 3.7 missed, and what they do about it now.
+The wallet that only pretends answered at once, so no screen was ever
+drawn while it worked: it can be told to take its time
+(`FakeBackend.takes`), and to fail in a way nobody foresaw
+(`FakeBackend.breakNext`). And the real backend was tested with nobody
+listening to it, while in the app the screens listen: a call it handed to
+another isolate then took the screens along and failed. Its calls to
+another isolate are functions of the library now (`_away` in
+`core_backend.dart`), and a test lets a listener that cannot cross
+listen.
+
 ## Where the app keeps things
 
 | What | Linux | Windows |

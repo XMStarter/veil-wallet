@@ -420,7 +420,12 @@ class _PasswordScreenState extends State<PasswordScreen> {
       _working = true;
       _problem = null;
     });
-    final refused = await widget.backend.changePassword(_old.text, next);
+    Problem? refused;
+    try {
+      refused = await widget.backend.changePassword(_old.text, next);
+    } catch (error) {
+      refused = unforeseen(error);
+    }
     if (!mounted) return;
     if (refused == null) {
       Navigator.of(context).pop(text.passwordChanged);
@@ -486,6 +491,7 @@ class _ShowPhraseScreenState extends State<ShowPhraseScreen> {
   final _password = TextEditingController();
   bool _working = false;
   bool _wrong = false;
+  Problem? _problem;
   String? _phrase;
 
   @override
@@ -501,22 +507,34 @@ class _ShowPhraseScreenState extends State<ShowPhraseScreen> {
       _wrong = false;
     });
     final backend = widget.backend;
-    final right = await backend.isPassword(_password.text) ?? false;
-    final phrase = right ? await backend.recoveryPhrase() : null;
+    String? phrase;
+    Problem? problem;
+    try {
+      final right = await backend.isPassword(_password.text) ?? false;
+      phrase = right ? await backend.recoveryPhrase() : null;
+    } catch (error) {
+      problem = unforeseen(error);
+    }
     if (!mounted) return;
     setState(() {
       _working = false;
-      _wrong = phrase == null;
+      _wrong = phrase == null && problem == null;
+      _problem = problem;
       _phrase = phrase;
-      // The password has done its work and is not kept on the screen.
-      if (phrase != null) _password.clear();
     });
+    if (phrase != null) {
+      // The password has done its work and is not kept on the screen.
+      _password.clear();
+    } else {
+      markAll(_password);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final text = AppLocalizations.of(context)!;
     final phrase = _phrase;
+    final problem = _problem;
     final back = VeilQuietButton(
       label: text.back,
       onPressed: () => Navigator.of(context).pop(),
@@ -550,10 +568,14 @@ class _ShowPhraseScreenState extends State<ShowPhraseScreen> {
           secret: true,
           enabled: !_working,
           autofocus: true,
-          onChanged: (_) => setState(() => _wrong = false),
+          onChanged: (_) => setState(() {
+            _wrong = false;
+            _problem = null;
+          }),
           onSubmitted: (_) => _show(),
         ),
         if (_wrong) ProblemText(text.problemWrongPassword),
+        if (problem != null) ProblemText(problemWords(text, problem)),
       ],
     );
   }
@@ -629,6 +651,7 @@ class _RemoveWalletScreenState extends State<RemoveWalletScreen> {
   final _password = TextEditingController();
   bool _working = false;
   bool _wrong = false;
+  Problem? _problem;
 
   @override
   void dispose() {
@@ -644,23 +667,31 @@ class _RemoveWalletScreenState extends State<RemoveWalletScreen> {
     });
     final backend = widget.backend;
     // Anything but a clear yes leaves the wallet where it is.
-    final right = await backend.isPassword(_password.text) ?? false;
-    if (!right) {
-      if (!mounted) return;
-      setState(() {
-        _working = false;
-        _wrong = true;
-      });
+    var right = false;
+    Problem? problem;
+    try {
+      right = await backend.isPassword(_password.text) ?? false;
+      if (right) await backend.removeWallet();
+    } catch (error) {
+      problem = unforeseen(error);
+    }
+    if (!mounted) return;
+    if (right && problem == null) {
+      openAlone(context, StartScreen(backend: backend));
       return;
     }
-    await backend.removeWallet();
-    if (!mounted) return;
-    openAlone(context, StartScreen(backend: backend));
+    setState(() {
+      _working = false;
+      _wrong = problem == null;
+      _problem = problem;
+    });
+    markAll(_password);
   }
 
   @override
   Widget build(BuildContext context) {
     final text = AppLocalizations.of(context)!;
+    final problem = _problem;
     return VeilScreen(
       title: text.settingsRemove,
       actions: [
@@ -683,9 +714,13 @@ class _RemoveWalletScreenState extends State<RemoveWalletScreen> {
           controller: _password,
           secret: true,
           enabled: !_working,
-          onChanged: (_) => setState(() => _wrong = false),
+          onChanged: (_) => setState(() {
+            _wrong = false;
+            _problem = null;
+          }),
         ),
         if (_wrong) ProblemText(text.problemWrongPassword),
+        if (problem != null) ProblemText(problemWords(text, problem)),
         if (_working) ...[
           const SizedBox(height: 16),
           const LinearProgressIndicator(),

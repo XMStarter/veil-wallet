@@ -12,10 +12,10 @@ import 'paths.dart';
 /// The wallet, run by the native core.
 ///
 /// Starting a session, giving it commands and reading its state return at
-/// once. The two calls that wait for the session's thread, the recovery
-/// phrase and closing, are made on another isolate, so the interface never
-/// stands still. Neither waits for a synchronisation to end: the core
-/// stops one for them.
+/// once. The calls that wait for the session's thread (the recovery
+/// phrase, the password checked or changed, and closing) are made on
+/// another isolate, so the interface never stands still. None waits for a
+/// synchronisation to end: the core stops one for them.
 class CoreBackend implements WalletBackend {
   CoreBackend(this._paths);
 
@@ -82,11 +82,7 @@ class CoreBackend implements WalletBackend {
       state = session.state();
     }
     if (state.phase != Phase.ready) {
-      final address = session.address;
-      final library = _paths.coreLibrary;
-      await Isolate.run(
-        () => VeilSession.fromAddress(VeilCore.open(library), address).close(),
-      );
+      await _away(_paths.coreLibrary, session.address, _close);
       throw StartFailure(
         state.phaseProblem ?? const Problem(ProblemKind.other, 'not opened'),
       );
@@ -146,13 +142,8 @@ class CoreBackend implements WalletBackend {
   Future<bool?> isPassword(String password) async {
     final session = _session;
     if (session == null) return null;
-    final address = session.address;
-    final library = _paths.coreLibrary;
-    return Isolate.run(
-      () => VeilSession.fromAddress(
-        VeilCore.open(library),
-        address,
-      ).isPassword(password),
+    return _waited(
+      _away(_paths.coreLibrary, session.address, _IsPassword(password).call),
     );
   }
 
@@ -162,13 +153,12 @@ class CoreBackend implements WalletBackend {
     if (session == null) {
       return const Problem(ProblemKind.notNow, 'no wallet is open');
     }
-    final address = session.address;
-    final library = _paths.coreLibrary;
-    return Isolate.run(
-      () => VeilSession.fromAddress(
-        VeilCore.open(library),
-        address,
-      ).changePassword(old, next),
+    return _waited(
+      _away(
+        _paths.coreLibrary,
+        session.address,
+        _ChangePassword(old, next).call,
+      ),
     );
   }
 
@@ -202,14 +192,7 @@ class CoreBackend implements WalletBackend {
   Future<String?> recoveryPhrase() async {
     final session = _session;
     if (session == null) return null;
-    final address = session.address;
-    final library = _paths.coreLibrary;
-    return Isolate.run(
-      () => VeilSession.fromAddress(
-        VeilCore.open(library),
-        address,
-      ).recoveryPhrase(),
-    );
+    return _waited(_away(_paths.coreLibrary, session.address, _phrase));
   }
 
   @override
@@ -238,12 +221,63 @@ class CoreBackend implements WalletBackend {
     _session = null;
     _state.value = null;
     if (session == null) return;
-    final address = session.address;
-    final library = _paths.coreLibrary;
-    await Isolate.run(
-      () => VeilSession.fromAddress(VeilCore.open(library), address).close(),
-    );
+    // Closing releases the session. A call still under way on another
+    // isolate gets its answer first.
+    while (_underWay.isNotEmpty) {
+      await Future.wait(_underWay.toList());
+    }
+    await _away(_paths.coreLibrary, session.address, _close);
   }
+
+  /// Calls that wait for the session's thread and have not returned yet.
+  final Set<Future<void>> _underWay = {};
+
+  /// Keeps [call] on record until it has returned, for [close] to wait for.
+  Future<T> _waited<T>(Future<T> call) {
+    late final Future<void> record;
+    record = call.then<void>((_) {}, onError: (_) {}).whenComplete(() {
+      _underWay.remove(record);
+    });
+    _underWay.add(record);
+    return call;
+  }
+}
+
+/// Makes [call] on the session at [address] on another isolate: for the
+/// calls that wait for the session's thread, which the main isolate, the
+/// one that draws, must never do.
+///
+/// A function of the library and not a method of the backend, on purpose.
+/// What is handed to another isolate takes along everything it can reach,
+/// and a function made inside a method can reach the backend, through it
+/// whoever listens to the backend, and so the screens, which cannot be
+/// handed over: the call then fails before it is made. From here nothing
+/// of the backend is in reach. [call] has to be a function of the library
+/// too, or a method of an object that holds only what the call needs.
+Future<T> _away<T>(String library, int address, T Function(VeilSession) call) =>
+    Isolate.run(
+      () => call(VeilSession.fromAddress(VeilCore.open(library), address)),
+    );
+
+SessionState _close(VeilSession session) => session.close();
+
+String? _phrase(VeilSession session) => session.recoveryPhrase();
+
+class _IsPassword {
+  const _IsPassword(this.password);
+
+  final String password;
+
+  bool? call(VeilSession session) => session.isPassword(password);
+}
+
+class _ChangePassword {
+  const _ChangePassword(this.old, this.next);
+
+  final String old;
+  final String next;
+
+  Problem? call(VeilSession session) => session.changePassword(old, next);
 }
 
 /// A kind of problem only this side can have: a native part of the app is

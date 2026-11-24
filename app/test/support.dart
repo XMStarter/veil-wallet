@@ -121,6 +121,7 @@ class FakeBackend implements WalletBackend {
         Problem(ProblemKind.transportMissing, 'no program for obfs4'),
       );
     }
+    await _work();
     final failure = failNext;
     failNext = null;
     if (failure != null) throw StartFailure(failure);
@@ -185,12 +186,30 @@ class FakeBackend implements WalletBackend {
     return null;
   }
 
+  /// Thrown by the next call that waits for the wallet, whichever it is:
+  /// a failure of a kind nobody foresaw.
+  Object? breakNext;
+
+  /// How long the wallet takes over a call that waits for it. The real
+  /// one takes long enough for the screen to be drawn meanwhile.
+  Duration takes = Duration.zero;
+
+  Future<void> _work() async {
+    if (takes > Duration.zero) await Future<void>.delayed(takes);
+    final broken = breakNext;
+    breakNext = null;
+    if (broken != null) throw broken;
+  }
+
   @override
-  Future<bool?> isPassword(String password) async =>
-      _state.value == null ? null : password == this.password;
+  Future<bool?> isPassword(String password) async {
+    await _work();
+    return _state.value == null ? null : password == this.password;
+  }
 
   @override
   Future<Problem?> changePassword(String old, String next) async {
+    await _work();
     calls.add('change password');
     if (old != password) {
       return const Problem(ProblemKind.wrongPassword, 'wrong password');
@@ -418,6 +437,39 @@ Future<void> press(WidgetTester tester, String label) async {
   await tester.ensureVisible(button);
   await tester.tap(button);
   await tester.pumpAndSettle();
+}
+
+/// Presses the button labelled [label] and waits for a wallet that takes
+/// its time ([FakeBackend.takes]) to answer, with the screen drawn while
+/// it works, as it is in the app.
+Future<void> pressAndWait(WidgetTester tester, String label) async {
+  final button = find.text(label.toUpperCase());
+  await tester.ensureVisible(button);
+  await tester.tap(button);
+  await tester.pump();
+  await tester.pump(const Duration(seconds: 1));
+  await tester.pumpAndSettle();
+}
+
+/// Types [text] on the keyboard as it is, without choosing a field first:
+/// it goes to whichever field has the keyboard, and nowhere if none has.
+Future<void> typeOn(WidgetTester tester, String text) async {
+  expect(
+    tester.testTextInput.hasAnyClients,
+    isTrue,
+    reason: 'no field has the keyboard',
+  );
+  tester.testTextInput.enterText(text);
+  await tester.pumpAndSettle();
+}
+
+/// Whether everything typed into the only field on the screen is marked,
+/// so that the next key replaces it.
+bool allMarked(WidgetTester tester) {
+  final field = tester.widget<TextField>(find.byType(TextField)).controller!;
+  return field.text.isNotEmpty &&
+      field.selection.start == 0 &&
+      field.selection.end == field.text.length;
 }
 
 /// Whether the button labelled [label] can be pressed.

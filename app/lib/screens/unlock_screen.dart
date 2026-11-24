@@ -66,12 +66,19 @@ class _UnlockScreenState extends State<UnlockScreen> {
             : PhraseScreen(backend: backend, phrase: phrase),
       );
     } on StartFailure catch (failure) {
-      if (!mounted) return;
-      setState(() {
-        _working = false;
-        _problem = failure.problem;
-      });
+      _refused(failure.problem);
+    } catch (error) {
+      _refused(unforeseen(error));
     }
+  }
+
+  void _refused(Problem problem) {
+    if (!mounted) return;
+    setState(() {
+      _working = false;
+      _problem = problem;
+    });
+    markAll(_password);
   }
 
   @override

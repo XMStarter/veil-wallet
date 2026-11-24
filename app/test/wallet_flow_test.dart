@@ -254,6 +254,42 @@ void main() {
     expect(backend.startedWith, WalletSource.open);
   });
 
+  testWidgets('after a wrong password the next one is typed straight away', (
+    tester,
+  ) async {
+    final backend = FakeBackend(hasWallet: true, confirmed: true);
+    await pumpApp(tester, 'en', backend: backend);
+    backend.takes = const Duration(milliseconds: 300);
+    // The field has the keyboard from the start, and keeps it through a
+    // refusal, with the refused password marked to be typed over.
+    await typeOn(tester, 'not the password');
+    await pressAndWait(tester, 'Open wallet');
+    expect(find.text('Wrong password.'), findsOneWidget);
+    expect(allMarked(tester), isTrue);
+    await typeOn(tester, 'nor this one');
+    await pressAndWait(tester, 'Open wallet');
+    expect(find.text('Wrong password.'), findsOneWidget);
+    await typeOn(tester, testPassword);
+    await pressAndWait(tester, 'Open wallet');
+    expect(find.text('WALLET'), findsOneWidget);
+  });
+
+  testWidgets('a failure nobody foresaw is shown, and the screen goes on', (
+    tester,
+  ) async {
+    final backend = FakeBackend(hasWallet: true, confirmed: true);
+    await pumpApp(tester, 'en', backend: backend);
+    backend.breakNext = ArgumentError('something that cannot happen');
+    await type(tester, 'Password', testPassword);
+    await press(tester, 'Open wallet');
+    // Not "Opening…" for ever: what happened is said, and the wallet can
+    // be opened by trying again.
+    expect(find.textContaining('something that cannot happen'), findsOneWidget);
+    expect(enabled(tester, 'Open wallet'), isTrue);
+    await press(tester, 'Open wallet');
+    expect(find.text('WALLET'), findsOneWidget);
+  });
+
   testWidgets('a wallet whose phrase was never checked shows it again first', (
     tester,
   ) async {

@@ -289,7 +289,10 @@ pub struct SessionState {
 pub struct Session {
     commands: Sender<Command>,
     shared: Arc<Shared>,
-    thread: Option<JoinHandle<()>>,
+    /// Taken by whoever ends the session, which can be done through a
+    /// shared reference: the C interface ends a session while a call that
+    /// waits for its thread may still be under way on another thread.
+    thread: Mutex<Option<JoinHandle<()>>>,
 }
 
 enum Command {
@@ -448,7 +451,7 @@ impl Session {
         Session {
             commands,
             shared,
-            thread: Some(thread),
+            thread: Mutex::new(Some(thread)),
         }
     }
 
@@ -564,7 +567,15 @@ impl Session {
     /// its phase is `Closed`, or `Failed` with the reason. A
     /// synchronisation under way is stopped; what it scanned is saved, and
     /// the next session continues from there.
-    pub fn close(mut self) -> SessionState {
+    pub fn close(self) -> SessionState {
+        self.end()
+    }
+
+    /// What [`Session::close`] does, for a session that is shared. Calls
+    /// that wait for the session's thread and are under way get their
+    /// answer first; any made afterwards is told that the session has
+    /// ended.
+    pub(crate) fn end(&self) -> SessionState {
         self.shut_down();
         self.shared.get()
     }
@@ -579,9 +590,11 @@ impl Session {
         let _ = self.commands.send(command);
     }
 
-    fn shut_down(&mut self) {
-        self.send(Command::Close);
-        if let Some(thread) = self.thread.take() {
+    fn shut_down(&self) {
+        let thread = self.thread.lock().unwrap_or_else(|e| e.into_inner()).take();
+        // Only the first to ask ends it; there is nothing left for a second.
+        if let Some(thread) = thread {
+            self.send(Command::Close);
             let _ = thread.join();
         }
     }

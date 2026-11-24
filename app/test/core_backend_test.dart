@@ -5,7 +5,9 @@
 // Needs the core built as a shared library (`cargo build -p veil_core` in
 // native/, or VEIL_CORE_LIB) and is skipped without it.
 
+import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:veil/core/backend.dart';
@@ -103,6 +105,32 @@ void main() {
     },
     skip: skip,
   );
+
+  test(
+    'a wallet that does not open fails the same way with the app listening',
+    () async {
+      // In the app, screens listen to the backend, and what listens leads
+      // to things that cannot be handed to another isolate: timers, the
+      // window. The backend closes a failed session on another isolate,
+      // and nothing of the app may travel with that call.
+      final backend = CoreBackend(paths());
+      final watcher = _Watcher();
+      backend.state.addListener(watcher.changed);
+      backend.settings.addListener(watcher.changed);
+      addTearDown(watcher.stop);
+      for (var attempt = 0; attempt < 2; attempt++) {
+        await expectLater(
+          backend.start(WalletSource.open, password: 'correct horse battery'),
+          throwsA(isA<StartFailure>()),
+        );
+      }
+      expect(backend.state.value, isNull);
+      expect(Directory(paths().torStateDir).existsSync(), isFalse);
+      await backend.close();
+    },
+    skip: skip,
+  );
+
   test(
     'settings are kept in a file, and a damaged one costs only them',
     () async {
@@ -204,4 +232,18 @@ void main() {
     // Removing what is not there is nothing.
     await backend.removeWallet();
   });
+}
+
+/// Stands for a screen: it listens, and holds what a screen holds.
+class _Watcher {
+  final Timer _timer = Timer.periodic(const Duration(hours: 1), (_) {});
+  final ReceivePort _port = ReceivePort();
+  int changes = 0;
+
+  void changed() => changes++;
+
+  void stop() {
+    _timer.cancel();
+    _port.close();
+  }
 }

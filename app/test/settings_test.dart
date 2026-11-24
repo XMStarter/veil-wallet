@@ -321,6 +321,68 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a refused password is typed over, on every screen that asks', (
+    tester,
+  ) async {
+    final backend = await openSettings(tester, 'en');
+    final first = testPhrase.split(' ').first;
+    backend.takes = const Duration(milliseconds: 300);
+    await openLine(tester, 'Recovery phrase');
+    await typeOn(tester, 'not the password');
+    await pressAndWait(tester, 'Show');
+    expect(find.text('Wrong password.'), findsOneWidget);
+    expect(allMarked(tester), isTrue);
+    await typeOn(tester, testPassword);
+    await pressAndWait(tester, 'Show');
+    expect(find.text(first), findsOneWidget);
+    await press(tester, 'Back');
+
+    await openLine(tester, 'Remove wallet');
+    await type(tester, 'Password', 'not the password');
+    await pressAndWait(tester, 'Remove the wallet');
+    expect(find.text('Wrong password.'), findsOneWidget);
+    expect(allMarked(tester), isTrue);
+    await typeOn(tester, testPassword);
+    await pressAndWait(tester, 'Remove the wallet');
+    expect(backend.hasWallet, isFalse);
+  });
+
+  testWidgets('a failure nobody foresaw leaves no screen waiting for ever', (
+    tester,
+  ) async {
+    final backend = await openSettings(tester, 'en');
+    final failure = ArgumentError('something that cannot happen');
+    final said = find.textContaining('something that cannot happen');
+
+    await openLine(tester, 'Recovery phrase');
+    backend.breakNext = failure;
+    await type(tester, 'Password', testPassword);
+    await press(tester, 'Show');
+    expect(said, findsOneWidget);
+    expect(find.text('Wrong password.'), findsNothing);
+    expect(enabled(tester, 'Show'), isTrue);
+    await press(tester, 'Back');
+
+    await openLine(tester, 'Password');
+    backend.breakNext = failure;
+    await type(tester, 'Current password', testPassword);
+    await type(tester, 'Password', 'a new password');
+    await type(tester, 'Repeat the password', 'a new password');
+    await press(tester, 'Change the password');
+    expect(said, findsOneWidget);
+    expect(backend.password, testPassword);
+    expect(enabled(tester, 'Change the password'), isTrue);
+    await press(tester, 'Back');
+
+    await openLine(tester, 'Remove wallet');
+    backend.breakNext = failure;
+    await type(tester, 'Password', testPassword);
+    await press(tester, 'Remove the wallet');
+    expect(said, findsOneWidget);
+    expect(backend.hasWallet, isTrue);
+    expect(enabled(tester, 'Remove the wallet'), isTrue);
+  });
+
   testWidgets('the wallet is removed only for the password', (tester) async {
     final backend = await openSettings(tester, 'en');
     await openLine(tester, 'Remove wallet');

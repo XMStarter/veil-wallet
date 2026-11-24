@@ -2,6 +2,10 @@ import '../core/backend.dart';
 import '../core/core_backend.dart' show libraryMissing;
 import '../l10n/app_localizations.dart';
 
+/// What went wrong in a way nobody foresaw, as a problem to show. A screen
+/// that waits for the wallet shows it rather than wait for ever.
+Problem unforeseen(Object error) => Problem(ProblemKind.other, '$error');
+
 /// A problem in the user's language. Kinds without words of their own are
 /// shown with the core's detail, which is in English.
 String problemWords(AppLocalizations text, Problem problem) {

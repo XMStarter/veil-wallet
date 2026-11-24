@@ -14,7 +14,7 @@ use crate::ffi::{
     parse_command, parse_start, start_with, state_json, veil_check_bridges, veil_secret_free,
     veil_session_change_password, veil_session_close, veil_session_command,
     veil_session_is_password, veil_session_recovery_phrase, veil_session_revision,
-    veil_session_start, veil_session_state, veil_string_free, Request, VeilSession,
+    veil_session_start, veil_session_state, veil_string_free, with_session, Request, VeilSession,
 };
 use crate::session::Hooks;
 use crate::{
@@ -531,6 +531,21 @@ fn a_session_is_driven_through_the_interface_from_start_to_close() {
         .unwrap();
         assert_eq!(refused["kind"], "bad_request");
     }
+
+    // A call that waits for the session's thread keeps nobody else from
+    // the session meanwhile: the app reads the state several times a
+    // second, on another thread, and must not stand still for as long as
+    // a password takes to check in the middle of a synchronisation. Shown
+    // by a call made from within another; were the handle locked for the
+    // whole of a call, this one would never come back.
+    // SAFETY: a live handle, in both calls.
+    let within = unsafe {
+        with_session(handle, 0, |session| {
+            assert_eq!(session.is_password(PASSWORD), Ok(false));
+            veil_session_revision(handle)
+        })
+    };
+    assert_ne!(within, 0);
 
     // Nodes of the user's own are taken, and shown as in force.
     let own = format!("{BROADCAST_HOST}:38081");

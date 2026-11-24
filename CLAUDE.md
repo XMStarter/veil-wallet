@@ -243,9 +243,23 @@ open and, in a second change of the state, the send an earlier session
 had left unknown, and the tests read the state in between. It is one
 change now, said last. That failure stopped the `offline` level before
 it built the app, so the app the owner then started was the one of the
-step before, without Settings. Not shown yet: that a session writes such a
-send and the next one reads it, on a private chain; and anything in the
-app with a real wallet, a changed password above all. Bridges changed
+step before, without Settings. On commit `8d27d89` the `offline` and
+`regtest` levels passed as Linux and as Windows programs, a session
+closed and opened again while a send was unknown included. In the app
+with a real wallet the owner then confirmed the changed password, the
+phrase shown for the password, theme and language kept over a restart,
+and the removal of the wallet; the auto-lock was not checked; and with a
+wrong password the app hung. Which screen was not said. Found for it,
+with tests that fail without the fix: on the screen that opens the
+wallet, the backend closed the refused session on another isolate with a
+function made inside one of its methods, which took the backend and,
+through its listeners, the screens along, so the call failed with an
+error the screen did not catch and it said "opening" for ever (the tests
+had nobody listening to the backend). Fixed with it: screens show any
+failure and go on; a password field keeps the keyboard through a
+refusal; and the C interface no longer locks the handle for the whole of
+a call that waits, which froze the window while a password was checked
+during a synchronisation. Not confirmed by the owner yet. Bridges changed
 in Settings take effect the next time the wallet is opened. Next after
 its acceptance is step 3.8, the app on Windows. Not done: the app. See the build plan in
 `docs/concept.md`.

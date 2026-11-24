@@ -30,6 +30,10 @@ class VeilField extends StatelessWidget {
   final bool monospace;
   final int lines;
   final bool numeric;
+
+  /// False while what was typed is being worked on: it cannot be changed
+  /// then. The field keeps the keyboard all the same, so that after a
+  /// refusal the user types on without having to click it again.
   final bool enabled;
   final bool autofocus;
   final ValueChanged<String>? onChanged;
@@ -59,7 +63,7 @@ class VeilField extends StatelessWidget {
           maxLines: secret ? 1 : lines,
           minLines: secret ? 1 : lines,
           keyboardType: numeric ? TextInputType.number : null,
-          enabled: enabled,
+          readOnly: !enabled,
           autofocus: autofocus,
           onChanged: onChanged,
           onSubmitted: onSubmitted,
@@ -85,4 +89,13 @@ class VeilField extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Marks everything typed into [field], so that the next key replaces it:
+/// for a password that was refused.
+void markAll(TextEditingController field) {
+  field.selection = TextSelection(
+    baseOffset: 0,
+    extentOffset: field.text.length,
+  );
 }

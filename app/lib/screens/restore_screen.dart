@@ -73,6 +73,12 @@ class _RestoreScreenState extends State<RestoreScreen> {
         _working = false;
         _problem = failure.problem;
       });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _working = false;
+        _problem = unforeseen(error);
+      });
     }
   }
 
