@@ -266,11 +266,23 @@ fn it_synchronises_by_itself_when_told_how_often() {
     wait(&session, |state| matches!(state.sync, SyncState::Failed(_)));
     let first = stand_in.requests().len();
     assert!(first > 0);
-    let tried_again = (0..100).any(|_| {
+    // How soon is not the point, and on a machine busy with other tests
+    // the wallet library can take many seconds over a node that is not
+    // there.
+    let began = std::time::Instant::now();
+    let tried_again = (0..SOON.as_millis() / 100).any(|_| {
         std::thread::sleep(Duration::from_millis(100));
         stand_in.requests().len() > first
     });
-    assert!(tried_again, "no second synchronisation within ten seconds");
+    assert!(
+        tried_again,
+        "no second synchronisation within {SOON:?}: {:#?}",
+        session.state()
+    );
+    eprintln!(
+        "the second synchronisation began after {:?}",
+        began.elapsed()
+    );
 }
 
 /// A session with two slow fake nodes behind its two candidates, in the

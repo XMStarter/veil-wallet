@@ -207,12 +207,26 @@ does not show it. On the owner's machine, on commit `3c9a853`, the
 level stopped at an older test of `veil_wallet` that still expected the
 library's bare refusal where a lack of funds now has its own error; that
 the test saw the new error on a real chain, on both systems, is the first
-confirmation of that mapping. The test is corrected. Because the level
-stops at the first failure, the scenario
-on a private chain that was rewritten for this step has still not run: it asserts
-that a transaction whose answer was lost is found in the node's pool
-before any block, which rests on reading the wallet library's source, and
-that a send to an unreachable node is reported as unknown. Next after its
+confirmation of that mapping. The test is corrected. On commit `8352e0c`
+the level then reached the scenario this step rewrote, and it failed on
+both systems at the same place: after a lost answer and one
+synchronisation the send was still shown as unknown and unsettled. That
+cannot be how the session leaves it, so the test had read the state
+between two changes: the end of the synchronisation was reported first
+and what it said about the send a moment later. Both are now one change.
+Whether the wallet finds such a transaction in the node's pool before any
+block, which rests on reading the wallet library's source, is therefore
+still not shown either way; the next run decides it. Everything before
+that place passed: the refusal for lack of funds, the review with its
+total and source address, the lost answer reported as unknown, and no
+other send built meanwhile. As Windows programs the test of the
+synchronisation timer also failed once in that run, with no second
+synchronisation within ten seconds; it had passed on the same code in the
+offline level forty-five minutes earlier, and another test in the run
+took over a minute where it takes seconds, so the machine was busy with
+the daemons. The cause is not proven. The test now waits as long as the
+others do and prints the session's state if it gives up. The owner
+reported that sending works in the app. Next after its
 acceptance is step 3.7, settings. Not done: the app. See the build plan in
 `docs/concept.md`.
 

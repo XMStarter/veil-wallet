@@ -658,14 +658,23 @@ fn run(
         if interrupted.is_none() {
             sync_began = Instant::now();
         }
-        interrupted = sync(&mut core, &config, shared, save_every, interrupted.take());
+        interrupted = sync(
+            &mut core,
+            &config,
+            shared,
+            save_every,
+            interrupted.take(),
+            unknown
+                .as_mut()
+                .map(|send| (send, sync_began, send_settles_after)),
+        );
         if interrupted.is_some() {
             continue;
         }
         sync_owed = false;
         last_sync = Some(Instant::now());
-        if let Some(send) = unknown.take() {
-            unknown = send.after_sync(shared, sync_began, send_settles_after);
+        if unknown.as_ref().is_some_and(|send| send.found) {
+            unknown = None;
         }
         if let Some((to, amount)) = waiting_send.take() {
             match review(&mut core, &to, amount, shared, inbox) {
@@ -765,12 +774,18 @@ fn save(core: &mut Core, shared: &Shared) {
 /// It also stops when a command arrives. Then it saves and returns the
 /// attempt, to be passed in again as `interrupted` once the command is
 /// dealt with; the state goes on showing the synchronisation as running.
+///
+/// `unknown` is a send whose outcome is unknown, with when this
+/// synchronisation began and how long after the attempt its silence
+/// counts: the end of the synchronisation and what it says about that send
+/// are reported in one change of the state.
 fn sync(
     core: &mut Core,
     config: &SessionConfig,
     shared: &Shared,
     save_every: Duration,
     interrupted: Option<SyncAttempt>,
+    unknown: Option<(&mut UnknownSend, Instant, Duration)>,
 ) -> Option<SyncAttempt> {
     let mut attempt = interrupted.unwrap_or_else(|| {
         shared.update(|state| state.sync = SyncState::Running { progress: None });
@@ -815,12 +830,16 @@ fn sync(
     shared.update(|state| {
         state.tor = tor;
         state.syncs_ended += 1;
+        let finished = outcome.is_ok();
         match outcome {
             Ok(progress) => {
                 state.node = Some(node);
                 state.sync = SyncState::Done { progress };
             }
             Err(error) => state.sync = SyncState::Failed(error.into()),
+        }
+        if let Some((send, sync_began, settles_after)) = unknown {
+            send.look(state, finished, sync_began, settles_after);
         }
     });
     // What was scanned is kept even if the app is killed a moment later.
@@ -835,6 +854,8 @@ struct UnknownSend {
     since: Instant,
     /// See [`SendState::OutcomeUnknown`].
     settled: bool,
+    /// The transaction has turned up in the history: it was sent.
+    found: bool,
 }
 
 impl UnknownSend {
@@ -843,47 +864,47 @@ impl UnknownSend {
             txids,
             since: Instant::now(),
             settled: false,
+            found: false,
         }
     }
 
-    /// Looks at what the synchronisation that has just ended, and that
-    /// began at `sync_began`, made of the wallet's history. Returns `None`
-    /// once the transaction is there: the state then says `Sent`.
-    fn after_sync(
-        mut self,
-        shared: &Shared,
+    /// Looks at the history a synchronisation has just left in `state`,
+    /// and changes the send in `state` if that settles anything: to `Sent`
+    /// if the transaction is there, to settled if a synchronisation that
+    /// finished, and that began at `sync_began`, long enough after the
+    /// attempt, does not show it.
+    ///
+    /// Called from inside the change that reports the end of that
+    /// synchronisation, so that nobody sees the one without the other.
+    fn look(
+        &mut self,
+        state: &mut SessionState,
+        finished: bool,
         sync_began: Instant,
         settles_after: Duration,
-    ) -> Option<UnknownSend> {
-        let state = shared.get();
-        let found = state
+    ) {
+        self.found = state
             .history
             .iter()
             .any(|transfer| !transfer.failed && self.txids.contains(&transfer.txid));
-        if found {
-            shared.update(|state| {
-                state.send = SendState::Sent {
-                    txids: self.txids.clone(),
-                }
-            });
-            return None;
+        if self.found {
+            state.send = SendState::Sent {
+                txids: self.txids.clone(),
+            };
+            return;
         }
         // Only a synchronisation that finished, and that began long enough
         // after the attempt, says anything by not showing it.
-        let finished = matches!(state.sync, SyncState::Done { .. });
         let late_enough = sync_began
             .checked_duration_since(self.since)
             .is_some_and(|waited| waited >= settles_after);
         if finished && late_enough && !self.settled {
             self.settled = true;
-            shared.update(|state| {
-                state.send = SendState::OutcomeUnknown {
-                    txids: self.txids.clone(),
-                    settled: true,
-                }
-            });
+            state.send = SendState::OutcomeUnknown {
+                txids: self.txids.clone(),
+                settled: true,
+            };
         }
-        Some(self)
     }
 }
 
