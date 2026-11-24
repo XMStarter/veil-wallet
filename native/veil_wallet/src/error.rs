@@ -71,6 +71,11 @@ pub enum Error {
     #[error("the synchronisation was stopped before it finished")]
     SyncStopped,
 
+    /// The wallet cannot pay the amount and its fee from what can be spent
+    /// now. Funds still waiting for confirmations do not count.
+    #[error("not enough funds that can be spent now: {0}")]
+    NotEnoughFunds(String),
+
     /// The amount to send is zero.
     #[error("the amount must be greater than zero")]
     ZeroAmount,

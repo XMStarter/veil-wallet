@@ -8,7 +8,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:veil_bridge/veil_bridge.dart';
+import 'package:veil/core/backend.dart';
 
 import 'support.dart';
 
@@ -36,6 +36,12 @@ const labels = {
     phrase: 'Recovery phrase',
     open: 'Open wallet',
     receive: 'Receive',
+    back: 'Back',
+    send: 'Send',
+    payee: 'Address to pay to',
+    everything: 'Send everything',
+    next: 'Continue',
+    pay: 'Send payment',
   ),
   'ru': (
     create: 'Создать кошелёк',
@@ -46,6 +52,12 @@ const labels = {
     phrase: 'Фраза восстановления',
     open: 'Открыть кошелёк',
     receive: 'Получить',
+    back: 'Назад',
+    send: 'Отправить',
+    payee: 'Адрес получателя',
+    everything: 'Отправить всё',
+    next: 'Продолжить',
+    pay: 'Отправить платёж',
   ),
 };
 
@@ -132,6 +144,17 @@ void main() {
 
       await press(tester, label.receive);
       await capture(tester, '9-receive-$language');
+      await press(tester, label.back);
+
+      await press(tester, label.send);
+      await type(tester, label.payee, testAddresses[1]);
+      await capture(tester, '10-send-$language');
+      await press(tester, label.everything);
+      await press(tester, label.next);
+      await capture(tester, '11-review-$language');
+      backend.sendEndsAs = SendPhase.outcomeUnknown;
+      await press(tester, label.pay);
+      await capture(tester, '12-unknown-$language');
     });
   }
 }

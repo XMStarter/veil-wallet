@@ -120,9 +120,17 @@ them again after a change that is meant.
   that calling it again continues where it was and an attempt that is
   stopped again and again still comes to an end.
 - **In the middle of a send.** `commit` fails with the wallet's
-  `SendOutcomeUnknown`: the node may have the transaction. The interface
-  must not offer to send again before the next synchronisation, which shows
-  the transaction in the history if it went out.
+  `SendOutcomeUnknown`: the node may have the transaction. A session
+  keeps the transaction's ids and looks for them in the history after
+  every synchronisation; the wallet library also notices a transaction of
+  its own among those a node is still holding. Found, the send becomes
+  `Sent`. Until then the session builds no other send and does not let
+  the outcome be cleared. A synchronisation that finishes without showing
+  it, having begun five minutes or more after the attempt, settles it:
+  the state says so, and from then on a new send or a cancel is taken.
+  The session never calls such a send failed. It does not remember it
+  across a restart; a session that starts synchronises before it builds a
+  send, which finds the transaction if it has spread by then.
 
 ## Use
 
@@ -158,7 +166,7 @@ node block until the node has answered.
 | A synchronisation told to stop: no further node is asked, and it continues where it was. In the session: a command and closing do not wait for a synchronisation, which goes on afterwards; a send asked for meanwhile waits for its end. The nodes are fakes that take their time over a request for blocks | The wallet library. No network. | `../check.sh offline` |
 | The C interface: requests read or refused, the state against the fixtures, null handles, a session driven through it from start to close | The wallet library for the last. No network. | `../check.sh offline` |
 | A wallet behind the stand-in on a private chain: synchronises through one listener, sends through the other, and stays silent in between | The wallet library and a Monero daemon | `../check.sh regtest` |
-| The session on a private chain: receives, reviews a send and cancels it, sends, loses the answer to a send and finds it in the history, and shows the same in a new session | The wallet library and a Monero daemon | `../check.sh regtest` |
+| The session on a private chain: receives, is refused a send it cannot afford, reviews a send and cancels it, sends, loses the answer to a send, builds no other meanwhile and finds it before any block, fails to reach the node with a send, has that settled and sends again, and shows the same in a new session | The wallet library and a Monero daemon | `../check.sh regtest` |
 | The session on a long private chain over a slowed line: the scan is saved on the way, and the copy taken then opens with part of the chain behind it; the recovery phrase is handed out in the middle; the wallet is closed in the middle and a later session scans the rest; the payment is there each time | The wallet library and a Monero daemon | `../check.sh regtest` |
 | On a private chain: a download cut once is retried; a node that disappears is reported and another node finishes; a send whose answer is lost is reported as unknown and turns up in the history, paid once | The wallet library and a Monero daemon | `../check.sh regtest` |
 | A new wallet synchronises with a public onion node over the real Tor network | The wallet library and the Tor network | `../check.sh tor` |

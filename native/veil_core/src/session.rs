@@ -108,6 +108,9 @@ pub enum ProblemKind {
     InvalidNode,
     /// The amount to send is zero.
     ZeroAmount,
+    /// The wallet cannot pay the amount and its fee from what can be spent
+    /// now.
+    NotEnoughFunds,
     /// Too many addresses were handed out without any being paid.
     TooManyUnusedAddresses,
     /// The connection was lost while a transaction was being sent. It may
@@ -143,6 +146,7 @@ impl From<veil_wallet::Error> for Problem {
             }
             Error::InvalidAddress => ProblemKind::InvalidAddress,
             Error::ZeroAmount => ProblemKind::ZeroAmount,
+            Error::NotEnoughFunds(_) => ProblemKind::NotEnoughFunds,
             Error::TooManyUnusedAddresses { .. } => ProblemKind::TooManyUnusedAddresses,
             Error::SendOutcomeUnknown => ProblemKind::SendOutcomeUnknown,
             _ => ProblemKind::Other,
@@ -211,14 +215,29 @@ pub enum SendState {
         to: String,
         amount: Amount,
         fee: Amount,
+        /// The amount and the fee together: what leaves the wallet.
+        total: Amount,
+        /// The wallet's own addresses, by index, whose coins are spent.
+        /// More than one means coins from different addresses are spent
+        /// together, which can show that they belong to one wallet.
+        source_addresses: Vec<u32>,
     },
     /// Being handed to the node.
     Sending,
     /// Sent.
     Sent { txids: Vec<String> },
-    /// The connection was lost while sending. The interface must not offer
-    /// to send again before a synchronisation has finished.
-    OutcomeUnknown,
+    /// The connection was lost while sending, and the transaction may have
+    /// gone out or not.
+    ///
+    /// The session looks for it after every synchronisation, in blocks and
+    /// among the transactions the node is still holding, and turns this
+    /// into `Sent` when it finds it. Until then it builds no other send. If
+    /// a synchronisation that began a good while after the attempt still
+    /// does not show it, `settled` becomes true: the transaction most
+    /// likely never reached the node, and from then on the session takes a
+    /// new send, or a cancel that clears this. It never says by itself
+    /// that the send failed.
+    OutcomeUnknown { txids: Vec<String>, settled: bool },
     /// Not sent.
     Failed(Problem),
 }
@@ -328,6 +347,8 @@ pub(crate) struct Hooks {
     pub transport: StartTransport,
     pub wallet: Box<dyn FnOnce(&mut Wallet) + Send>,
     pub save_every: Duration,
+    /// See [`SEND_SETTLES_AFTER`]; tests wait less.
+    pub send_settles_after: Duration,
 }
 
 /// Starts whatever carries the wallet's traffic.
@@ -342,6 +363,13 @@ const TICK: Duration = Duration::from_millis(250);
 /// more than this, plus the batch of blocks that was on its way.
 pub(crate) const SAVE_EVERY: Duration = Duration::from_secs(120);
 
+/// How long after a send whose outcome is unknown a synchronisation has to
+/// begin for its silence to count. A transaction that reached a node shows
+/// up at other nodes within seconds as a rule, and within a few minutes
+/// when its first hops kept it to themselves, as Monero nodes do on
+/// purpose for a short while.
+pub(crate) const SEND_SETTLES_AFTER: Duration = Duration::from_secs(300);
+
 impl Session {
     /// Opens the wallet and starts Tor on a new thread, and returns at
     /// once. [`SessionState::phase`] tells when the wallet is open, or why
@@ -354,6 +382,7 @@ impl Session {
             }),
             wallet: Box::new(|_| {}),
             save_every: SAVE_EVERY,
+            send_settles_after: SEND_SETTLES_AFTER,
         };
         Session::start_with(config, source, password, hooks)
     }
@@ -447,7 +476,9 @@ impl Session {
     /// `Review` with the fee, or to `Failed`. Nothing is sent.
     ///
     /// During a synchronisation the send goes to `Preparing` and is built
-    /// when the synchronisation has ended.
+    /// when the synchronisation has ended. While the outcome of an earlier
+    /// send is unknown and not settled, nothing is built: see
+    /// [`SendState::OutcomeUnknown`].
     pub fn prepare_send(&self, to: &str, amount: SendAmount) {
         self.send(Command::PrepareSend {
             to: to.to_owned(),
@@ -461,7 +492,8 @@ impl Session {
     }
 
     /// Drops the transaction under review or the send waiting to be built,
-    /// or clears the outcome of the last send from the state.
+    /// or clears the outcome of the last send from the state. An outcome
+    /// that is unknown and not settled stays.
     pub fn cancel_send(&self) {
         self.send(Command::CancelSend);
     }
@@ -519,6 +551,7 @@ fn run(
     inbox: &Receiver<Command>,
 ) {
     let save_every = hooks.save_every;
+    let send_settles_after = hooks.send_settles_after;
     let mut core = match open(&config, source, &password, hooks) {
         Ok(core) => core,
         Err(problem) => {
@@ -544,6 +577,10 @@ fn run(
     // A send asked for while a synchronisation was owed. It is built when
     // that has ended, so never from a wallet that knows half the chain.
     let mut waiting_send: Option<(String, SendAmount)> = None;
+    // A send whose outcome is unknown, until it is found or cleared.
+    let mut unknown: Option<UnknownSend> = None;
+    // When the synchronisation under way, or the last one, began.
+    let mut sync_began = Instant::now();
     loop {
         // With a synchronisation owed there is nothing to wait for: take
         // what has arrived and go on with it.
@@ -570,11 +607,18 @@ fn run(
                 });
             }
             Ok(Command::PrepareSend { to, amount }) => {
-                if sync_owed {
+                if unknown.as_ref().is_some_and(|send| !send.settled) {
+                    shared.update(|state| state.last_problem = Some(outcome_not_known()));
+                } else if sync_owed {
+                    unknown = None;
                     shared.update(|state| state.send = SendState::Preparing);
                     waiting_send = Some((to, amount));
-                } else if review(&mut core, &to, amount, shared, inbox) == AfterReview::Close {
-                    break;
+                } else {
+                    match review(&mut core, &to, amount, shared, inbox) {
+                        AfterReview::Close => break,
+                        AfterReview::Continue => unknown = None,
+                        AfterReview::Unknown(txids) => unknown = Some(UnknownSend::new(txids)),
+                    }
                 }
             }
             Ok(Command::ConfirmSend) => shared.update(|state| {
@@ -584,8 +628,13 @@ fn run(
                 ));
             }),
             Ok(Command::CancelSend) => {
-                waiting_send = None;
-                shared.update(|state| state.send = SendState::Idle);
+                if unknown.as_ref().is_some_and(|send| !send.settled) {
+                    shared.update(|state| state.last_problem = Some(outcome_not_known()));
+                } else {
+                    unknown = None;
+                    waiting_send = None;
+                    shared.update(|state| state.send = SendState::Idle);
+                }
             }
             Ok(Command::Phrase(reply)) => {
                 let _ = reply.send(core.seed_phrase().map_err(Problem::from));
@@ -606,15 +655,23 @@ fn run(
         if !sync_owed || shared.is_waiting() {
             continue;
         }
+        if interrupted.is_none() {
+            sync_began = Instant::now();
+        }
         interrupted = sync(&mut core, &config, shared, save_every, interrupted.take());
         if interrupted.is_some() {
             continue;
         }
         sync_owed = false;
         last_sync = Some(Instant::now());
+        if let Some(send) = unknown.take() {
+            unknown = send.after_sync(shared, sync_began, send_settles_after);
+        }
         if let Some((to, amount)) = waiting_send.take() {
-            if review(&mut core, &to, amount, shared, inbox) == AfterReview::Close {
-                break;
+            match review(&mut core, &to, amount, shared, inbox) {
+                AfterReview::Close => break,
+                AfterReview::Continue => unknown = None,
+                AfterReview::Unknown(txids) => unknown = Some(UnknownSend::new(txids)),
             }
         }
     }
@@ -771,10 +828,81 @@ fn sync(
     None
 }
 
+/// A send whose outcome is unknown: the connection was lost while the
+/// transaction was being handed to the node.
+struct UnknownSend {
+    txids: Vec<String>,
+    since: Instant,
+    /// See [`SendState::OutcomeUnknown`].
+    settled: bool,
+}
+
+impl UnknownSend {
+    fn new(txids: Vec<String>) -> UnknownSend {
+        UnknownSend {
+            txids,
+            since: Instant::now(),
+            settled: false,
+        }
+    }
+
+    /// Looks at what the synchronisation that has just ended, and that
+    /// began at `sync_began`, made of the wallet's history. Returns `None`
+    /// once the transaction is there: the state then says `Sent`.
+    fn after_sync(
+        mut self,
+        shared: &Shared,
+        sync_began: Instant,
+        settles_after: Duration,
+    ) -> Option<UnknownSend> {
+        let state = shared.get();
+        let found = state
+            .history
+            .iter()
+            .any(|transfer| !transfer.failed && self.txids.contains(&transfer.txid));
+        if found {
+            shared.update(|state| {
+                state.send = SendState::Sent {
+                    txids: self.txids.clone(),
+                }
+            });
+            return None;
+        }
+        // Only a synchronisation that finished, and that began long enough
+        // after the attempt, says anything by not showing it.
+        let finished = matches!(state.sync, SyncState::Done { .. });
+        let late_enough = sync_began
+            .checked_duration_since(self.since)
+            .is_some_and(|waited| waited >= settles_after);
+        if finished && late_enough && !self.settled {
+            self.settled = true;
+            shared.update(|state| {
+                state.send = SendState::OutcomeUnknown {
+                    txids: self.txids.clone(),
+                    settled: true,
+                }
+            });
+        }
+        Some(self)
+    }
+}
+
+/// Why a send is neither built nor cleared while the last one's outcome is
+/// unknown.
+fn outcome_not_known() -> Problem {
+    Problem::new(
+        ProblemKind::NotNow,
+        "the outcome of the last send is not known yet",
+    )
+}
+
 #[derive(PartialEq, Eq)]
 enum AfterReview {
+    /// The send is over, one way or another; the state says which.
     Continue,
     Close,
+    /// The transaction with these ids may have gone out or not.
+    Unknown(Vec<String>),
 }
 
 /// Builds a transaction and holds it until the user confirms or cancels.
@@ -788,7 +916,7 @@ fn review(
     inbox: &Receiver<Command>,
 ) -> AfterReview {
     let after = hold_for_review(core, to, amount, shared, inbox);
-    if after == AfterReview::Continue {
+    if after != AfterReview::Close {
         publish_wallet(core, shared);
         save(core, shared);
     }
@@ -810,11 +938,22 @@ fn hold_for_review(
             return AfterReview::Continue;
         }
     };
+    let Some(total) = pending.total() else {
+        shared.update(|state| {
+            state.send = SendState::Failed(Problem::new(
+                ProblemKind::Other,
+                "the amount and the fee do not fit into one amount",
+            ));
+        });
+        return AfterReview::Continue;
+    };
     shared.update(|state| {
         state.send = SendState::Review {
             to: to.to_owned(),
             amount: pending.amount(),
             fee: pending.fee(),
+            total,
+            source_addresses: pending.source_addresses().to_vec(),
         }
     });
     loop {
@@ -825,15 +964,26 @@ fn hold_for_review(
         match command {
             Ok(Command::ConfirmSend) => {
                 shared.update(|state| state.send = SendState::Sending);
+                // Kept for the case that the answer is lost: by these the
+                // transaction is recognised if it went out after all.
+                let ids = pending.txids().to_vec();
                 let sent = pending.commit();
+                let unknown = matches!(sent, Err(veil_wallet::Error::SendOutcomeUnknown));
                 shared.update(|state| {
                     state.send = match sent {
                         Ok(txids) => SendState::Sent { txids },
-                        Err(veil_wallet::Error::SendOutcomeUnknown) => SendState::OutcomeUnknown,
+                        Err(veil_wallet::Error::SendOutcomeUnknown) => SendState::OutcomeUnknown {
+                            txids: ids.clone(),
+                            settled: false,
+                        },
                         Err(error) => SendState::Failed(error.into()),
                     }
                 });
-                return AfterReview::Continue;
+                return if unknown {
+                    AfterReview::Unknown(ids)
+                } else {
+                    AfterReview::Continue
+                };
             }
             Ok(Command::CancelSend) => {
                 drop(pending);

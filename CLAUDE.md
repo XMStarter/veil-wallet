@@ -87,7 +87,7 @@ that cannot lose the user's funds.
   `native/veil_core/tests/fixtures`, which both sides test against.
 - `app/`: the app, written with Flutter, for Linux and Windows first. So
   far the way to an open wallet (create, recovery phrase, restore, unlock),
-  Home, and Receive.
+  Home, Receive, and Send.
   Screens talk to `WalletBackend` (`app/lib/core`), never to the core
   directly; tests use a backend that only pretends, and no test opens a
   real wallet, because that starts Tor. Read
@@ -194,7 +194,20 @@ wallet the owner confirmed that the synchronisation starts by itself once
 Tor is connected, that Receive shows the code and the address and Copy
 works, and that locking in the middle of a synchronisation takes seconds.
 The owner also reported that the QR code works. No payment has been
-received in the app yet. Next is step 3.6, send. Not done: the app. See the build plan in
+received in the app yet. Step 3.6, send, is written and not yet accepted.
+In the app: a form (address, with paste and payment links, and an amount
+or everything), a review (address, amount, fee, total, a warning when
+coins from several addresses are combined), and the outcome. In the core:
+the review's total and source addresses, a lack of funds as a problem of
+its own, and a send whose outcome is unknown is now looked for after every
+synchronisation, becomes sent when found, blocks other sends until then,
+and is settled, never failed, when a synchronisation five minutes later
+does not show it. The offline tests pass in a cloud session. The scenario
+on a private chain was rewritten for this and has not run: it asserts
+that a transaction whose answer was lost is found in the node's pool
+before any block, which rests on reading the wallet library's source, and
+that a send to an unreachable node is reported as unknown. Next after its
+acceptance is step 3.7, settings. Not done: the app. See the build plan in
 `docs/concept.md`.
 
 ## Environment notes

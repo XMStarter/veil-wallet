@@ -10,6 +10,7 @@ import '../widgets/veil_button.dart';
 import '../widgets/veil_screen.dart';
 import 'navigation.dart';
 import 'receive_screen.dart';
+import 'send_screen.dart';
 import 'status_words.dart';
 import 'unlock_screen.dart';
 
@@ -89,8 +90,13 @@ class _HomeScreenState extends State<HomeScreen> {
               ? null
               : () => open(context, ReceiveScreen(backend: widget.backend)),
         ),
-        // Sending comes with the next build step.
-        VeilButton(label: text.homeSend, primary: false, onPressed: null),
+        VeilButton(
+          label: text.homeSend,
+          primary: false,
+          onPressed: _locking
+              ? null
+              : () => open(context, SendScreen(backend: widget.backend)),
+        ),
         VeilQuietButton(
           label: _locking ? text.lockWorking : text.lockAction,
           onPressed: _locking ? null : _lock,
@@ -111,15 +117,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 16),
                   Notice(text.homeRebuilt, warning: true),
                 ],
+                // A payment in doubt is said here too, not only on the
+                // screen it happened on.
+                if (state.send.phase == SendPhase.outcomeUnknown) ...[
+                  const SizedBox(height: 16),
+                  Notice(text.homeUnknownNotice, warning: true),
+                ],
                 const SizedBox(height: 24),
                 ..._activity(text, state),
                 const SizedBox(height: 24),
-                Text(
-                  text.homeSendNotBuilt,
-                  style: VeilText.secondary,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 12),
                 Notice(text.startStagenetNotice),
               ],
             );

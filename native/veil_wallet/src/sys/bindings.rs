@@ -23,6 +23,11 @@ pub struct MoneroC {
         pendingTx_ptr: *mut ::std::os::raw::c_void,
         separator: *const ::std::os::raw::c_char,
     ) -> *const ::std::os::raw::c_char,
+    pub MONERO_PendingTransaction_subaddrIndices:
+        unsafe extern "C" fn(
+            pendingTx_ptr: *mut ::std::os::raw::c_void,
+            separator: *const ::std::os::raw::c_char,
+        ) -> *const ::std::os::raw::c_char,
     pub MONERO_TransactionInfo_direction:
         unsafe extern "C" fn(txInfo_ptr: *mut ::std::os::raw::c_void) -> ::std::os::raw::c_int,
     pub MONERO_TransactionInfo_isPending:
@@ -231,6 +236,9 @@ impl MoneroC {
         let MONERO_PendingTransaction_txid = __library
             .get(b"MONERO_PendingTransaction_txid\0")
             .map(|sym| *sym)?;
+        let MONERO_PendingTransaction_subaddrIndices = __library
+            .get(b"MONERO_PendingTransaction_subaddrIndices\0")
+            .map(|sym| *sym)?;
         let MONERO_TransactionInfo_direction = __library
             .get(b"MONERO_TransactionInfo_direction\0")
             .map(|sym| *sym)?;
@@ -376,6 +384,7 @@ impl MoneroC {
             MONERO_PendingTransaction_amount,
             MONERO_PendingTransaction_fee,
             MONERO_PendingTransaction_txid,
+            MONERO_PendingTransaction_subaddrIndices,
             MONERO_TransactionInfo_direction,
             MONERO_TransactionInfo_isPending,
             MONERO_TransactionInfo_isFailed,
@@ -469,6 +478,13 @@ impl MoneroC {
         separator: *const ::std::os::raw::c_char,
     ) -> *const ::std::os::raw::c_char {
         (self.MONERO_PendingTransaction_txid)(pendingTx_ptr, separator)
+    }
+    pub unsafe fn MONERO_PendingTransaction_subaddrIndices(
+        &self,
+        pendingTx_ptr: *mut ::std::os::raw::c_void,
+        separator: *const ::std::os::raw::c_char,
+    ) -> *const ::std::os::raw::c_char {
+        (self.MONERO_PendingTransaction_subaddrIndices)(pendingTx_ptr, separator)
     }
     pub unsafe fn MONERO_TransactionInfo_direction(
         &self,

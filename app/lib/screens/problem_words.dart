@@ -13,6 +13,11 @@ String problemWords(AppLocalizations text, Problem problem) {
     ProblemKind.torNotReady => text.problemTorNotReady,
     ProblemKind.noNode => text.problemNoNode,
     ProblemKind.tooManyUnusedAddresses => text.problemTooManyAddresses,
+    ProblemKind.invalidAddress => text.problemInvalidAddress,
+    ProblemKind.invalidAmount => text.problemInvalidAmount,
+    ProblemKind.zeroAmount => text.problemZeroAmount,
+    ProblemKind.notEnoughFunds => text.problemNotEnoughFunds,
+    ProblemKind.notNow => text.problemNotNow,
     libraryMissing =>
       '${text.problemLibraryMissing} ${text.problemDetail(problem.detail)}',
     _ => '${text.problemOther} ${text.problemDetail(problem.detail)}',

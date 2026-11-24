@@ -185,6 +185,7 @@ fn kind_name(kind: ProblemKind) -> &'static str {
         ProblemKind::InvalidAmount => "invalid_amount",
         ProblemKind::InvalidNode => "invalid_node",
         ProblemKind::ZeroAmount => "zero_amount",
+        ProblemKind::NotEnoughFunds => "not_enough_funds",
         ProblemKind::TooManyUnusedAddresses => "too_many_unused_addresses",
         ProblemKind::SendOutcomeUnknown => "send_outcome_unknown",
         ProblemKind::NotNow => "not_now",
@@ -231,15 +232,27 @@ pub(crate) fn state_json(state: &SessionState) -> Value {
     let send = match &state.send {
         SendState::Idle => json!({ "name": "idle" }),
         SendState::Preparing => json!({ "name": "preparing" }),
-        SendState::Review { to, amount, fee } => json!({
+        SendState::Review {
+            to,
+            amount,
+            fee,
+            total,
+            source_addresses,
+        } => json!({
             "name": "review",
             "to": to,
             "amount": amount.to_string(),
             "fee": fee.to_string(),
+            "total": total.to_string(),
+            "source_addresses": source_addresses,
         }),
         SendState::Sending => json!({ "name": "sending" }),
         SendState::Sent { txids } => json!({ "name": "sent", "txids": txids }),
-        SendState::OutcomeUnknown => json!({ "name": "outcome_unknown" }),
+        SendState::OutcomeUnknown { txids, settled } => json!({
+            "name": "outcome_unknown",
+            "txids": txids,
+            "settled": settled,
+        }),
         SendState::Failed(problem) => json!({ "name": "failed", "problem": problem_json(problem) }),
     };
     let history: Vec<Value> = state
@@ -416,6 +429,7 @@ pub unsafe extern "C" fn veil_session_start(
             }),
             wallet: Box::new(|_| {}),
             save_every: crate::session::SAVE_EVERY,
+            send_settles_after: crate::session::SEND_SETTLES_AFTER,
         };
         start_with(config, password, phrase, hooks)
     });

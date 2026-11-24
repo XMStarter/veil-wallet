@@ -156,6 +156,31 @@ pub struct Wallet {
     rebuilt_from_keys: bool,
 }
 
+/// What the library's refusal to build a transaction means. It says in
+/// English that there is not enough money, in three wordings that all
+/// begin the same way.
+fn not_built(error: Error) -> Error {
+    match error {
+        Error::Wallet(message) if message.starts_with("not enough money") => {
+            Error::NotEnoughFunds(message)
+        }
+        other => other,
+    }
+}
+
+/// The address indices in the library's list of them, which it writes as
+/// one set in braces per transaction: `{{1,4},{4}}`. Each index once, in
+/// ascending order.
+fn address_indices(list: &str) -> Vec<u32> {
+    let mut indices: Vec<u32> = list
+        .split(|c: char| !c.is_ascii_digit())
+        .filter_map(|number| number.parse().ok())
+        .collect();
+    indices.sort_unstable();
+    indices.dedup();
+    indices
+}
+
 /// A pointer the watching thread of [`Wallet::refresh_until`] may hold.
 struct ListenerPtr(*mut c_void);
 
@@ -1057,7 +1082,7 @@ impl Wallet {
             )
         };
         if pending.is_null() {
-            self.check()?;
+            self.check().map_err(not_built)?;
             return Err(Error::Wallet("the transaction could not be built".into()));
         }
 
@@ -1068,10 +1093,10 @@ impl Wallet {
                 let message = self
                     .lib
                     .take_string(api.MONERO_PendingTransaction_errorString(pending));
-                return Err(Error::Wallet(non_empty(
+                return Err(not_built(Error::Wallet(non_empty(
                     message,
                     "the transaction could not be built",
-                )));
+                ))));
             }
             // Read the ids now: the library forgets them once the
             // transaction has been broadcast.
@@ -1087,7 +1112,11 @@ impl Wallet {
             if txids.is_empty() {
                 return Err(Error::Wallet("the transaction has no id".into()));
             }
+            let sources = self.lib.take_string(
+                api.MONERO_PendingTransaction_subaddrIndices(pending, separator.as_ptr()),
+            );
             Ok(PendingSend {
+                source_addresses: address_indices(&sources),
                 amount: Amount::from_atomic(api.MONERO_PendingTransaction_amount(pending)),
                 fee: Amount::from_atomic(api.MONERO_PendingTransaction_fee(pending)),
                 txids,
@@ -1152,6 +1181,7 @@ pub struct PendingSend<'w> {
     amount: Amount,
     fee: Amount,
     txids: Vec<String>,
+    source_addresses: Vec<u32>,
 }
 
 impl PendingSend<'_> {
@@ -1163,6 +1193,23 @@ impl PendingSend<'_> {
     /// The network fee, paid on top of the amount.
     pub fn fee(&self) -> Amount {
         self.fee
+    }
+
+    /// What leaves the wallet: the amount and the fee. `None` if the two
+    /// do not fit into one amount, which no real payment comes near.
+    pub fn total(&self) -> Option<Amount> {
+        self.amount.checked_add(self.fee)
+    }
+
+    /// The wallet's own addresses, by index, whose coins this payment
+    /// spends, in ascending order. Index 0 is where change comes back to.
+    ///
+    /// The library chooses the coins and takes them from one address as
+    /// long as that address holds enough. More than one index here means
+    /// coins from different addresses are spent together, which can show
+    /// whoever paid to those addresses that they belong to one wallet.
+    pub fn source_addresses(&self) -> &[u32] {
+        &self.source_addresses
     }
 
     /// Ids of the transactions that carry the payment. More than one only
@@ -1304,6 +1351,37 @@ pub fn is_onion_host(host: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn address_indices_are_read_from_the_librarys_braces() {
+        assert_eq!(address_indices(""), Vec::<u32>::new());
+        assert_eq!(address_indices("{{3}}"), [3]);
+        assert_eq!(address_indices("{{4,1},{4},{0}}"), [0, 1, 4]);
+    }
+
+    #[test]
+    fn a_refusal_for_lack_of_money_is_told_apart_from_the_others() {
+        for wording in [
+            "not enough money to transfer, available only 1.0, sent amount 2.0",
+            "not enough money to transfer, overall balance only 1.0, sent amount 2.0",
+            "not enough money to transfer, available only 1.0, transaction amount 1.1 = 1.0 + 0.1 (fee)",
+        ] {
+            assert!(matches!(
+                not_built(Error::Wallet(wording.into())),
+                Error::NotEnoughFunds(_)
+            ));
+        }
+        assert!(matches!(
+            not_built(Error::Wallet(
+                "not enough outputs for specified ring size".into()
+            )),
+            Error::Wallet(_)
+        ));
+        assert!(matches!(
+            not_built(Error::NodeUnreachable),
+            Error::NodeUnreachable
+        ));
+    }
 
     #[test]
     fn onion_host_must_be_a_bare_onion_name() {

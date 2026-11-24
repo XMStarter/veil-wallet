@@ -101,6 +101,9 @@ variables and keeps a log.
 - Changing the start height of an existing wallet so that it lasts, for a
   user who restored with too late a date. It needs the library to rewrite
   the keys file, and a rescan.
-- Warning when a payment has to combine coins from different addresses.
+- The interface's warning when a payment combines coins from different
+  addresses rests on `PendingSend::source_addresses`. Index 0 there is
+  where change comes back to, so a payment from change and from one
+  address counts as two.
 - Choosing the restore height from a date.
 - Background sync with progress reporting.

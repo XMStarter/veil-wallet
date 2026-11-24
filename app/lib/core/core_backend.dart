@@ -111,6 +111,22 @@ class CoreBackend implements WalletBackend {
   void newAddress() => _session?.newAddress();
 
   @override
+  Problem? prepareSend(String to, String amount) {
+    try {
+      _session?.prepareSend(to, amount);
+      return null;
+    } on VeilException catch (refused) {
+      return refused.problem;
+    }
+  }
+
+  @override
+  void confirmSend() => _session?.confirmSend();
+
+  @override
+  void cancelSend() => _session?.cancelSend();
+
+  @override
   Future<String?> recoveryPhrase() async {
     final session = _session;
     if (session == null) return null;
