@@ -177,25 +177,24 @@ with a real wallet and reported, after the step had been merged, that the
 check of three words worked, Tor connected on the screen after opening,
 the wallet opened with its password after the app was started again, and
 locking worked. Restoring in the app was not part of that report. Step 3.5, home and
-receive, is written and not yet accepted. In the core a synchronisation
-can now be stopped: the session saves every two minutes of a scan, and any
-command, closing included, stops the scan, is dealt with, and the scan
-goes on. In the app: Home (balance, Tor and synchronisation in words,
-recent activity), Receive (QR code, address in groups of four, copy, new
-address), and the wallet synchronises by itself while open. On the
-owner's machine, on commit `9e78eea`, the `offline` and `regtest` levels
-passed as Linux programs, the test that stops a scan with real blocks
-behind it included
+receive, is done. In the core a synchronisation can now be stopped: the
+session saves every two minutes of a scan, and any command, closing
+included, stops the scan, is dealt with, and the scan goes on. In the app:
+Home (balance, Tor and synchronisation in words, recent activity), Receive
+(QR code, address in groups of four, copy, new address), and the wallet
+synchronises by itself while open. The owner's acceptance run passed at
+the `offline` and `regtest` levels as Linux and as Windows programs, the
+test that stops a scan with real blocks behind it included
 (`a_long_scan_is_saved_on_the_way_gives_way_and_misses_nothing` in
-`veil_core`), and `offline` passed as Windows programs. As Windows
-programs that one test failed in `regtest`, on a step of its own: it
-copied the keys file of an open wallet, which the wallet library keeps
-locked, and Windows lets nobody else read a locked file. The test now
-copies that file while the wallet is closed; the run that shows it pass
-on Windows is still owed, and so is a word on what this step added to
-the app: the synchronisation starting by itself, Receive, and locking in
-the middle of a synchronisation.
-Next after its acceptance is step 3.6, send. Not done: the app. See the build plan in
+`veil_core`). As Windows programs that test first failed on a step of its
+own: it copied the keys file of an open wallet, which the wallet library
+keeps locked, and Windows lets nobody else read a locked file. It now
+copies that file while the wallet is closed. In the app with a real
+wallet the owner confirmed that the synchronisation starts by itself once
+Tor is connected, that Receive shows the code and the address and Copy
+works, and that locking in the middle of a synchronisation takes seconds.
+Nobody has scanned the QR code from the app's window with another wallet,
+and no payment has been received in the app yet. Next is step 3.6, send. Not done: the app. See the build plan in
 `docs/concept.md`.
 
 ## Environment notes
