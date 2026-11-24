@@ -94,6 +94,14 @@ For each acceptance run, on the branch being accepted:
 
 The last line of the output names the log file to send.
 
+`./accept.sh` does a whole run in one command, each step only when the
+one before it has passed: it takes the branch's latest commits, runs the
+checks as Linux programs, runs them as Windows programs (see below),
+names the logs to send, and starts the app that the run has built.
+Without arguments the levels are `offline` and `regtest`; others are
+named as for `check.sh`. `--no-app` stops after the checks, and
+`--no-pull` leaves the commits as they are.
+
 ### On Windows itself
 
 WSL runs the Linux build. The same checks also run as Windows programs,

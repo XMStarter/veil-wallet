@@ -82,6 +82,10 @@ that cannot lose the user's funds.
     `daemons` is a diagnosis of the test daemon, not a check. With
     `--windows` in front, the levels are built for Windows on Linux and run
     as Windows programs through WSL.
+  - `accept.sh`: the owner's acceptance run in one command, step after
+    step: the latest commits, `check.sh` as Linux and as Windows programs,
+    the logs to send, then the app. It starts a daemon, so it is not for
+    a cloud session, where only `--no-pull --no-app offline` may be tried.
 - `dart/veil_bridge`: the Dart side of the core. It calls the C interface
   in `veil_core/src/ffi.rs`; the state crosses as JSON, pinned by
   `native/veil_core/tests/fixtures`, which both sides test against.
