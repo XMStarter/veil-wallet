@@ -894,6 +894,13 @@ fn run(
         };
         sync_owed = false;
         last_sync = Some(Instant::now());
+        if level {
+            // The node that carried this synchronisation is asked first
+            // the next time. Otherwise a first node that is down would be
+            // tried, and waited for, every minute for as long as the
+            // wallet is open.
+            start_with(&mut nodes, core.nodes().sync());
+        }
         if unknown.as_ref().is_some_and(|send| send.found) {
             forget(&mut unknown, &mut core, shared);
         }
@@ -1037,6 +1044,16 @@ fn own_nodes(core: &Core) -> Vec<OnionNode> {
         .map(str::parse)
         .collect::<Result<Vec<OnionNode>, _>>()
         .unwrap_or_default()
+}
+
+/// Turns `nodes` so that it begins with `node`, keeping the order they
+/// follow each other in: those before it go to the end, as the ones that
+/// did not carry the last synchronisation. A node that is not among them
+/// changes nothing.
+pub(crate) fn start_with(nodes: &mut [OnionNode], node: &OnionNode) {
+    if let Some(position) = nodes.iter().position(|candidate| candidate == node) {
+        nodes.rotate_left(position);
+    }
 }
 
 /// The nodes a core starts on, given the list to try in order: the first

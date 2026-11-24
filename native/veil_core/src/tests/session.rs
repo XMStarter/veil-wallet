@@ -709,6 +709,26 @@ fn a_wallet_is_not_made_when_tor_does_not_start() {
 }
 
 #[test]
+fn the_node_that_worked_is_the_one_to_start_with() {
+    let node = |host: &str| OnionNode::new(host, 18089).unwrap();
+    let (a, b, c) = (node(SYNC_HOST), node(BROADCAST_HOST), node(OWN_HOST));
+
+    // Those before it go to the end, in the order they were in.
+    let mut nodes = vec![a.clone(), b.clone(), c.clone()];
+    crate::session::start_with(&mut nodes, &c);
+    assert_eq!(nodes, [c.clone(), a.clone(), b.clone()]);
+    crate::session::start_with(&mut nodes, &a);
+    assert_eq!(nodes, [a.clone(), b.clone(), c.clone()]);
+    // The first stays first, and a node that is not on the list changes
+    // nothing.
+    crate::session::start_with(&mut nodes, &a);
+    assert_eq!(nodes, [a.clone(), b.clone(), c.clone()]);
+    let mut two = vec![a.clone(), b.clone()];
+    crate::session::start_with(&mut two, &c);
+    assert_eq!(two, [a, b]);
+}
+
+#[test]
 fn a_wallet_that_is_open_is_not_opened_by_a_second_session() {
     let dir = TempDir::new("session-twice");
     let Some(config) = config(&dir, "w") else {
@@ -1477,5 +1497,29 @@ mod on_a_private_chain {
         assert_eq!(state.balance.total, in_the_end);
         assert_eq!(outgoing(&state), 3);
         assert_eq!(state.sync, SyncState::NotYet);
+
+        // --- A first node that is down is not asked every time ---------------
+        // The first node is gone. The synchronisation finds that out, goes
+        // on to the second, and finishes with it.
+        stand_in.unroute(SYNC_HOST, SYNC_PORT);
+        let state = synchronised(&session);
+        assert_eq!(
+            state.node,
+            Some(OnionNode::new(BROADCAST_HOST, BROADCAST_PORT).unwrap())
+        );
+        // The next one starts with the node that worked, and does not
+        // spend its first while on the one that did not.
+        stand_in.clear_requests();
+        let state = synchronised(&session);
+        assert!(matches!(state.sync, SyncState::Done { .. }), "{state:#?}");
+        let requests = stand_in.requests();
+        assert!(!requests.is_empty());
+        assert!(
+            requests
+                .iter()
+                .all(|request| request.host == BROADCAST_HOST),
+            "{requests:?}"
+        );
+        assert_eq!(session.close().phase, Phase::Closed);
     }
 }

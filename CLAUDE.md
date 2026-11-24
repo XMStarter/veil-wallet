@@ -344,9 +344,12 @@ wallet: the owner left it to be checked without one, and its tests on the
 wallet that only pretends were widened for that (a key counts as use; it
 locks from any screen and leaves no phrase on show; a wallet opened again
 locks again; the default is five minutes). They pass, and they say
-nothing about a real window's clicks and keys. A synchronisation still starts with the first candidate every
-time, so a first node that is down costs every synchronisation the time
-it takes to find that out. Bridges changed
+nothing about a real window's clicks and keys. A synchronisation started with the first candidate every
+time, so a first node that was down cost every synchronisation the time
+it takes to find that out; since step 3.8 was merged the node that
+carried a synchronisation to its end is the one asked first the next
+time (shown on a private chain only, at the end of the scenario; not run
+there yet). Bridges changed
 in Settings take effect the next time the wallet is opened. Step 3.7 was
 merged on the owner's word after hosted CI had passed on Linux and
 Windows. Step 3.8, the app on Windows, is written and not yet accepted.

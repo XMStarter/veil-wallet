@@ -73,6 +73,11 @@ What the session holds to, whatever the interface does:
 - **Changes that belong together are one change.** The end of a
   synchronisation, the balance and history after it, and what it means
   for a send; the outcome of a send and the balance it left.
+- **The node that worked is asked first.** A session tries its nodes in
+  order for every synchronisation. Once one has carried a
+  synchronisation to its end, the list is turned so that it comes first;
+  the nodes before it, which did not answer, are tried again only when
+  it stops answering too.
 - **One wallet, one session.** A wallet that is open is marked as such
   by a lock on a file next to it (`veil_wallet`), and a second session on
   it, a second window of the app for one, fails with `WalletInUse` before
