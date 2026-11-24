@@ -412,6 +412,7 @@ fn a_session_is_driven_through_the_interface_from_start_to_close() {
     let hooks = Hooks {
         transport: Box::new(move |_| Ok(Box::new(transport) as Box<dyn Transport>)),
         wallet: Box::new(|_| {}),
+        save_every: crate::session::SAVE_EVERY,
     };
     let handle = start_with(&config_json(&dir, "create"), PASSWORD, None, hooks).unwrap();
 

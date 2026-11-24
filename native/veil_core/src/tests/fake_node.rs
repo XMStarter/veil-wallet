@@ -10,6 +10,7 @@
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 /// The size of the answer to a request for blocks.
 pub const BLOCKS_REPLY_BYTES: usize = 256 * 1024;
@@ -22,6 +23,14 @@ pub struct FakeNode {
 impl FakeNode {
     /// Starts a node that reports a chain of `height` blocks.
     pub fn start(height: u64) -> FakeNode {
+        FakeNode::start_slow(height, Duration::ZERO)
+    }
+
+    /// Like [`FakeNode::start`], with a node that takes `delay` to answer
+    /// a request for blocks. The wallet library cannot leave a request it
+    /// is waiting on, so this is how long a synchronisation with this node
+    /// goes on at the least.
+    pub fn start_slow(height: u64, delay: Duration) -> FakeNode {
         let listener = TcpListener::bind(("127.0.0.1", 0)).expect("loopback port");
         let port = listener.local_addr().expect("local address").port();
         let asked = Arc::new(Mutex::new(Vec::new()));
@@ -30,7 +39,7 @@ impl FakeNode {
             for stream in listener.incoming() {
                 let Ok(stream) = stream else { return };
                 let log = Arc::clone(&log);
-                std::thread::spawn(move || serve(stream, height, &log));
+                std::thread::spawn(move || serve(stream, height, delay, &log));
             }
         });
         FakeNode { port, asked }
@@ -48,7 +57,7 @@ impl FakeNode {
 }
 
 /// Answers requests on one connection until it closes.
-fn serve(mut stream: TcpStream, height: u64, log: &Mutex<Vec<String>>) {
+fn serve(mut stream: TcpStream, height: u64, delay: Duration, log: &Mutex<Vec<String>>) {
     while let Some((path, body)) = read_request(&mut stream) {
         let (kind, reply) = if path == "/json_rpc" {
             let method = json_string(&body, "method").unwrap_or_default();
@@ -65,6 +74,7 @@ fn serve(mut stream: TcpStream, height: u64, log: &Mutex<Vec<String>>) {
             ("application/json", reply.into_bytes())
         } else {
             log.lock().unwrap().push(path);
+            std::thread::sleep(delay);
             ("application/octet-stream", vec![0u8; BLOCKS_REPLY_BYTES])
         };
         let head = format!(

@@ -65,6 +65,12 @@ pub enum Error {
     )]
     SendOutcomeUnknown,
 
+    /// The synchronisation was told to stop before the wallet had caught up
+    /// with the node. Nothing is wrong: what was scanned is kept, and the
+    /// next synchronisation continues from there.
+    #[error("the synchronisation was stopped before it finished")]
+    SyncStopped,
+
     /// The amount to send is zero.
     #[error("the amount must be greater than zero")]
     ZeroAmount,

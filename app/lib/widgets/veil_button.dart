@@ -27,3 +27,27 @@ class VeilButton extends StatelessWidget {
     );
   }
 }
+
+/// A button that is only its words, for what a screen offers without
+/// pressing it on anyone: going back, locking the wallet.
+class VeilQuietButton extends StatelessWidget {
+  const VeilQuietButton({
+    super.key,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: TextButton(
+        onPressed: onPressed,
+        child: Text(label.toUpperCase(), textAlign: TextAlign.center),
+      ),
+    );
+  }
+}

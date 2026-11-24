@@ -10,6 +10,9 @@ String problemWords(AppLocalizations text, Problem problem) {
     ProblemKind.walletExists => text.problemWalletExists,
     ProblemKind.invalidPhrase => text.problemInvalidPhrase,
     ProblemKind.torFailed => text.problemTorFailed,
+    ProblemKind.torNotReady => text.problemTorNotReady,
+    ProblemKind.noNode => text.problemNoNode,
+    ProblemKind.tooManyUnusedAddresses => text.problemTooManyAddresses,
     libraryMissing =>
       '${text.problemLibraryMissing} ${text.problemDetail(problem.detail)}',
     _ => '${text.problemOther} ${text.problemDetail(problem.detail)}',

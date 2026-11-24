@@ -59,7 +59,11 @@ runtime.
 ## Controls
 
 - Buttons are 54 px high with a 2 px corner radius. The primary button is
-  filled with Ink; the secondary button is outlined.
+  filled with Ink; the secondary button is outlined. What a screen offers
+  without pressing it on anyone (going back, locking) is a button of words
+  only.
+- A QR code is drawn in Ink on Field, each module a whole number of
+  pixels, with the quiet zone the standard asks for.
 - Every touch target is at least 44 px.
 - Body text contrast is at least 4.5:1 against its background.
 
@@ -69,11 +73,13 @@ runtime.
    opens a form for the phrase and, for 25-word phrases, the creation date.
 2. **Recovery phrase.** Sixteen numbered words, a warning, and a
    confirmation button. Followed by a check of three words.
-3. **Home.** Balance (tap to hide), available and pending amounts, Tor and
-   sync status, Receive and Send, recent activity, and a quiet way to lock
-   the wallet.
-4. **Receive.** QR code, the number of the address, the address itself, Copy
-   and Share.
+3. **Home.** Balance (tap to hide, which hides every amount on the
+   screen), available and pending amounts, Tor and sync status, Receive and
+   Send, recent activity, and a quiet way to lock the wallet. A
+   synchronisation under way shows a line that fills.
+4. **Receive.** QR code, the number of the address, the address itself,
+   Copy, and a way to ask for a new address. Share comes with the phone:
+   a desktop has nothing to share into.
 5. **Send.** Form, then a review screen, then a confirmation.
 6. **Settings.** Tor status, node, bridges, password, auto-lock, show
    recovery phrase, theme, language.

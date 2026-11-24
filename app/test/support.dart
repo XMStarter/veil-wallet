@@ -51,17 +51,51 @@ class FakeBackend implements WalletBackend {
   String? restoredPhrase;
   int? restoredHeight;
   final _state = ValueNotifier<SessionState?>(null);
+  int _revision = 0;
+
+  /// How many addresses in a row may go unpaid before another is refused.
+  static const unusedAddresses = 3;
 
   @override
   ValueListenable<SessionState?> get state => _state;
 
-  /// Changes what Tor is doing, as the core would report it.
-  void tor(TorState state, {int percent = 100, bool rebuilt = false}) {
-    _state.value = _sessionState(
-      TorStatus(state, percent, null),
-      rebuilt: rebuilt,
+  /// Changes what the open wallet reports, as the core would: what is
+  /// named changes, the rest stays.
+  void report({
+    TorStatus? tor,
+    SyncStatus? sync,
+    String? total,
+    String? unlocked,
+    String? locked,
+    ReceiveAddress? address,
+    List<Transfer>? history,
+    bool? rebuilt,
+    Problem? lastProblem,
+  }) {
+    final now = _state.value!;
+    _state.value = SessionState(
+      revision: ++_revision,
+      phase: Phase.ready,
+      phaseProblem: null,
+      tor: tor ?? now.tor,
+      node: null,
+      sync: sync ?? now.sync,
+      syncsEnded: now.syncsEnded,
+      balanceTotal: total ?? now.balanceTotal,
+      balanceUnlocked: unlocked ?? now.balanceUnlocked,
+      balanceLocked: locked ?? now.balanceLocked,
+      receiveAddress: address ?? now.receiveAddress,
+      history: history ?? now.history,
+      send: const SendStatus(SendPhase.idle),
+      rebuiltFromKeys: rebuilt ?? now.rebuiltFromKeys,
+      // Cleared by the next command, as in the core.
+      lastProblem: lastProblem,
     );
   }
+
+  /// Changes what Tor is doing, as the core would report it.
+  void tor(TorState state, {int percent = 100, bool rebuilt = false}) =>
+      report(tor: TorStatus(state, percent, null), rebuilt: rebuilt);
 
   @override
   Future<bool> walletExists() async => hasWallet;
@@ -88,7 +122,23 @@ class FakeBackend implements WalletBackend {
     this.password = password;
     hasWallet = true;
     if (source == WalletSource.restore) confirmed = true;
-    tor(TorState.bootstrapping, percent: 15);
+    _state.value = _newSession(++_revision);
+  }
+
+  @override
+  void newAddress() {
+    calls.add('new address');
+    final index = _state.value!.receiveAddress!.index;
+    if (index >= unusedAddresses) {
+      report(
+        lastProblem: const Problem(
+          ProblemKind.tooManyUnusedAddresses,
+          'too many unused addresses',
+        ),
+      );
+    } else {
+      report(address: ReceiveAddress(index + 1, testAddresses[index]));
+    }
   }
 
   @override
@@ -111,23 +161,54 @@ class FakeBackend implements WalletBackend {
   }
 }
 
-SessionState _sessionState(TorStatus tor, {bool rebuilt = false}) =>
-    SessionState(
-      revision: 1,
-      phase: Phase.ready,
-      phaseProblem: null,
-      tor: tor,
-      node: null,
-      sync: const SyncStatus(SyncPhase.notYet),
-      syncsEnded: 0,
-      balanceTotal: '0.00',
-      balanceUnlocked: '0.00',
-      receiveAddress: null,
-      history: const [],
-      send: const SendStatus(SendPhase.idle),
-      rebuiltFromKeys: rebuilt,
-      lastProblem: null,
-    );
+/// A wallet that has just been opened: Tor is connecting, nothing has
+/// been synchronised, and the first address is the one to receive at.
+SessionState _newSession(int revision) => SessionState(
+  revision: revision,
+  phase: Phase.ready,
+  phaseProblem: null,
+  tor: const TorStatus(TorState.bootstrapping, 15, null),
+  node: null,
+  sync: const SyncStatus(SyncPhase.notYet),
+  syncsEnded: 0,
+  balanceTotal: '0.00',
+  balanceUnlocked: '0.00',
+  balanceLocked: '0.00',
+  receiveAddress: ReceiveAddress(1, testAddresses[0]),
+  history: const [],
+  send: const SendStatus(SendPhase.idle),
+  rebuiltFromKeys: false,
+  lastProblem: null,
+);
+
+/// Addresses of the right shape for the test network, to draw and to tell
+/// apart. Nobody holds their keys.
+const testAddresses = [
+  '73a4nWuvkYoYoksGurDjKZQcZkmaxLaKbbeiKzHnMmqKivrCzq5Q2JtJG1UZNZFqLPbQ3MiXCk2Q5bdwdUNSr7X9QrPubkn',
+  '7BnERTpvL5MbCLtj5n9No7J5oE5hHiB3tVCK5cjSvCsYWD2WRJLFuWeKTLiXo5QJqt2ZwUaLy2Vh1Ad51K7FNgqcHgjW85o',
+  '77xa6Dha7kzCQuvmd8iB5VYoMkdenwCNRU9khGhExXQ8KLL3z1N1ZATBD1sFPenyHWT9cm4fVFnCAUApY53peuoZFtwZiw5',
+];
+
+/// A payment as the core reports it.
+Transfer transfer({
+  required Direction direction,
+  required String amount,
+  int confirmations = 100,
+  bool pending = false,
+  bool failed = false,
+  int timestamp = 1795400000,
+}) => Transfer(
+  txid: '${direction.name}-$amount-$timestamp',
+  direction: direction,
+  amount: amount,
+  fee: direction == Direction.outgoing ? '0.00003066' : '0.00',
+  blockHeight: pending ? 0 : 2256000,
+  confirmations: confirmations,
+  timestamp: timestamp,
+  pending: pending,
+  failed: failed,
+  addressIndices: direction == Direction.incoming ? const [1] : const [],
+);
 
 /// Starts the app in [language] on top of [backend], in a window of
 /// [size].

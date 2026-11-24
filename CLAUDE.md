@@ -86,7 +86,8 @@ that cannot lose the user's funds.
   in `veil_core/src/ffi.rs`; the state crosses as JSON, pinned by
   `native/veil_core/tests/fixtures`, which both sides test against.
 - `app/`: the app, written with Flutter, for Linux and Windows first. So
-  far the way to an open wallet: create, recovery phrase, restore, unlock.
+  far the way to an open wallet (create, recovery phrase, restore, unlock),
+  Home, and Receive.
   Screens talk to `WalletBackend` (`app/lib/core`), never to the core
   directly; tests use a backend that only pretends, and no test opens a
   real wallet, because that starts Tor. Read
@@ -167,19 +168,33 @@ owner's machine the `offline` level passed with the app's checks and its
 Linux build, and the built app opened its window under WSL. In hosted CI
 the app was built for Windows and the Dart side was tested against the
 Windows build of the core, both for the first time, and passed. Step 3.4,
-the start flow, is written and not yet accepted: creating a wallet with
-its password, showing and checking the recovery phrase, restoring from a
-phrase, and opening the wallet on the device, on stagenet. Its tests walk
-that way on a wallet that only pretends. On the owner's machine the
-`offline` and `regtest` levels passed with it on commit `72d51cb`, and
-the app has created a wallet there. How the walk through the app went
-(the phrase check, Tor connecting, opening again with the password) was
-never reported, and the two changes after that commit, the warning about
-25 words and the lock, have not been run there. The owner had the step
-merged on that footing; treat the app with a real wallet as not yet
-confirmed until a later step's run says otherwise. Next is step 3.5,
-home and receive, which also has to make a synchronisation stoppable and
-save its progress along the way. Not done: the app. See the build plan in
+the start flow, is done: creating a wallet with its password, showing and
+checking the recovery phrase, restoring from a phrase, opening the wallet
+on the device, and locking it, on stagenet. Its tests walk that way on a
+wallet that only pretends. On the owner's machine the `offline` and
+`regtest` levels passed with it, and the owner walked through the app
+with a real wallet and reported, after the step had been merged, that the
+check of three words worked, Tor connected on the screen after opening,
+the wallet opened with its password after the app was started again, and
+locking worked. Restoring in the app was not part of that report. Step 3.5, home and
+receive, is done. In the core a synchronisation can now be stopped: the
+session saves every two minutes of a scan, and any command, closing
+included, stops the scan, is dealt with, and the scan goes on. In the app:
+Home (balance, Tor and synchronisation in words, recent activity), Receive
+(QR code, address in groups of four, copy, new address), and the wallet
+synchronises by itself while open. The owner's acceptance run passed at
+the `offline` and `regtest` levels as Linux and as Windows programs, the
+test that stops a scan with real blocks behind it included
+(`a_long_scan_is_saved_on_the_way_gives_way_and_misses_nothing` in
+`veil_core`). As Windows programs that test first failed on a step of its
+own: it copied the keys file of an open wallet, which the wallet library
+keeps locked, and Windows lets nobody else read a locked file. It now
+copies that file while the wallet is closed. In the app with a real
+wallet the owner confirmed that the synchronisation starts by itself once
+Tor is connected, that Receive shows the code and the address and Copy
+works, and that locking in the middle of a synchronisation takes seconds.
+The owner also reported that the QR code works. No payment has been
+received in the app yet. Next is step 3.6, send. Not done: the app. See the build plan in
 `docs/concept.md`.
 
 ## Environment notes

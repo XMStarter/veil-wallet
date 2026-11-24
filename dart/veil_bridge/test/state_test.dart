@@ -32,6 +32,7 @@ void main() {
     // Amounts stay the text the core wrote, to the last digit.
     expect(state.balanceTotal, '12.345678901234');
     expect(state.balanceUnlocked, '10.50');
+    expect(state.balanceLocked, '1.845678901234');
     expect(state.receiveAddress!.index, 3);
     expect(state.receiveAddress!.address, hasLength(95));
     expect(state.rebuiltFromKeys, isFalse);

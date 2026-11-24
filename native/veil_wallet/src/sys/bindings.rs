@@ -74,6 +74,7 @@ pub struct MoneroC {
     ) -> *const ::std::os::raw::c_char,
     pub MONERO_Wallet_nettype:
         unsafe extern "C" fn(wallet_ptr: *mut ::std::os::raw::c_void) -> ::std::os::raw::c_int,
+    pub MONERO_Wallet_stop: unsafe extern "C" fn(wallet_ptr: *mut ::std::os::raw::c_void),
     pub MONERO_Wallet_store: unsafe extern "C" fn(
         wallet_ptr: *mut ::std::os::raw::c_void,
         path: *const ::std::os::raw::c_char,
@@ -279,6 +280,7 @@ impl MoneroC {
             .map(|sym| *sym)?;
         let MONERO_Wallet_address = __library.get(b"MONERO_Wallet_address\0").map(|sym| *sym)?;
         let MONERO_Wallet_nettype = __library.get(b"MONERO_Wallet_nettype\0").map(|sym| *sym)?;
+        let MONERO_Wallet_stop = __library.get(b"MONERO_Wallet_stop\0").map(|sym| *sym)?;
         let MONERO_Wallet_store = __library.get(b"MONERO_Wallet_store\0").map(|sym| *sym)?;
         let MONERO_Wallet_init = __library.get(b"MONERO_Wallet_init\0").map(|sym| *sym)?;
         let MONERO_Wallet_setRefreshFromBlockHeight = __library
@@ -393,6 +395,7 @@ impl MoneroC {
             MONERO_Wallet_errorString,
             MONERO_Wallet_address,
             MONERO_Wallet_nettype,
+            MONERO_Wallet_stop,
             MONERO_Wallet_store,
             MONERO_Wallet_init,
             MONERO_Wallet_setRefreshFromBlockHeight,
@@ -585,6 +588,9 @@ impl MoneroC {
         wallet_ptr: *mut ::std::os::raw::c_void,
     ) -> ::std::os::raw::c_int {
         (self.MONERO_Wallet_nettype)(wallet_ptr)
+    }
+    pub unsafe fn MONERO_Wallet_stop(&self, wallet_ptr: *mut ::std::os::raw::c_void) {
+        (self.MONERO_Wallet_stop)(wallet_ptr)
     }
     pub unsafe fn MONERO_Wallet_store(
         &self,

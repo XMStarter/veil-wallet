@@ -34,7 +34,85 @@
   "unlockAction": "Открыть кошелёк",
   "unlockWorking": "Открываем кошелёк…",
   "homeTitle": "Кошелёк",
-  "homeNotBuilt": "Кошелёк открыт. Его экраны ещё не сделаны.",
+  "homeBalanceHide": "Скрыть баланс",
+  "homeBalanceShow": "Показать баланс",
+  "homeBalanceHidden": "Баланс скрыт",
+  "homeBalanceStale": "По состоянию на последнюю завершённую синхронизацию.",
+  "amountXmr": "{amount} XMR",
+  "@amountXmr": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "homeAvailable": "Доступно: {amount} XMR",
+  "@homeAvailable": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "homePending": "Ожидает подтверждений: {amount} XMR",
+  "@homePending": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "homeReceive": "Получить",
+  "homeSend": "Отправить",
+  "homeSendNotBuilt": "Отправка ещё не сделана.",
+  "homeActivity": "Недавние операции",
+  "homeNoActivity": "Платежей пока нет.",
+  "activityReceived": "Получено",
+  "activitySent": "Отправлено",
+  "activityUnconfirmed": "Ещё не подтверждено",
+  "activityConfirming": "{count} из 10 подтверждений",
+  "@activityConfirming": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "activityFailed": "Не прошло",
+  "syncWaitingForTor": "Синхронизация — после подключения Tor",
+  "syncNotYet": "Ещё не синхронизирован",
+  "syncStarting": "Синхронизация",
+  "syncRunning": "{count, plural, one{Синхронизация, остался {count} блок} few{Синхронизация, осталось {count} блока} many{Синхронизация, осталось {count} блоков} other{Синхронизация, осталось {count} блока}}",
+  "@syncRunning": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "syncDone": "Синхронизирован",
+  "syncFailed": "Синхронизация не удалась. {reason} Кошелёк попробует снова сам.",
+  "@syncFailed": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "receiveTitle": "Получить",
+  "receiveAddressNumber": "Адрес {number}",
+  "@receiveAddressNumber": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "receiveNotice": "У каждого платежа свой адрес. Когда на этот придёт платёж, появится следующий. Прежние адреса продолжают работать.",
+  "receiveCopy": "Скопировать адрес",
+  "receiveCopied": "Адрес в буфере обмена.",
+  "receiveCopyFailed": "Адрес не удалось скопировать.",
+  "receiveNew": "Новый адрес",
   "homeRebuilt": "Файл данных кошелька не удалось прочитать. Кошелёк открыт по ключам, они целы; средства снова появятся после синхронизации.",
   "lockAction": "Заблокировать кошелёк",
   "lockWorking": "Закрываем кошелёк…",
@@ -45,6 +123,9 @@
   "problemWalletExists": "На этом устройстве уже есть кошелёк. Ничего не изменено.",
   "problemInvalidPhrase": "Это не фраза восстановления: какое-то слово неверно или слова стоят в другом порядке.",
   "problemTorFailed": "Tor не запустился.",
+  "problemTorNotReady": "Tor не подключён.",
+  "problemNoNode": "Ни один узел не ответил.",
+  "problemTooManyAddresses": "Несколько адресов подряд ещё не получили платежа. Сначала используйте один из них: если неиспользованных станет больше, платёж может потеряться при восстановлении кошелька по фразе.",
   "problemLibraryMissing": "Приложение неполное: не найдена его часть.",
   "problemOther": "Что-то пошло не так.",
   "problemDetail": "Подробности: {detail}"

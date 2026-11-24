@@ -47,6 +47,15 @@ if, at build time, Arti cannot run bridges on Android.
 - **Local scanning.** Blocks are downloaded and scanned on the device. The
   view key never leaves it. Veil does not use light-wallet servers, because
   they require the view key.
+- **A long scan does not hold the wallet.** The first synchronisation of a
+  restored wallet can take an hour. Every two minutes of it the wallet
+  saves what it has scanned, so that a crash or a killed app costs
+  minutes and not the hour. Locking the wallet, showing an
+  address or the recovery phrase do not wait for it either: the scan stops
+  after the blocks it is working on, normally within seconds, and goes on
+  afterwards or the next time the wallet is opened. A send asked for
+  during a scan is built when the scan has finished, never from a wallet
+  that has seen only part of the chain.
 - **Separate Tor circuits.** Synchronisation uses one node. A transaction is
   broadcast through a different node on a separate circuit, so that no node
   can link the sync history to the spend.
@@ -63,7 +72,8 @@ if, at build time, Arti cannot run bridges on Android.
   (starts with `4`) is never shown.
 - The Receive screen shows one fresh subaddress as text and as a QR code.
   Once a payment arrives at it, the address is marked as used and the next
-  one is shown.
+  one is shown. The code holds a payment link, `monero:` followed by the
+  address, which other Monero wallets read.
 - A new address is issued only after the previous one was used, or when the
   user explicitly asks for one, and the number of unused addresses in a row
   is capped. Otherwise a wallet restored from the phrase could miss payments:
@@ -160,7 +170,11 @@ run where is set out in [development.md](development.md).
       and hosted CI compiling it for Linux and Windows.
    4. *Start:* create a wallet, show and check the recovery phrase, restore,
       set a password.
-   5. *Home and Receive.*
+   5. *Home and Receive.* The balance, Tor and synchronisation in words,
+      recent activity; the address as a QR code and as text, copied or
+      replaced by a new one. The app synchronises by itself while the
+      wallet is open. With it, in the core: a synchronisation that can be
+      stopped and that saves along the way.
    6. *Send:* form, review, confirmation, and the case where the outcome is
       not known.
    7. *Settings:* node, bridges, password, auto-lock, recovery phrase,

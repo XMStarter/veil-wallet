@@ -51,6 +51,24 @@ synchronisation and every send; while a transaction is under review it
 takes no other command but closing. Closing, or dropping the session,
 saves the wallet and stops Tor.
 
+A synchronisation does not hold the session up:
+
+- Once blocks are arriving, the session stops it every two minutes, saves
+  what was scanned, and goes on. A wallet killed in the middle of a long
+  scan loses no more than that.
+- Any command but another request to synchronise stops it too. The session
+  saves, does what was asked, and continues the same synchronisation: the
+  state shows it as running throughout, and nodes that had already failed
+  are not gone back to. Closing is such a command, so locking a wallet does
+  not wait for a scan to end.
+- A send asked for meanwhile is shown as being prepared and is built when
+  the synchronisation has ended.
+
+How soon a synchronisation stops is up to the wallet library: after the
+batch of blocks it is working on, normally within seconds. A request that
+a node never answers has to run into the library's timeout first, which
+takes minutes.
+
 ## From another language: the C interface
 
 The app is written in Dart, so the session is also reachable through a few
@@ -96,6 +114,11 @@ them again after a change that is meant.
   caller's order and moves to the next when a node cannot be reached, is
   not usable, or stops answering part way. It stops at once when Tor is no
   longer ready.
+- **Stopped on purpose.** `continue_sync` does the same and can be told to
+  stop. It then ends with the wallet's `SyncStopped`, keeps what was
+  scanned, and remembers in its `SyncAttempt` which nodes have failed, so
+  that calling it again continues where it was and an attempt that is
+  stopped again and again still comes to an end.
 - **In the middle of a send.** `commit` fails with the wallet's
   `SendOutcomeUnknown`: the node may have the transaction. The interface
   must not offer to send again before the next synchronisation, which shows
@@ -132,9 +155,11 @@ node block until the node has answered.
 | Node names; Tor not ready; the wallet asks for its node by name through the sync listener only; no listeners, no connection; a web server is not a node | The wallet library for all but the first. No network: Tor is replaced by `veil_tor`'s stand-in. | `../check.sh offline` |
 | A connection cut in the middle of a synchronisation, with the node still there, with the node gone, and with Tor gone: what is reported, that the next node is tried, and that the wallet is unharmed. The node is a fake that knows its version and height and has no blocks | The wallet library. No network. | `../check.sh offline` |
 | The session: a new wallet, the same wallet opened again, a wrong password, a restore, a synchronisation that fails, the timer, the cap on addresses, a send that cannot be built, a damaged data file | The wallet library. No network. | `../check.sh offline` |
+| A synchronisation told to stop: no further node is asked, and it continues where it was. In the session: a command and closing do not wait for a synchronisation, which goes on afterwards; a send asked for meanwhile waits for its end. The nodes are fakes that take their time over a request for blocks | The wallet library. No network. | `../check.sh offline` |
 | The C interface: requests read or refused, the state against the fixtures, null handles, a session driven through it from start to close | The wallet library for the last. No network. | `../check.sh offline` |
 | A wallet behind the stand-in on a private chain: synchronises through one listener, sends through the other, and stays silent in between | The wallet library and a Monero daemon | `../check.sh regtest` |
 | The session on a private chain: receives, reviews a send and cancels it, sends, loses the answer to a send and finds it in the history, and shows the same in a new session | The wallet library and a Monero daemon | `../check.sh regtest` |
+| The session on a long private chain over a slowed line: the scan is saved on the way, and the copy taken then opens with part of the chain behind it; the recovery phrase is handed out in the middle; the wallet is closed in the middle and a later session scans the rest; the payment is there each time | The wallet library and a Monero daemon | `../check.sh regtest` |
 | On a private chain: a download cut once is retried; a node that disappears is reported and another node finishes; a send whose answer is lost is reported as unknown and turns up in the history, paid once | The wallet library and a Monero daemon | `../check.sh regtest` |
 | A new wallet synchronises with a public onion node over the real Tor network | The wallet library and the Tor network | `../check.sh tor` |
 

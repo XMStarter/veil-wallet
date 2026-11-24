@@ -91,6 +91,9 @@ rules, leading to ports on this machine instead of into Tor. Tests use it to
 run code that needs Tor without a network, and to read which onion names
 were asked for and through which listener. No app build enables it.
 
+The stand-in can let what nodes send back pass slowly (`limit_replies`),
+for tests of what happens in the middle of a long download.
+
 The stand-in can also lose a connection on purpose (`cut_once`): part way
 through what the node sends, or after a request has reached the node and
 before the answer comes back. Afterwards the node is reachable again, gone,

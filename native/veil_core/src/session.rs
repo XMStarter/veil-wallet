@@ -12,10 +12,25 @@
 //! to, and on a timer if [`SessionConfig::sync_every`] says so; it saves
 //! after every synchronisation and every send; and it holds a send between
 //! the review and the confirmation.
+//!
+//! A synchronisation can take an hour, and the session does not make
+//! anything wait that long. Every few minutes it stops the synchronisation,
+//! saves what was scanned, and goes on, so that a kill or a power cut costs
+//! minutes. And any command but another request to synchronise stops it the
+//! same way: the session saves, does what was asked, and continues the
+//! synchronisation afterwards. Closing is such a command, which is what
+//! lets a wallet be locked in the middle of a long scan. A send asked for
+//! meanwhile is built once the synchronisation has ended, never from a
+//! wallet that has seen only part of the chain.
+//!
+//! How soon a synchronisation stops is the library's doing: after the batch
+//! of blocks it is working on, normally within seconds, but not before a
+//! node that has gone silent answers or is given up on.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex, OnceLock};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -26,7 +41,7 @@ use veil_wallet::{
 };
 use zeroize::Zeroizing;
 
-use crate::{Core, CoreError, Nodes, OnionNode};
+use crate::{Core, CoreError, Nodes, OnionNode, SyncAttempt};
 
 /// What a session needs to know before it starts.
 #[derive(Debug, Clone)]
@@ -172,7 +187,9 @@ pub enum SyncState {
     /// None since the session started. The balance and the history are
     /// those of the last synchronisation before it.
     NotYet,
-    /// Running. `progress` appears once the first blocks have arrived.
+    /// Running. `progress` appears once the first blocks have arrived. It
+    /// stays `Running` while the session saves along the way or does what a
+    /// command asked for, and when the session is closed in the middle.
     Running { progress: Option<SyncProgress> },
     /// Finished: the wallet is level with the node.
     Done { progress: SyncProgress },
@@ -186,7 +203,8 @@ pub enum SyncState {
 pub enum SendState {
     /// No send is under way.
     Idle,
-    /// The transaction is being built.
+    /// The transaction is being built, or waits to be built for the
+    /// synchronisation under way to end.
     Preparing,
     /// Built and signed, waiting for the user. Nothing has left the device.
     Review {
@@ -238,8 +256,8 @@ pub struct SessionState {
 
 /// A wallet running on its own thread.
 ///
-/// Dropping a session closes it: the wallet is saved and Tor stopped. That
-/// waits for a synchronisation under way, which cannot be interrupted yet.
+/// Dropping a session closes it: a synchronisation under way is stopped,
+/// the wallet is saved and Tor stopped.
 pub struct Session {
     commands: Sender<Command>,
     shared: Arc<Shared>,
@@ -256,10 +274,21 @@ enum Command {
     Close,
 }
 
+impl Command {
+    /// Whether a synchronisation under way stops for this command. It does
+    /// for all but the request for a synchronisation itself.
+    fn interrupts(&self) -> bool {
+        !matches!(self, Command::Sync)
+    }
+}
+
 /// The state, and a way to wait for it to change.
 struct Shared {
     state: Mutex<SessionState>,
     changed: Condvar,
+    /// How many commands that interrupt a synchronisation were sent and
+    /// not yet taken by the session's thread.
+    waiting: AtomicUsize,
 }
 
 impl Shared {
@@ -276,15 +305,29 @@ impl Shared {
     fn get(&self) -> SessionState {
         self.state.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
+
+    /// Whether a command is waiting that a synchronisation has to stop for.
+    fn is_waiting(&self) -> bool {
+        self.waiting.load(Ordering::SeqCst) > 0
+    }
+
+    /// Counts a command as taken by the session's thread.
+    fn taken(&self, command: &Command) {
+        if command.interrupts() {
+            self.waiting.fetch_sub(1, Ordering::SeqCst);
+        }
+    }
 }
 
 /// What a session is given besides its configuration: how to get a
-/// transport, and anything to do to the wallet once it is open. The app
-/// starts Tor and does nothing to the wallet; tests put a stand-in in
-/// Tor's place and make the wallet accept a private chain.
+/// transport, anything to do to the wallet once it is open, and how often
+/// to save during a synchronisation. The app starts Tor, does nothing to
+/// the wallet, and saves every [`SAVE_EVERY`]; tests put a stand-in in
+/// Tor's place, make the wallet accept a private chain, and save sooner.
 pub(crate) struct Hooks {
     pub transport: StartTransport,
     pub wallet: Box<dyn FnOnce(&mut Wallet) + Send>,
+    pub save_every: Duration,
 }
 
 /// Starts whatever carries the wallet's traffic.
@@ -293,6 +336,11 @@ pub(crate) type StartTransport =
 
 /// How often an idle session looks at Tor and at its timer.
 const TICK: Duration = Duration::from_millis(250);
+
+/// How long a synchronisation scans before the session stops it to save
+/// what was scanned. A wallet killed in the middle of a long scan loses no
+/// more than this, plus the batch of blocks that was on its way.
+pub(crate) const SAVE_EVERY: Duration = Duration::from_secs(120);
 
 impl Session {
     /// Opens the wallet and starts Tor on a new thread, and returns at
@@ -305,6 +353,7 @@ impl Session {
                 Err(error) => Err(Problem::new(ProblemKind::TorFailed, error.to_string())),
             }),
             wallet: Box::new(|_| {}),
+            save_every: SAVE_EVERY,
         };
         Session::start_with(config, source, password, hooks)
     }
@@ -338,6 +387,7 @@ impl Session {
                 last_problem: None,
             }),
             changed: Condvar::new(),
+            waiting: AtomicUsize::new(0),
         });
         let (commands, inbox) = mpsc::channel();
         let password = Zeroizing::new(password.to_owned());
@@ -382,7 +432,8 @@ impl Session {
     }
 
     /// Synchronises with the first node that carries it through. The
-    /// outcome appears in [`SessionState::sync`].
+    /// outcome appears in [`SessionState::sync`]. Does nothing more if a
+    /// synchronisation is already under way.
     pub fn sync(&self) {
         self.send(Command::Sync);
     }
@@ -394,6 +445,9 @@ impl Session {
 
     /// Builds a transaction for review. [`SessionState::send`] goes to
     /// `Review` with the fee, or to `Failed`. Nothing is sent.
+    ///
+    /// During a synchronisation the send goes to `Preparing` and is built
+    /// when the synchronisation has ended.
     pub fn prepare_send(&self, to: &str, amount: SendAmount) {
         self.send(Command::PrepareSend {
             to: to.to_owned(),
@@ -406,14 +460,14 @@ impl Session {
         self.send(Command::ConfirmSend);
     }
 
-    /// Drops the transaction under review, or clears the outcome of the
-    /// last send from the state.
+    /// Drops the transaction under review or the send waiting to be built,
+    /// or clears the outcome of the last send from the state.
     pub fn cancel_send(&self) {
         self.send(Command::CancelSend);
     }
 
-    /// The wallet's recovery phrase. Waits for the session's thread, so for
-    /// the end of a synchronisation if one is running.
+    /// The wallet's recovery phrase. Waits for the session's thread; a
+    /// synchronisation under way stops for it and continues afterwards.
     pub fn recovery_phrase(&self) -> Result<SeedPhrase, Problem> {
         let (reply, answer) = mpsc::channel();
         self.send(Command::Phrase(reply));
@@ -423,20 +477,26 @@ impl Session {
     }
 
     /// Saves and closes the wallet and stops Tor. Returns the last state:
-    /// its phase is `Closed`, or `Failed` with the reason.
+    /// its phase is `Closed`, or `Failed` with the reason. A
+    /// synchronisation under way is stopped; what it scanned is saved, and
+    /// the next session continues from there.
     pub fn close(mut self) -> SessionState {
         self.shut_down();
         self.shared.get()
     }
 
     fn send(&self, command: Command) {
+        // Counted before it is sent, so that the count is never behind.
+        if command.interrupts() {
+            self.shared.waiting.fetch_add(1, Ordering::SeqCst);
+        }
         // A session whose thread has ended takes no commands; its state
         // already says why.
         let _ = self.commands.send(command);
     }
 
     fn shut_down(&mut self) {
-        let _ = self.commands.send(Command::Close);
+        self.send(Command::Close);
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
         }
@@ -458,6 +518,7 @@ fn run(
     shared: &Shared,
     inbox: &Receiver<Command>,
 ) {
+    let save_every = hooks.save_every;
     let mut core = match open(&config, source, &password, hooks) {
         Ok(core) => core,
         Err(problem) => {
@@ -475,8 +536,22 @@ fn run(
     });
 
     let mut last_sync: Option<Instant> = None;
+    // A synchronisation was asked for, or a command interrupted one, and it
+    // has not ended yet.
+    let mut sync_owed = false;
+    // The synchronisation a command interrupted, to be continued.
+    let mut interrupted: Option<SyncAttempt> = None;
+    // A send asked for while a synchronisation was owed. It is built when
+    // that has ended, so never from a wallet that knows half the chain.
+    let mut waiting_send: Option<(String, SendAmount)> = None;
     loop {
-        let command = inbox.recv_timeout(TICK);
+        // With a synchronisation owed there is nothing to wait for: take
+        // what has arrived and go on with it.
+        let patience = if sync_owed { Duration::ZERO } else { TICK };
+        let command = inbox.recv_timeout(patience);
+        if let Ok(command) = &command {
+            shared.taken(command);
+        }
         if matches!(
             command,
             Ok(Command::Sync | Command::NewAddress | Command::PrepareSend { .. })
@@ -486,10 +561,7 @@ fn run(
         }
         match command {
             Ok(Command::Close) | Err(RecvTimeoutError::Disconnected) => break,
-            Ok(Command::Sync) => {
-                sync(&mut core, &config, shared);
-                last_sync = Some(Instant::now());
-            }
+            Ok(Command::Sync) => sync_owed = true,
             Ok(Command::NewAddress) => {
                 let issued = core.new_receive_address();
                 shared.update(|state| match issued {
@@ -498,11 +570,12 @@ fn run(
                 });
             }
             Ok(Command::PrepareSend { to, amount }) => {
-                if review(&mut core, &to, amount, shared, inbox) == AfterReview::Close {
+                if sync_owed {
+                    shared.update(|state| state.send = SendState::Preparing);
+                    waiting_send = Some((to, amount));
+                } else if review(&mut core, &to, amount, shared, inbox) == AfterReview::Close {
                     break;
                 }
-                publish_wallet(&mut core, shared);
-                save(&mut core, shared);
             }
             Ok(Command::ConfirmSend) => shared.update(|state| {
                 state.last_problem = Some(Problem::new(
@@ -510,7 +583,10 @@ fn run(
                     "there is no transaction under review",
                 ));
             }),
-            Ok(Command::CancelSend) => shared.update(|state| state.send = SendState::Idle),
+            Ok(Command::CancelSend) => {
+                waiting_send = None;
+                shared.update(|state| state.send = SendState::Idle);
+            }
             Ok(Command::Phrase(reply)) => {
                 let _ = reply.send(core.seed_phrase().map_err(Problem::from));
             }
@@ -522,8 +598,23 @@ fn run(
         shared.update(|state| state.tor = tor);
         if let Some(every) = config.sync_every {
             if ready && last_sync.is_none_or(|at| at.elapsed() >= every) {
-                sync(&mut core, &config, shared);
-                last_sync = Some(Instant::now());
+                sync_owed = true;
+            }
+        }
+        // Commands that have arrived come first; the synchronisation would
+        // only stop for them at once.
+        if !sync_owed || shared.is_waiting() {
+            continue;
+        }
+        interrupted = sync(&mut core, &config, shared, save_every, interrupted.take());
+        if interrupted.is_some() {
+            continue;
+        }
+        sync_owed = false;
+        last_sync = Some(Instant::now());
+        if let Some((to, amount)) = waiting_send.take() {
+            if review(&mut core, &to, amount, shared, inbox) == AfterReview::Close {
+                break;
             }
         }
     }
@@ -610,15 +701,57 @@ fn save(core: &mut Core, shared: &Shared) {
     }
 }
 
-fn sync(core: &mut Core, config: &SessionConfig, shared: &Shared) {
-    shared.update(|state| state.sync = SyncState::Running { progress: None });
-    let outcome = core.sync_with_any(&config.nodes, &mut |progress| {
-        shared.update(|state| {
-            state.sync = SyncState::Running {
-                progress: Some(progress),
-            }
-        });
+/// Synchronises until the wallet is level with a node or the attempt has
+/// failed, and puts the outcome into the state. Once blocks are arriving,
+/// stops every `save_every` to save what was scanned, and goes on.
+///
+/// It also stops when a command arrives. Then it saves and returns the
+/// attempt, to be passed in again as `interrupted` once the command is
+/// dealt with; the state goes on showing the synchronisation as running.
+fn sync(
+    core: &mut Core,
+    config: &SessionConfig,
+    shared: &Shared,
+    save_every: Duration,
+    interrupted: Option<SyncAttempt>,
+) -> Option<SyncAttempt> {
+    let mut attempt = interrupted.unwrap_or_else(|| {
+        shared.update(|state| state.sync = SyncState::Running { progress: None });
+        SyncAttempt::through(&config.nodes)
     });
+    let outcome = loop {
+        // The clock for saving starts with the first blocks of this
+        // stretch. Before them there is nothing to save, and a stretch
+        // that has scanned something has moved on, however often it is
+        // stopped.
+        let scanning_since = OnceLock::new();
+        let stop = || {
+            shared.is_waiting()
+                || scanning_since
+                    .get()
+                    .is_some_and(|since: &Instant| since.elapsed() >= save_every)
+        };
+        let outcome = core.continue_sync(&mut attempt, &stop, &mut |progress| {
+            scanning_since.get_or_init(Instant::now);
+            shared.update(|state| {
+                state.sync = SyncState::Running {
+                    progress: Some(progress),
+                }
+            });
+        });
+        if !matches!(
+            outcome,
+            Err(CoreError::Wallet(veil_wallet::Error::SyncStopped))
+        ) {
+            break outcome;
+        }
+        // Stopped on the way, for a command or because it is time to save.
+        // Either way what was scanned goes to disk first.
+        save(core, shared);
+        if shared.is_waiting() {
+            return Some(attempt);
+        }
+    };
     let node = core.nodes().sync().clone();
     let tor = core.tor_status();
     publish_wallet(core, shared);
@@ -635,6 +768,7 @@ fn sync(core: &mut Core, config: &SessionConfig, shared: &Shared) {
     });
     // What was scanned is kept even if the app is killed a moment later.
     save(core, shared);
+    None
 }
 
 #[derive(PartialEq, Eq)]
@@ -644,8 +778,24 @@ enum AfterReview {
 }
 
 /// Builds a transaction and holds it until the user confirms or cancels.
-/// While it is held, the session takes no other command but closing.
+/// While it is held, the session takes no other command but closing. Then
+/// publishes what the wallet knows and saves it.
 fn review(
+    core: &mut Core,
+    to: &str,
+    amount: SendAmount,
+    shared: &Shared,
+    inbox: &Receiver<Command>,
+) -> AfterReview {
+    let after = hold_for_review(core, to, amount, shared, inbox);
+    if after == AfterReview::Continue {
+        publish_wallet(core, shared);
+        save(core, shared);
+    }
+    after
+}
+
+fn hold_for_review(
     core: &mut Core,
     to: &str,
     amount: SendAmount,
@@ -668,7 +818,11 @@ fn review(
         }
     });
     loop {
-        match inbox.recv() {
+        let command = inbox.recv();
+        if let Ok(command) = &command {
+            shared.taken(command);
+        }
+        match command {
             Ok(Command::ConfirmSend) => {
                 shared.update(|state| state.send = SendState::Sending);
                 let sent = pending.commit();

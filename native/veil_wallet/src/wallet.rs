@@ -156,14 +156,22 @@ pub struct Wallet {
     rebuilt_from_keys: bool,
 }
 
-/// A pointer the progress thread of [`Wallet::refresh_with_progress`] may
-/// hold.
+/// A pointer the watching thread of [`Wallet::refresh_until`] may hold.
 struct ListenerPtr(*mut c_void);
 
 // SAFETY: the listener is a plain record that the library writes during a
 // refresh and that is made to be read from another thread meanwhile; the
 // thread holding this never outlives the refresh it watches.
 unsafe impl Send for ListenerPtr {}
+
+/// The wallet, for the one call the watching thread of
+/// [`Wallet::refresh_until`] makes on it: asking the refresh to stop.
+struct StopPtr(*mut c_void);
+
+// SAFETY: stopping only sets flags the library reads between two batches of
+// blocks, and is the library's own way to end a refresh from another
+// thread; the thread holding this never outlives the refresh it watches.
+unsafe impl Send for StopPtr {}
 
 // SAFETY: the wallet library's objects are not tied to the thread that
 // created them. `Wallet` is not `Sync`, so only one thread uses it at a time.
@@ -675,7 +683,9 @@ impl Wallet {
     }
 
     /// Like [`Wallet::refresh`], and calls `report` about once a second
-    /// with how far scanning has come.
+    /// with how far scanning has come, from the first block of this
+    /// refresh on. A report therefore also says that this refresh has
+    /// scanned something.
     ///
     /// `report` runs on another thread while this one waits for the
     /// library. The first sync of a wallet can take a long time over Tor;
@@ -684,36 +694,81 @@ impl Wallet {
         &mut self,
         report: &mut (dyn FnMut(SyncProgress) + Send),
     ) -> Result<SyncProgress, Error> {
+        self.refresh_until(&|| false, report)
+    }
+
+    /// Like [`Wallet::refresh_with_progress`], and gives up as soon as
+    /// `stop` says so, with [`Error::SyncStopped`].
+    ///
+    /// `stop` is asked about twenty times a second, on another thread. Once
+    /// it answers yes, the library finishes the batch of blocks it is
+    /// working on, which it cannot leave half done, and scans no further.
+    /// What was scanned stays in the open wallet; [`Wallet::save`] writes
+    /// it to disk, and the next refresh continues after it. If that batch
+    /// was the last one, the refresh has finished and says so; if the
+    /// refresh failed in the meantime, it fails with that error as it
+    /// would have without the stop.
+    ///
+    /// A stop does not cut short a request the node has not answered yet.
+    /// The refresh ends when the answer comes, or when the library gives up
+    /// waiting for it, which takes minutes.
+    pub fn refresh_until(
+        &mut self,
+        stop: &(dyn Fn() -> bool + Sync),
+        report: &mut (dyn FnMut(SyncProgress) + Send),
+    ) -> Result<SyncProgress, Error> {
         const REPORT_EVERY: Duration = Duration::from_secs(1);
         const CHECK_EVERY: Duration = Duration::from_millis(50);
 
+        if stop() {
+            return Err(Error::SyncStopped);
+        }
         let node_height = self.node_height()?;
 
         let before = self.sync_progress().wallet_height;
         let finished = AtomicBool::new(false);
+        let stopped = AtomicBool::new(false);
         let listener = ListenerPtr(self.listener);
+        // The library's record still shows the last block of the refresh
+        // before this one. Nothing is reported until it moves.
+        let scanned_earlier = if self.listener.is_null() {
+            0
+        } else {
+            // SAFETY: the listener lives as long as the wallet.
+            unsafe { self.lib.api.MONERO_cw_WalletListener_height(self.listener) }
+        };
+        let to_stop = StopPtr(self.wallet);
         let api = &self.lib.api;
         let wallet = self.wallet;
         let refreshed = std::thread::scope(|scope| {
             let finished = &finished;
+            let stopped = &stopped;
             scope.spawn(move || {
                 let listener = listener;
-                if listener.0.is_null() {
-                    return;
-                }
+                let to_stop = to_stop;
                 let mut waited = Duration::ZERO;
                 while !finished.load(Ordering::SeqCst) {
                     std::thread::sleep(CHECK_EVERY);
+                    if stop() {
+                        stopped.store(true, Ordering::SeqCst);
+                        // Asked again on every round: the library forgets a
+                        // stop that reaches it before its loop has started.
+                        // SAFETY: the wallet outlives this scope; see
+                        // `StopPtr`.
+                        unsafe { api.MONERO_Wallet_stop(to_stop.0) };
+                        continue;
+                    }
                     waited += CHECK_EVERY;
-                    if waited < REPORT_EVERY {
+                    if waited < REPORT_EVERY || listener.0.is_null() {
                         continue;
                     }
                     waited = Duration::ZERO;
                     // SAFETY: the listener lives as long as the wallet,
                     // which outlives this scope.
                     let scanned = unsafe { api.MONERO_cw_WalletListener_height(listener.0) };
-                    // Zero until the first block of this refresh arrives.
-                    if scanned > 0 {
+                    // Unchanged until the first block of this refresh
+                    // arrives.
+                    if scanned > 0 && scanned != scanned_earlier {
                         report(SyncProgress {
                             wallet_height: scanned.min(node_height),
                             node_height,
@@ -726,17 +781,24 @@ impl Wallet {
             finished.store(true, Ordering::SeqCst);
             refreshed
         });
+        // A failure is reported as what it is, stopped or not: the caller
+        // has to know that this node did not carry the refresh.
         self.check()?;
         if !refreshed {
             return Err(Error::Wallet("synchronisation failed".into()));
         }
         let progress = self.sync_progress();
-        // Success with blocks still missing and none scanned means the
-        // library skipped the scan. Never report that as up to date.
-        if progress.blocks_left() > 0 && progress.wallet_height <= before {
-            return Err(Error::Wallet(
-                "synchronisation made no progress".to_string(),
-            ));
+        if progress.blocks_left() > 0 {
+            if stopped.load(Ordering::SeqCst) {
+                return Err(Error::SyncStopped);
+            }
+            // Success with blocks still missing and none scanned means the
+            // library skipped the scan. Never report that as up to date.
+            if progress.wallet_height <= before {
+                return Err(Error::Wallet(
+                    "synchronisation made no progress".to_string(),
+                ));
+            }
         }
         Ok(progress)
     }
