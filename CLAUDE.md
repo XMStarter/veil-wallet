@@ -194,40 +194,35 @@ wallet the owner confirmed that the synchronisation starts by itself once
 Tor is connected, that Receive shows the code and the address and Copy
 works, and that locking in the middle of a synchronisation takes seconds.
 The owner also reported that the QR code works. No payment has been
-received in the app yet. Step 3.6, send, is written and not yet accepted.
+received in the app yet. Step 3.6, send, is done.
 In the app: a form (address, with paste and payment links, and an amount
 or everything), a review (address, amount, fee, total, a warning when
 coins from several addresses are combined), and the outcome. In the core:
 the review's total and source addresses, a lack of funds as a problem of
-its own, and a send whose outcome is unknown is now looked for after every
+its own, and a send whose outcome is unknown is looked for after every
 synchronisation, becomes sent when found, blocks other sends until then,
 and is settled, never failed, when a synchronisation five minutes later
-does not show it. On the owner's machine, on commit `3c9a853`, the
-`offline` level passed as Linux and as Windows programs. The `regtest`
-level stopped at an older test of `veil_wallet` that still expected the
-library's bare refusal where a lack of funds now has its own error; that
-the test saw the new error on a real chain, on both systems, is the first
-confirmation of that mapping. The test is corrected. On commit `8352e0c`
-the level then reached the scenario this step rewrote, and it failed on
-both systems at the same place: after a lost answer and one
-synchronisation the send was still shown as unknown and unsettled. That
-cannot be how the session leaves it, so the test had read the state
-between two changes: the end of the synchronisation was reported first
-and what it said about the send a moment later. Both are now one change.
-Whether the wallet finds such a transaction in the node's pool before any
-block, which rests on reading the wallet library's source, is therefore
-still not shown either way; the next run decides it. Everything before
-that place passed: the refusal for lack of funds, the review with its
-total and source address, the lost answer reported as unknown, and no
-other send built meanwhile. As Windows programs the test of the
-synchronisation timer also failed once in that run, with no second
-synchronisation within ten seconds; it had passed on the same code in the
-offline level forty-five minutes earlier, and another test in the run
-took over a minute where it takes seconds, so the machine was busy with
-the daemons. The cause is not proven. The test now waits as long as the
-others do and prints the session's state if it gives up. The owner
-reported that sending works in the app. Next after its
-acceptance is step 3.7, settings. Not done: the app. See the build plan in
+does not show it. The owner's acceptance run passed: the `offline` level
+as Linux and as Windows programs on commit `3c9a853`, and the `regtest`
+level both ways on commit `22f44f8`, which differs from it in one test of
+`veil_wallet`, one test of `veil_core`, and the change described next; the
+`offline` level was run on that last commit in a cloud session only. The
+runs found three things. An older test still expected the library's bare
+refusal where a lack of funds now has its own error. The session reported
+the end of a synchronisation in one change of the state and what it said
+about a lost send in the next, and a test, like an interface, could read
+the state in between; both are one change now. And the test of the
+synchronisation timer failed once as Windows programs while the machine
+was busy with the daemons, having passed on the same code before; its
+cause was not proven, it now waits as long as the other tests, and it
+passed in the next run. Shown on a private chain, on both systems: a
+transaction whose answer was lost is found among the node's waiting
+transactions before any block and reported as sent; no other send is built
+meanwhile; a send to a node that cannot be reached is reported as unknown,
+settled by a synchronisation, and sent again, paid once. The owner
+reported that sending works in the app. Not tried: a lost connection in
+the app itself, which cannot be brought about by hand. Next is step 3.7,
+settings. Not done: the app. See the build plan in
 `docs/concept.md`.
 
 ## Environment notes
