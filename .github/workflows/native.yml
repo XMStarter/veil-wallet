@@ -67,6 +67,16 @@ jobs:
       - name: Format, lint, offline tests, and the app's build
         shell: bash
         run: bash check.sh offline
+      # The core for Android: the lint, a build, and the tests compiled. The
+      # compiler is the Android NDK, one pinned release from its publisher,
+      # checked against its checksum. Nothing built for Android is run, and
+      # the wallet library is not built here for Android either.
+      - name: Install the pinned Android NDK
+        if: runner.os == 'Linux'
+        run: bash check.sh --android ndk
+      - name: Lint and build the core for Android
+        if: runner.os == 'Linux'
+        run: bash check.sh --android offline
       # The app as it was just built for Windows, with the core next to it,
       # kept with this run as a file to download: it is what the owner
       # starts on a Windows machine (native/windows-app.sh). Nothing leaves

@@ -134,6 +134,12 @@ app looks for the core and the wallet library in its own folder, next to
 - Restoring from a 25-word phrase asks for a block number to scan from,
   not for a date as the concept says. The core cannot turn a date into a
   block yet.
+- On Android the app has been tried on one phone, the owner's, where a
+  wallet synchronised and sent a payment on stagenet: see "For Android"
+  in `docs/development.md` for how it is built. Its wallet is in the app's private
+  storage, which no other app can read and Android copies to no backup;
+  the core and the wallet library are inside the package. It has no
+  transport programs, so bridges cannot be used there yet.
 - Screenshots are not blocked on the phrase screen. That is for Android.
 - Receive has no Share. That is for Android too: a desktop has nothing to
   share into.

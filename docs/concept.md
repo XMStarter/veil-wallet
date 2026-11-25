@@ -251,8 +251,22 @@ run where is set out in [development.md](development.md).
       C interface.
    8. *The app on Windows:* the build from hosted CI with the wallet library
       next to it, run on the owner's machine.
-4. **Android.** Background sync through a foreground service, battery
-   restrictions, a build without Google services.
+4. **Android.** The same core and the same app on a phone, on 64-bit ARM.
+   1. *The core for Android.* The core and the wallet library built for
+      Android from a desktop, with `check.sh --android`, and hosted CI
+      building the core for Android. Nothing built this way is run yet.
+   2. *The app on a phone.* The Android side of the app with the core and
+      the wallet library inside the package, the wallet in the app's own
+      storage, a build without Google services, installed on the owner's
+      phone: from a new wallet to a payment on stagenet.
+   3. *What a phone asks for.* No screenshots of the recovery phrase, no
+      cloud backup of the wallet, the clipboard cleared after an address
+      was copied, Share on Receive, scanning a code on Send.
+   4. *Background synchronisation* through a foreground service, and
+      battery restrictions.
+   5. *Biometric unlock* through the hardware-backed key store.
+   6. *Bridges on Android:* whether an app can ship and start a transport
+      program.
 5. **Hardening.** Network-level leak checks, fuzzing of address and URI
    parsing, an external audit.
 6. **Release.** Open source, reproducible builds, signed APKs, F-Droid.
@@ -280,7 +294,19 @@ run where is set out in [development.md](development.md).
   Bridges work through it on Linux for obfs4 and Snowflake; WebTunnel is
   set up the same way but has not been tried. A transport is a separate
   program that Tor starts, and whether an app can ship and start one on
-  Android is still to be verified, as is the Android build.
+  Android is still to be verified. Arti itself runs there: inside the app
+  on a phone it connected and carried a synchronisation and a payment.
+- **The app's name on Android.** Android knows an app by an identifier
+  that can never change once people have the app. For now it is
+  `io.github.xmstarter.veil`, after the project's place on GitHub. It is
+  to be settled, with the name, before anything is published.
+- **The compiler of the wallet library for Android.** Monero's dependency
+  build brings its own Android compiler, a release of 2018, and the
+  library is built with it; the core and the app are built with the
+  current one. Each of the two libraries is complete in itself, so they
+  work side by side. Building Monero's dependencies with the current
+  compiler would mean maintaining that build ourselves, which has not
+  been tried.
 - **Antivirus on Windows.** An antivirus on the test machine reported the
   wallet library as a potentially unwanted application, a "coin miner", the
   first time a program opened it, and it has to be allowed by hand. The

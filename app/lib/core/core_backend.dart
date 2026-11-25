@@ -49,13 +49,24 @@ class CoreBackend implements WalletBackend {
     bool withoutBridges = false,
   }) async {
     await close();
-    for (final library in [_paths.coreLibrary, _paths.walletLibrary]) {
-      if (!File(library).existsSync()) {
-        throw StartFailure(Problem(libraryMissing, library));
+    if (_paths.librariesAreFiles) {
+      for (final library in [_paths.coreLibrary, _paths.walletLibrary]) {
+        if (!File(library).existsSync()) {
+          throw StartFailure(Problem(libraryMissing, library));
+        }
       }
     }
     await Directory(_paths.walletDir).create(recursive: true);
-    final core = _core ??= VeilCore.open(_paths.coreLibrary);
+    final VeilCore core;
+    try {
+      core = _core ??= VeilCore.open(_paths.coreLibrary);
+    } on ArgumentError catch (notLoaded) {
+      // Where the libraries are names, not files, this is how a missing
+      // one shows: the system does not find it.
+      throw StartFailure(
+        Problem(libraryMissing, '${_paths.coreLibrary}: ${notLoaded.message}'),
+      );
+    }
     final VeilSession session;
     try {
       session = core.start(
@@ -136,7 +147,7 @@ class CoreBackend implements WalletBackend {
 
   @override
   Problem? checkBridges(List<String> lines) {
-    if (!File(_paths.coreLibrary).existsSync()) {
+    if (_paths.librariesAreFiles && !File(_paths.coreLibrary).existsSync()) {
       return Problem(libraryMissing, _paths.coreLibrary);
     }
     return (_core ??= VeilCore.open(_paths.coreLibrary)).checkBridges(lines);

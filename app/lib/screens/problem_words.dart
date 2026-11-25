@@ -13,7 +13,13 @@ String problemWords(AppLocalizations text, Problem problem) {
     ProblemKind.wrongPassword => text.problemWrongPassword,
     ProblemKind.walletExists => text.problemWalletExists,
     ProblemKind.walletInUse => text.problemWalletInUse,
-    ProblemKind.invalidPhrase => text.problemInvalidPhrase,
+    // With what the wallet library said about it, in English: a phrase
+    // can be refused for more than one reason, and which it was is what
+    // helps to put it right.
+    ProblemKind.invalidPhrase =>
+      problem.detail.isEmpty
+          ? text.problemInvalidPhrase
+          : '${text.problemInvalidPhrase} ${text.problemDetail(problem.detail)}',
     ProblemKind.torFailed => text.problemTorFailed,
     ProblemKind.torNotReady => text.problemTorNotReady,
     ProblemKind.torLost => text.problemTorLost,

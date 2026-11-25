@@ -389,7 +389,8 @@ fn a_transaction_would_go_to_the_first_node_that_answers() {
     // sync node, through the sync listener.
     assert_eq!(core.nodes(), &nodes());
     stand_in.clear_requests();
-    assert!(core.node_height().is_ok());
+    let height = core.node_height();
+    assert!(height.is_ok(), "{height:?}");
     let requests = stand_in.requests();
     assert!(
         requests
