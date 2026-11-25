@@ -43,7 +43,15 @@ class _PhraseCheckScreenState extends State<PhraseCheckScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    // No picture is taken of this screen: see [Device.secretShown].
+    widget.backend.device.secretShown();
+  }
+
+  @override
   void dispose() {
+    widget.backend.device.secretGone();
     for (final field in _typed) {
       field.dispose();
     }

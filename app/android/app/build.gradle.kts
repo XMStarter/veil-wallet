@@ -57,3 +57,10 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // Reads the code of an address with the camera, on the device. It is
+    // ZXing, open source under the Apache licence, with the screen that
+    // shows the camera's picture; nothing of Google's services is in it.
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+}

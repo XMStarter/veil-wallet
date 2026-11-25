@@ -45,7 +45,9 @@ void main() {
     expect(backend.startedWith, WalletSource.create);
     expect(backend.password, testPassword);
 
-    // The phrase: every word, numbered, under a warning.
+    // The phrase: every word, numbered, under a warning. No picture is
+    // taken of the app while it is on show.
+    expect(backend.device.guards, [true]);
     expect(find.text('RECOVERY PHRASE'), findsOneWidget);
     for (var at = 0; at < words.length; at++) {
       expect(find.text('${at + 1}'), findsOneWidget);
@@ -66,9 +68,13 @@ void main() {
     await type(tester, 'Word ${asked[1]}', 'zzzzzzzzzz');
     expect(find.textContaining('That is not the word'), findsOneWidget);
     expect(enabled(tester, 'Continue'), isFalse);
-    // Back shows the phrase again, and the check starts over.
+    // Back shows the phrase again, and the check starts over. The guard
+    // was up all the while: one screen with the phrase lay under the
+    // other, and it is put up once, not once per screen.
+    expect(backend.device.guards, [true]);
     await press(tester, 'Back');
     expect(find.text('RECOVERY PHRASE'), findsOneWidget);
+    expect(backend.device.guards, [true]);
     await press(tester, 'I wrote them down');
     final again = askedPositions(tester);
     for (final number in again) {
@@ -86,6 +92,8 @@ void main() {
 
     expect(backend.confirmed, isTrue);
     expect(find.text('WALLET'), findsOneWidget);
+    // With the phrase off the screen, pictures may be taken again.
+    expect(backend.device.guards, [true, false]);
     expect(find.text('Tor is connecting: 15%'), findsOneWidget);
     // Tor's state follows the core's, in words.
     backend.tor(TorState.ready);
@@ -132,9 +140,12 @@ void main() {
   ) async {
     final backend = FakeBackend();
     await pumpApp(tester, 'en', backend: backend);
+    expect(backend.device.guarded, isFalse);
     await press(tester, 'Restore from recovery phrase');
     expect(find.text('RESTORE'), findsOneWidget);
     expect(find.textContaining('No words yet'), findsOneWidget);
+    // A phrase is about to be typed here: no picture of it is taken.
+    expect(backend.device.guarded, isTrue);
 
     await type(tester, 'Recovery phrase', 'unaware yard donate');
     expect(find.textContaining('3 words'), findsOneWidget);

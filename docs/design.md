@@ -95,8 +95,8 @@ runtime.
    Send, recent activity, and a quiet way to lock the wallet. A
    synchronisation under way shows a line that fills.
 4. **Receive.** QR code, the number of the address, the address itself,
-   Copy, and a way to ask for a new address. Share comes with the phone:
-   a desktop has nothing to share into.
+   Copy, and a way to ask for a new address. On a phone also Share, which
+   hands the address to another app; a desktop has nothing to share into.
 5. **Send.** A form: the address, with Paste, and the amount, or
    everything. Then a review: the address in groups of four, the amount,
    the fee, the total, a warning if coins from several addresses are
@@ -120,4 +120,5 @@ language and falls back to English.
 - A vector version of the logo. The repository currently has a raster image,
   whose white background shows as a faint box on the start screen.
 - A simplified mark for the app icon. The full illustration does not read at
-  icon size.
+  icon size. Until there is one, the icon on Android is the profile under
+  its veil cut out of the logo, without the wordmark.

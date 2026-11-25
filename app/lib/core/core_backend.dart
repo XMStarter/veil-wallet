@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:veil_bridge/veil_bridge.dart';
 
 import 'backend.dart';
+import 'device.dart';
 import 'paths.dart';
 
 /// The wallet, run by the native core.
@@ -17,7 +18,10 @@ import 'paths.dart';
 /// another isolate, so the interface never stands still. None waits for a
 /// synchronisation to end: the core stops one for them.
 class CoreBackend implements WalletBackend {
-  CoreBackend(this._paths);
+  CoreBackend(this._paths, {Device? device}) : device = device ?? ThisDevice();
+
+  @override
+  final Device device;
 
   final AppPaths _paths;
   VeilCore? _core;

@@ -249,6 +249,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  const inClipboard =
+      'The address is in the clipboard. It is taken out again in a minute.';
+
   testWidgets('receive shows the address as a code and as text to check', (
     tester,
   ) async {
@@ -271,13 +274,88 @@ void main() {
     );
 
     // Copied whole, without the gaps.
-    expect(find.text('The address is in the clipboard.'), findsNothing);
+    expect(find.text(inClipboard), findsNothing);
     await press(tester, 'Copy address');
     expect(copied, [address]);
-    expect(find.text('The address is in the clipboard.'), findsOneWidget);
+    expect(find.text(inClipboard), findsOneWidget);
 
     await press(tester, 'Back');
     expect(find.text('WALLET'), findsOneWidget);
+
+    // A minute later the address is taken out of the clipboard again,
+    // whichever screen is on show by then.
+    await tester.pump(Device.clipboardFor - const Duration(seconds: 1));
+    expect(copied, [address]);
+    await tester.pump(const Duration(seconds: 2));
+    expect(copied, [address, '']);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('what was copied after the address is left in the clipboard', (
+    tester,
+  ) async {
+    final copied = clipboard(tester);
+    await openWallet(tester, 'en');
+    await press(tester, 'Receive');
+    await press(tester, 'Copy address');
+    expect(copied, [testAddresses[0]]);
+
+    // The user copies something else, in whatever app.
+    await Clipboard.setData(const ClipboardData(text: 'a shopping list'));
+    await tester.pump(Device.clipboardFor + const Duration(seconds: 1));
+    expect(copied, [testAddresses[0], 'a shopping list']);
+  });
+
+  testWidgets('a copy that ran out in the background is seen to in front', (
+    tester,
+  ) async {
+    final backend = await openWallet(tester, 'en');
+    await press(tester, 'Receive');
+    // A phone does not let an app in the background look into the
+    // clipboard: it sees nothing there, whatever is there.
+    var hidden = false;
+    final copied = <String>[];
+    String? held;
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') {
+        held = (call.arguments as Map<Object?, Object?>)['text']! as String;
+        copied.add(held!);
+      }
+      if (call.method == 'Clipboard.getData') {
+        return hidden || held == null || held!.isEmpty
+            ? null
+            : <String, Object?>{'text': held};
+      }
+      return null;
+    });
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+
+    await press(tester, 'Copy address');
+    hidden = true;
+    await tester.pump(Device.clipboardFor + const Duration(seconds: 1));
+    expect(copied, [testAddresses[0]], reason: 'not cleared unseen');
+
+    hidden = false;
+    backend.device.resumed();
+    await tester.pump();
+    expect(copied, [testAddresses[0], '']);
+  });
+
+  testWidgets('a phone can hand the address to another app', (tester) async {
+    clipboard(tester);
+    final backend = await openWallet(tester, 'en');
+    await press(tester, 'Receive');
+    // A desktop has nothing to share into, and no button for it.
+    expect(find.text('SHARE ADDRESS'), findsNothing);
+    await press(tester, 'Back');
+
+    backend.device.canShare = true;
+    await press(tester, 'Receive');
+    await press(tester, 'Share address');
+    expect(backend.device.shared, [testAddresses[0]]);
     expect(tester.takeException(), isNull);
   });
 
@@ -288,7 +366,7 @@ void main() {
     final backend = await openWallet(tester, 'en');
     await press(tester, 'Receive');
     await press(tester, 'Copy address');
-    expect(find.text('The address is in the clipboard.'), findsOneWidget);
+    expect(find.text(inClipboard), findsOneWidget);
 
     await press(tester, 'New address');
     expect(backend.calls.last, 'new address');
@@ -298,7 +376,7 @@ void main() {
       'monero:${testAddresses[1]}',
     );
     // What is in the clipboard is no longer the address on the screen.
-    expect(find.text('The address is in the clipboard.'), findsNothing);
+    expect(find.text(inClipboard), findsNothing);
 
     await press(tester, 'New address');
     expect(find.text('ADDRESS 3'), findsOneWidget);
@@ -311,6 +389,8 @@ void main() {
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
+    // The copy's minute runs out.
+    await tester.pump(Device.clipboardFor);
   });
 
   testWidgets('once the address has been paid, the next one is shown', (
@@ -368,7 +448,7 @@ void main() {
     await openWallet(tester, 'en');
     await press(tester, 'Receive');
     await press(tester, 'Copy address');
-    expect(find.text('The address is in the clipboard.'), findsNothing);
+    expect(find.text(inClipboard), findsNothing);
     expect(find.text('The address could not be copied.'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -435,7 +515,10 @@ void main() {
     expect(find.text('ПОЛУЧИТЬ'), findsOneWidget);
     expect(find.text('АДРЕС 1'), findsOneWidget);
     await press(tester, 'Скопировать адрес');
-    expect(find.text('Адрес в буфере обмена.'), findsOneWidget);
+    expect(
+      find.text('Адрес в буфере обмена. Через минуту он оттуда уберётся.'),
+      findsOneWidget,
+    );
     await press(tester, 'Новый адрес');
     await press(tester, 'Новый адрес');
     await press(tester, 'Новый адрес');
@@ -444,5 +527,7 @@ void main() {
     await press(tester, 'Назад');
     await press(tester, 'Заблокировать кошелёк');
     expect(find.text('ОТКРЫТЬ КОШЕЛЁК'), findsOneWidget);
+    // The copy's minute runs out.
+    await tester.pump(Device.clipboardFor);
   });
 }

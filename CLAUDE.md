@@ -104,8 +104,11 @@ that cannot lose the user's funds.
   in `veil_core/src/ffi.rs`; the state crosses as JSON, pinned by
   `native/veil_core/tests/fixtures`, which both sides test against.
 - `app/`: the app, written with Flutter, for Linux, Windows and Android
-  (`app/android`; the Android side answers one question, where the app's
-  files go, and the libraries are found there by name). So
+  (`app/android`; the libraries are found there by name, and what only
+  the system can do goes through `lib/core/device.dart` to
+  `MainActivity`: where the app's files go, no picture of a screen with
+  a phrase, Share, a code read with the camera, the clipboard emptied).
+  So
   far the way to an open wallet (create, recovery phrase, restore, unlock),
   Home, Receive, Send, and Settings.
   Screens talk to `WalletBackend` (`app/lib/core`), never to the core
@@ -513,8 +516,25 @@ itself on commit `be063de`, which differs only in that script, the
 `veil_core`. So the ending with 116 has happened once and did not come
 back; its cause was not found, and a run that passes afterwards does not
 show that nothing is wrong. With that, step 4.2 has passed the owner's
-run on both systems and on the phone. Hosted CI, with its new build for
-Android, has not run. The wallet library's "shared
+run on both systems and on the phone. Hosted CI then passed on both
+systems, its Linux job building the core for Android for the first time,
+in twelve minutes where it took six, and steps 4.1 and 4.2 were merged on
+the owner's word. Step 4.3, what a phone asks for, is written and has
+not been on a phone. No picture can be taken of the app while a recovery
+phrase is shown or typed (Android's `FLAG_SECURE`, put up by the four
+screens that have a phrase on them and taken down when the last is
+gone); every other screen can still be photographed, which is how the
+owner reports problems. An address that was copied is taken out of the
+clipboard a minute later if it is still there, on every system, and on a
+phone when the app is next in front if the minute ran out in the
+background. Receive has Share and Send reads a code with the camera,
+both only where the device can; the code is read by ZXing through
+`zxing-android-embedded`, the app's first dependency on Android besides
+Flutter, and the camera is its second permission. The icon is the
+profile cut out of the logo, until there is a mark made for it. Tests on
+the wallet and device that only pretend cover the Dart side of all of
+it; the Kotlin side is compiled into an APK and nothing more. The
+wallet library's "shared
 ring database" is not made on Android, where an app has no home folder;
 on a desktop the library makes it in the user's home folder, outside
 Veil's own, which was noticed here and is not dealt with. On

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:veil/app.dart';
+import 'package:veil/core/device.dart';
 import 'package:veil/core/backend.dart';
 
 /// Loads the app's own typefaces, so that tests lay text out as the app
@@ -30,9 +31,52 @@ const testPhrase =
     'surround forum execute lamp';
 const testPassword = 'correct horse battery';
 
+/// A device that only pretends to be a phone when told to, and notes what
+/// was asked of it. Its clipboard is the system's, which tests stand in
+/// for with [clipboard].
+class FakeDevice extends ThisDevice {
+  FakeDevice() : super(android: false);
+
+  @override
+  bool canShare = false;
+
+  @override
+  bool canScan = false;
+
+  /// What was handed to other apps.
+  final shared = <String>[];
+
+  /// What the next scan reads; null for a user who gives up.
+  String? scanReads;
+
+  /// What was shown while scanning.
+  final prompts = <String>[];
+
+  /// Every time the guard on the screen was put up (true) or taken down.
+  final guards = <bool>[];
+
+  /// Whether the system would take no picture of the app right now.
+  bool get guarded => guards.isNotEmpty && guards.last;
+
+  @override
+  Future<void> share(String text) async => shared.add(text);
+
+  @override
+  Future<String?> scan(String prompt) async {
+    prompts.add(prompt);
+    return scanReads;
+  }
+
+  @override
+  Future<void> guardScreen(bool on) async => guards.add(on);
+}
+
 /// A wallet that only pretends: no core, no files, no Tor.
 class FakeBackend implements WalletBackend {
   FakeBackend({this.hasWallet = false, this.confirmed = false});
+
+  @override
+  final FakeDevice device = FakeDevice();
 
   /// Whether the device already has a wallet.
   bool hasWallet;
@@ -552,17 +596,23 @@ Future<FakeBackend> openWallet(WidgetTester tester, String language) async {
   return backend;
 }
 
-/// Stands in for the system's clipboard, holding [text], and returns what
-/// is put into it.
+/// Stands in for the system's clipboard, holding [text] to begin with,
+/// and returns everything that is put into it, in order. It holds what
+/// was put into it last, as a clipboard does; an empty text is a
+/// clipboard that was cleared.
 List<String> clipboard(WidgetTester tester, {String? text}) {
   final copied = <String>[];
+  var held = text;
   final messenger = tester.binding.defaultBinaryMessenger;
   messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
     if (call.method == 'Clipboard.setData') {
-      copied.add((call.arguments as Map<Object?, Object?>)['text']! as String);
+      held = (call.arguments as Map<Object?, Object?>)['text']! as String;
+      copied.add(held!);
     }
     if (call.method == 'Clipboard.getData') {
-      return text == null ? null : <String, Object?>{'text': text};
+      return held == null || held!.isEmpty
+          ? null
+          : <String, Object?>{'text': held};
     }
     return null;
   });

@@ -6,6 +6,7 @@ import '../l10n/app_localizations.dart';
 import '../theme/colors.dart';
 import '../theme/type.dart';
 import '../widgets/notice.dart';
+import '../widgets/secret.dart';
 import '../widgets/veil_button.dart';
 import '../widgets/veil_screen.dart';
 import 'navigation.dart';
@@ -32,33 +33,37 @@ class PhraseScreen extends StatelessWidget {
         ],
       ),
     );
-    return VeilScreen(
-      title: text.phraseTitle,
-      actions: [
-        VeilButton(
-          label: text.phraseWritten,
-          onPressed: () => open(
-            context,
-            PhraseCheckScreen(backend: backend, phrase: phrase),
+    // No picture is taken of this screen: see [Device.secretShown].
+    return Secret(
+      device: backend.device,
+      child: VeilScreen(
+        title: text.phraseTitle,
+        actions: [
+          VeilButton(
+            label: text.phraseWritten,
+            onPressed: () => open(
+              context,
+              PhraseCheckScreen(backend: backend, phrase: phrase),
+            ),
           ),
-        ),
-      ],
-      children: [
-        Notice(text.phraseNotice, warning: true),
-        const SizedBox(height: 16),
-        Container(
-          color: VeilPalette.of(context).surface,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              column(0, half),
-              const SizedBox(width: 16),
-              column(half, words.length),
-            ],
+        ],
+        children: [
+          Notice(text.phraseNotice, warning: true),
+          const SizedBox(height: 16),
+          Container(
+            color: VeilPalette.of(context).surface,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                column(0, half),
+                const SizedBox(width: 16),
+                column(half, words.length),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

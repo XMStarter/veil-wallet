@@ -14,7 +14,8 @@ stopped, and the app asks for the password. While the wallet is open it
 synchronises by itself, a minute after the last time. If the device
 loses its network, Home says that Tor has lost its connection and that
 this, not the nodes, is why the synchronisation failed; the wallet goes
-on trying by itself and says so when Tor is connected again. Send takes an
+on trying by itself and says so when Tor is connected again. An address
+that was copied is taken out of the clipboard a minute later. Send takes an
 address and an amount, shows the transaction with its fee and total for a
 last look, and then how it went: sent, or, if the connection was lost,
 not known, which the wallet then clears up by itself. Settings has a line
@@ -130,7 +131,6 @@ app looks for the core and the wallet library in its own folder, next to
 - A password or a phrase that has been typed or shown stays in the app's
   memory until that memory is reused: text in Dart cannot be wiped. The
   core wipes its own copies.
-- The clipboard is not cleared after an address was copied.
 - Restoring from a 25-word phrase asks for a block number to scan from,
   not for a date as the concept says. The core cannot turn a date into a
   block yet.
@@ -140,11 +140,15 @@ app looks for the core and the wallet library in its own folder, next to
   storage, which no other app can read and Android copies to no backup;
   the core and the wallet library are inside the package. It has no
   transport programs, so bridges cannot be used there yet.
-- Screenshots are not blocked on the phrase screen. That is for Android.
-- Receive has no Share. That is for Android too: a desktop has nothing to
-  share into.
+- What a phone asks for is written and has not been tried on one: no
+  picture of the app while a recovery phrase is shown or typed, Share on
+  Receive, a code read with the camera on Send, and the app's own icon.
+  The code is read by ZXing with the screen from
+  `zxing-android-embedded`, both under the Apache licence 2.0, whose text
+  a build that ships them has to carry. They are the app's only
+  dependency on Android besides Flutter, and the camera its only
+  permission besides the network.
 - Home lists the latest twenty payments and has no way to the rest.
-- Send has no way to scan a code. That is for Android.
 - New bridges take effect the next time the wallet is opened, and the
   programs they need have to be installed on the machine; none comes with
   the app yet. If bridges in the settings stop working, the screen that
