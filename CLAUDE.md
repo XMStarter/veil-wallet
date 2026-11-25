@@ -73,7 +73,9 @@ that cannot lose the user's funds.
     only; do not add another network to it.
   - `wallet_lib`: pinned build script for the wallet library, Veil's
     patches to it, and the bindings generator. After changing a patch, run
-    `build.sh` again and regenerate the bindings.
+    `build.sh` again and regenerate the bindings. `--android` builds it
+    for Android on 64-bit ARM from a source tree of its own, with a patch
+    only that build has (`patches/android`); the README says why.
   - `veil_test_guard`: called first by every test that starts Tor or a
     daemon; fails the test on a CI runner. A new test of that kind calls it
     too. It also starts the daemon for tests, one at a time, and when the
@@ -83,7 +85,10 @@ that cannot lose the user's funds.
     `stagenet`, `bridges`) with a log; `setup` prepares a machine;
     `daemons` is a diagnosis of the test daemon, not a check. With
     `--windows` in front, the levels are built for Windows on Linux and run
-    as Windows programs through WSL.
+    as Windows programs through WSL. With `--android` in front there are
+    three: `ndk` installs the pinned Android NDK, `setup` adds the wallet
+    library for Android, and `offline` lints and builds for Android and
+    runs nothing.
   - `accept.sh`: the owner's acceptance run in one command, step after
     step: the latest commits, `check.sh` as Linux and as Windows programs,
     the logs to send, then the app. It starts a daemon, so it is not for
@@ -420,7 +425,28 @@ of that run, started under WSL. Not seen: the same in the app for
 Windows, which hosted CI builds only on a pull request, a send confirmed
 with the network gone, and a loss that shows as nothing but timeouts,
 which would still read as nodes that do not answer
-(`veil_tor::service::network_after` is the place to change then). On
+(`veil_tor::service::network_after` is the place to change then).
+That work was merged on the owner's word after hosted CI had passed on
+both systems. Next is step 4, Android, in the six parts listed in the
+build plan. Step 4.1, the core for Android, is written; nothing of it can
+be run before there is an app on a phone, so no run of the owner's is
+asked for until step 4.2. `./check.sh --android offline` lints the Rust
+code for Android on 64-bit ARM, builds the core as a library, and
+compiles the tests; it passed in a cloud session at the first try, Arti
+and its cryptography included, with the NDK release the pinned Flutter
+uses (`r28c`, pinned in `check.sh` by checksum). The wallet library for
+Android is built by `wallet_lib/build.sh --android` in ten minutes with
+Monero's own dependency build, which brings the NDK release of 2018 that
+Monero pins. Three things make up for that compiler's age, each in
+`build.sh`: the system's `libtinfo` offered under its old name to the
+compiler, a patch of three lines to a library monero_c adds (`bc-ur`),
+applied in a source tree only the Android build uses, and the name of
+the C++ runtime told to the linker. The result needs only what every
+Android has, exports the sixty-three functions Veil calls, and is laid
+out for devices with 16-kilobyte pages, as the core is. None of it has
+been loaded by anything. Hosted CI now also builds the core for Android
+on its Linux runner, which downloads the pinned NDK; that part of the
+workflow has not run yet. On
 commit `39a19a1`, which has the amount put right, the owner's run passed
 at the `offline` and `regtest` levels as Windows programs, the scenario
 with its new end included: a send confirmed with the network gone is
@@ -458,6 +484,11 @@ See the build plan in `docs/concept.md`.
   reporting switched off (`flutter --disable-analytics`,
   `dart --disable-analytics`) before anything else is run. The tools
   complain about running as root; that is harmless there.
+- Android in a cloud session: `./check.sh --android ndk` and
+  `--android offline` work there, and so does `wallet_lib/build.sh
+  --android`. Nothing built for Android can be started there. The hosts
+  an app's build needs (Google's and Maven's package servers, Gradle's)
+  answered when asked.
 - The wallet library can be built in a cloud session from source with
   `native/wallet_lib/build.sh` (about half an hour; install the packages
   listed at the top of the script first). Building it is fine; `monerod`
