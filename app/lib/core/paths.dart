@@ -10,9 +10,14 @@ class AppPaths {
 
   /// For Android, where [filesDir] is the app's private storage: no other
   /// app can read it. The two libraries are inside the app's package and
-  /// are asked for by name; Android knows where they are.
-  factory AppPaths.onAndroid(String filesDir) =>
-      AppPaths._(filesDir, '', const {}).._android = true;
+  /// are asked for by name; Android knows where they are. [libraryDir] is
+  /// the folder Android unpacked the package's native parts into, the
+  /// only place an app may start a program from: the transport program
+  /// for bridges lies there.
+  factory AppPaths.onAndroid(String filesDir, {String? libraryDir}) =>
+      AppPaths._(filesDir, '', const {})
+        .._android = true
+        .._transportDir = libraryDir;
 
   /// For the running app.
   factory AppPaths.forThisDevice() => AppPaths.from(
@@ -51,6 +56,12 @@ class AppPaths {
   final Map<String, String> _environment;
   bool _windows = false;
   bool _android = false;
+  String? _transportDir;
+
+  /// The folder of the transport programs the app brings along, for
+  /// bridges; null where it brings none and the ones installed on the
+  /// machine are used.
+  String? get transportDir => _transportDir;
 
   /// Whether [coreLibrary] and [walletLibrary] are files that can be
   /// looked for. On Android they are names, found by the system inside

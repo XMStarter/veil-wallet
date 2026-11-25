@@ -84,6 +84,23 @@ void main() {
       core.checkBridges(const ['conjure $plain'])?.kind,
       ProblemKind.transportMissing,
     );
+    // An app that brings a transport program along names its folder, and
+    // the program is found there under the name it has in a package for
+    // Android. Without the folder this machine has to have one installed,
+    // which it mostly has not.
+    const webtunnel =
+        'webtunnel [2001:db8::1]:443 0123456789ABCDEF0123456789ABCDEF01234567 '
+        'url=https://cdn.example/path ver=0.0.1';
+    final shipped = Directory('${dir.path}/shipped')..createSync();
+    File('${shipped.path}/liblyrebird.so').writeAsBytesSync(const []);
+    expect(
+      core.checkBridges(const [webtunnel], transportDir: shipped.path),
+      isNull,
+    );
+    final installed = core.checkBridges(const [webtunnel]);
+    if (installed != null) {
+      expect(installed.kind, ProblemKind.transportMissing);
+    }
     // A start with bridges that are not bridges is refused the same way.
     final withBridges = SessionConfig(
       walletLibrary: 'a',

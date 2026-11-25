@@ -34,9 +34,24 @@ fn nodes() -> Nodes {
 
 /// Loads the wallet library named by `VEIL_WALLET_LIB`, or skips the test.
 /// `VEIL_REQUIRE_WALLET_LIB=1` turns the skip into a failure.
+///
+/// A test that waits for a session with a limit calls this first, although
+/// the session loads the library itself: the first loading in a process
+/// has taken over a minute as a Windows program on the owner's machine,
+/// and that is no part of what such a test times. Once loaded, the
+/// library stays, and the session's own loading costs nothing. A loading
+/// that takes long says so, which shows with a test that fails.
 fn wallet_library() -> Option<WalletLibrary> {
     match std::env::var_os("VEIL_WALLET_LIB") {
-        Some(path) => Some(WalletLibrary::load(path).expect("wallet library loads")),
+        Some(path) => {
+            let started = std::time::Instant::now();
+            let library = WalletLibrary::load(path).expect("wallet library loads");
+            let took = started.elapsed();
+            if took >= Duration::from_secs(5) {
+                eprintln!("the wallet library took {} s to load", took.as_secs());
+            }
+            Some(library)
+        }
         None => {
             assert!(
                 std::env::var_os("VEIL_REQUIRE_WALLET_LIB").is_none(),

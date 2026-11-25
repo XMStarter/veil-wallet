@@ -162,9 +162,13 @@ for whoever runs it and says so.
 ./check.sh --android app
 ```
 
-builds the app as one file to install, `app-release.apk`, with the core
-and the wallet library inside, and under WSL copies it to the Windows
-Downloads folder as `veil.apk`. Copy it to a phone with a 64-bit ARM
+builds the app as one file to install, `app-release.apk`, with the core,
+the wallet library and the transport program for bridges inside, and
+under WSL copies it to the Windows Downloads folder as `veil.apk`. The
+transport program is the Tor Project's lyrebird, built from source by
+`native/transports/build.sh` (half a minute; `setup` runs it, and `app`
+does if it has not been run): its README says what is downloaded and how
+each download is checked. Copy it to a phone with a 64-bit ARM
 processor and Android 7 or later, and open it there; Android asks once
 whether apps may be installed from where the file was opened. The app is
 a real wallet on stagenet and connects to Tor.

@@ -35,6 +35,22 @@ android {
         }
     }
 
+    // The transport program for bridges is a program, not a library, and
+    // Android lets an app start a program only from the folder it unpacks
+    // a package's native parts into. So they are unpacked when the app is
+    // installed, which this asks for, where Android would otherwise use
+    // them from inside the package; and the program is named like a
+    // library (`liblyrebird.so`), because nothing else is unpacked.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+            // The program goes into the package as it was built, byte for
+            // byte: the build's tool for trimming libraries is made for
+            // libraries, and this is a program written in Go.
+            keepDebugSymbols += "**/liblyrebird.so"
+        }
+    }
+
     buildTypes {
         release {
             // Signed with the key Android's tools make on the machine that

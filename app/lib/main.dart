@@ -12,12 +12,13 @@ Future<void> main() async {
 }
 
 /// Where the app keeps its files. A desktop says so in its environment; on
-/// Android the system has to be asked, which is the one thing the app's
-/// Android side is there for.
+/// Android the system has to be asked, for the app's own storage and for
+/// the folder its package's native parts were unpacked into.
 Future<AppPaths> _paths() async {
   if (!Platform.isAndroid) return AppPaths.forThisDevice();
   WidgetsFlutterBinding.ensureInitialized();
   const device = MethodChannel('veil/device');
   final filesDir = await device.invokeMethod<String>('filesDir');
-  return AppPaths.onAndroid(filesDir!);
+  final libraryDir = await device.invokeMethod<String>('libraryDir');
+  return AppPaths.onAndroid(filesDir!, libraryDir: libraryDir);
 }

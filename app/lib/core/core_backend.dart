@@ -82,6 +82,7 @@ class CoreBackend implements WalletBackend {
           source: source,
           restoreHeight: restoreHeight,
           bridges: withoutBridges ? const [] : _settings.value.bridges,
+          transportDir: _paths.transportDir,
           syncEvery: _syncEvery,
         ),
         password: password,
@@ -154,7 +155,9 @@ class CoreBackend implements WalletBackend {
     if (_paths.librariesAreFiles && !File(_paths.coreLibrary).existsSync()) {
       return Problem(libraryMissing, _paths.coreLibrary);
     }
-    return (_core ??= VeilCore.open(_paths.coreLibrary)).checkBridges(lines);
+    return (_core ??= VeilCore.open(
+      _paths.coreLibrary,
+    )).checkBridges(lines, transportDir: _paths.transportDir);
   }
 
   @override

@@ -1,11 +1,14 @@
 //! Finding the programs that speak the transports bridges need.
 //!
 //! Tor does not speak obfs4, Snowflake or WebTunnel itself; a separate
-//! program does, and Tor starts it. Those programs are not part of Veil
-//! yet: they are looked for among the programs installed on the machine.
+//! program does, and Tor starts it. On a desktop those programs are not
+//! part of Veil yet: they are looked for among the programs installed on
+//! the machine. An app that brings one along says where it lies
+//! ([`programs_with`]); the app for Android does, because a phone has
+//! none installed and lets an app start only what came in its package.
 
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use veil_tor::TransportProgram;
 
@@ -55,6 +58,23 @@ pub fn programs_for(
     programs_in(needed, named, &search_path())
 }
 
+/// Like [`programs_for`], looking first in `shipped`, the folder an app
+/// keeps the programs it brings along in, if it has one.
+///
+/// There a program may lie under its own name or as `lib<name>.so`: the
+/// only kind of file Android unpacks from a package into a folder whose
+/// files may be started, so a program that travels in one is named like
+/// a library.
+pub fn programs_with(
+    needed: &[String],
+    named: Vec<TransportProgram>,
+    shipped: Option<&Path>,
+) -> Result<Vec<TransportProgram>, MissingTransport> {
+    let mut directories: Vec<PathBuf> = shipped.map(Path::to_path_buf).into_iter().collect();
+    directories.extend(search_path());
+    programs_in(needed, named, &directories)
+}
+
 /// Like [`programs_for`], looking in `directories` only.
 pub fn programs_in(
     needed: &[String],
@@ -101,11 +121,15 @@ fn search_path() -> Vec<PathBuf> {
 }
 
 fn find_program(name: &str, directories: &[PathBuf]) -> Option<PathBuf> {
-    let file_name = format!("{name}{}", std::env::consts::EXE_SUFFIX);
+    // Its own name, and the name it has inside a package for Android.
+    let file_names = [
+        format!("{name}{}", std::env::consts::EXE_SUFFIX),
+        format!("lib{name}.so"),
+    ];
     directories
         .iter()
         .filter(|directory| directory.is_absolute())
-        .map(|directory| directory.join(&file_name))
+        .flat_map(|directory| file_names.iter().map(move |file| directory.join(file)))
         .find(|candidate| candidate.is_file())
 }
 
@@ -208,6 +232,53 @@ mod tests {
         let missing = programs_in(&needed(&["conjure"]), Vec::new(), dirs).unwrap_err();
         assert!(missing.programs.is_empty());
         assert!(missing.to_string().contains("conjure"), "{missing}");
+    }
+
+    #[test]
+    fn a_program_that_came_in_a_package_is_found_under_its_library_name() {
+        // What an app for Android has in the folder its package was
+        // unpacked into.
+        let shipped = Programs::new("shipped", &[]);
+        let packaged = shipped.0.join("liblyrebird.so");
+        std::fs::write(&packaged, b"").unwrap();
+        let programs = programs_in(
+            &needed(&["obfs4", "snowflake", "webtunnel"]),
+            Vec::new(),
+            std::slice::from_ref(&shipped.0),
+        )
+        .unwrap();
+        assert_eq!(programs.len(), 1, "{programs:?}");
+        assert_eq!(programs[0].path, packaged);
+        assert_eq!(
+            programs[0].protocols,
+            vec!["obfs4", "snowflake", "webtunnel"]
+        );
+    }
+
+    #[test]
+    fn what_the_app_brought_along_comes_before_what_is_installed() {
+        let shipped = Programs::new("shipped-first", &[]);
+        let packaged = shipped.0.join("liblyrebird.so");
+        std::fs::write(&packaged, b"").unwrap();
+        let installed = Programs::new("installed-second", &["lyrebird", "obfs4proxy"]);
+        let programs = programs_in(
+            &needed(&["obfs4"]),
+            Vec::new(),
+            &[shipped.0.clone(), installed.0.clone()],
+        )
+        .unwrap();
+        assert_eq!(programs[0].path, packaged);
+
+        // And the folder named by the app is looked in at all.
+        let programs = programs_with(&needed(&["obfs4"]), Vec::new(), Some(&shipped.0)).unwrap();
+        assert_eq!(programs[0].path, packaged);
+    }
+
+    #[test]
+    fn a_folder_that_is_not_a_full_path_is_not_looked_in() {
+        let here = PathBuf::from("no-such-folder-of-transports");
+        let missing = programs_in(&needed(&["obfs4"]), Vec::new(), &[here]).unwrap_err();
+        assert_eq!(missing.transport, "obfs4");
     }
 
     #[test]

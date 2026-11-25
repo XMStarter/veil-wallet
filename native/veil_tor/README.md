@@ -172,9 +172,9 @@ cargo test -p veil_tor --test bridges -- --ignored --nocapture --test-threads=1
 - WebTunnel is configured like the other two and its bridge lines are
   understood, but it has not carried a connection: there is no public
   WebTunnel bridge to test with and no packaged program.
-- Shipping a transport program with the app. On Android in particular,
-  whether an app may start one is the question the concept's fallback to
-  the reference Tor implementation is about.
+- Shipping a transport program with the app on a desktop. The app for
+  Android carries one (`../transports`), and Arti starts it there: on
+  one phone Tor connected through obfs4 and through Snowflake.
 - Bridges through the C interface.
 - On Android the component is built (`../check.sh --android offline`
   lints it and compiles its tests) and its tests are not run there. It

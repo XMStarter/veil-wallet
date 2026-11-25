@@ -76,6 +76,10 @@ that cannot lose the user's funds.
     `build.sh` again and regenerate the bindings. `--android` builds it
     for Android on 64-bit ARM from a source tree of its own, with a patch
     only that build has (`patches/android`); the README says why.
+  - `transports`: pinned build script for the transport program the app
+    for Android brings along for bridges (the Tor Project's lyrebird,
+    for obfs4, Snowflake and WebTunnel), and why it is built the way it
+    is. It is under the GPL; the README says what that means.
   - `veil_test_guard`: called first by every test that starts Tor or a
     daemon; fails the test on a CI runner. A new test of that kind calls it
     too. It also starts the daemon for tests, one at a time, and when the
@@ -87,9 +91,10 @@ that cannot lose the user's funds.
     `--windows` in front, the levels are built for Windows on Linux and run
     as Windows programs through WSL. With `--android` in front there are
     four: `ndk` installs the pinned Android NDK, `setup` adds the Android
-    SDK and the wallet library for Android, `offline` lints and builds
-    for Android and runs nothing, and `app` builds the app as an APK with
-    the core and the wallet library inside.
+    SDK, the wallet library and the transport program for Android,
+    `offline` lints and builds for Android and runs nothing, and `app`
+    builds the app as an APK with the core, the wallet library and the
+    transport program inside.
   - `accept.sh`: the owner's acceptance run in one command, step after
     step: the latest commits, `check.sh` as Linux and as Windows programs,
     the logs to send, then the app. It starts a daemon, so it is not for
@@ -712,7 +717,79 @@ was not said; the owner did say that the fingerprint opens the wallet
 after a wrong password was typed, which is as meant on the screen that
 opens the wallet. So Android's key store and its question work on that
 phone as called. No run on the owner's desktop was made for this step:
-neither the core nor the wallet library changed in it.
+neither the core nor the wallet library changed in it. Hosted CI passed
+on both systems, and step 4.5 was merged on the owner's word.
+Step 4.6, bridges on Android, is written and has not been on a phone.
+A phone has no transport programs installed and lets an app start only
+what came in its package, so the package now carries one: lyrebird, the
+Tor Project's program for obfs4, Snowflake and WebTunnel, built for
+Android on 64-bit ARM from source by `native/transports/build.sh` in
+half a minute. Its source is pinned by commit, its Go packages by its
+own `go.sum`, Go itself by checksum, and the C compiler is the pinned
+NDK's; built twice in a cloud session in different folders it came out
+the same byte for byte. It is built with the NDK's C compiler because a
+Go program on Android finds names on the network only through the
+system's C library, and with a linker flag one of Snowflake's packages
+needs; the README there says why. It goes into the package as
+`liblyrebird.so`, untouched, and the package's native parts are now
+unpacked when the app is installed, which is the one place Android lets
+an app start a program from; the APK is twenty-nine megabytes where it
+was fifty-four, because they are compressed in it now. The core looks
+for a transport program first in a folder the app names
+(`transport_dir` in a start request and in `veil_check_bridges`,
+`veil_core::transports::programs_with`), under its own name or as
+`lib<name>.so`; the app for Android names the folder Android unpacked
+the package into. Offline tests cover the search and the way through
+the C interface and the Dart side. Not known until a phone shows it:
+whether Arti can start the program there, which is what the concept's
+fallback to the reference Tor implementation was about, and whether a
+bridge then carries a connection. lyrebird is under the GNU General
+Public License, version 3 or later, and Veil under MIT; they are
+separate programs, but a package with lyrebird inside has to be handed
+on under lyrebird's terms for that part. That is an open decision in
+the concept, for the owner, before a release; it does not stand in the
+way of trying the app on the owner's own phone. With the APK built from
+commit `ecc8c94` the owner put bridges into Settings on the phone, the
+obfs4 bridges built into Tor Browser and then one of its Snowflake
+bridges, the lines the `bridges` level uses, and reported: with obfs4
+Home first said that the wallet could not synchronise because no node
+answered and that it tries again by itself, and then that went away;
+Snowflake works. So Arti starts the program from the app's package on a
+phone and both transports carry Tor there, which answers the question
+the concept's fallback was kept for. What Home said after the message
+went away with obfs4 was not said; a message about nodes, and none
+about Tor, means Tor had connected through the bridge, and nodes that
+do not answer at the first try are what the public stagenet nodes have
+done before, here through a connection several times slower. Whether
+the bridge had a part in it was not looked into. Not tried: WebTunnel,
+and a network that blocks Tor, since the owner's does not. On commit
+`241dd5f` the owner's run passed at the `offline` and `regtest` levels
+as Linux programs and at the `offline` level as Windows programs. The
+`regtest` level as Windows programs failed in one test of `veil_core`,
+`a_session_is_driven_through_the_interface_from_start_to_close`: after
+its sixty seconds the session was still opening, at its very first
+state. The seven other tests that open a wallet and started with it
+were reported as running for over a minute too, tests that take
+seconds, and then passed; they have no limit of their own. The same
+test program had passed minutes earlier in the same run without the
+`regtest` feature. That is the picture of the wallet DLL taking over a
+minute to load the first time in a freshly built program, which this
+machine has shown before in other forms; that it was the loading and
+not the first call after it was not seen. Nothing of this step is in
+that test's way. The tests that wait with a limit now load the library
+first, outside what they time, and a loading that takes five seconds or
+more says so in the test's output. On commit `d28e3a5`, which has that
+change, the `regtest` level passed as Windows programs, all fifty-six
+tests of `veil_core`. No test stood at the start of the program this
+time, so the slow loading did not come back, and the run does not show
+whether the change would have carried the tests through it: a test that
+passes shows none of its output, so how long the loading took is not in
+the log either. With that, step 4.6 has passed the owner's run on both
+systems and on the phone. The owner said afterwards that obfs4 works on
+the phone, and about lyrebird's licence: it will be decided before a
+release, and the owner is to be reminded of it then. Whoever takes up
+step 6, the release, raises it first: `docs/concept.md`, "Open
+decisions", "The licence of the transport program".
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
@@ -731,7 +808,10 @@ See the build plan in `docs/concept.md`.
   status 116 a second or so after starting and passed when run again;
   `check.sh` now runs such a program's tests again one at a time to name
   the test, and what that run prints is the first thing to read if it
-  comes back.
+  comes back. Once, the tests of `veil_core` that open a wallet all
+  stood for over a minute at the start of a freshly built test program
+  and then went on; the one with a limit failed. The tests now load the
+  wallet library before they time anything and say when that took long.
   Each run of `veil.exe` takes 15 to 20 seconds there before it does
   anything, from loading over the WSL file share and being scanned. Tor connects
   from that machine without bridges, so the `bridges` level shows there
