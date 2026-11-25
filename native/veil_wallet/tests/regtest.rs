@@ -10,7 +10,7 @@ mod common;
 
 use std::path::Path;
 
-use common::{wallet_library, TempDir};
+use common::{wallet_library, RingDatabaseBefore, TempDir};
 use veil_test_guard::RegtestDaemon;
 use veil_wallet::{
     Amount, Direction, Error, Network, Node, SendAmount, Wallet, WalletLibrary,
@@ -74,6 +74,9 @@ fn receive_on_fresh_addresses_send_and_restore() {
         return;
     };
     let dir = TempDir::new("regtest");
+    // Sending is what the library's shared ring database is for, and this
+    // scenario sends: see `a_wallet_leaves_nothing_outside_its_folder`.
+    let ring_database = RingDatabaseBefore::look();
 
     // A funding wallet stands in for whoever pays the user.
     let mut funder = new_wallet(&lib, &dir.file("funder"), &daemon);
@@ -233,6 +236,8 @@ fn receive_on_fresh_addresses_send_and_restore() {
         let mut again = Wallet::open(&lib, &dir.file("alice"), PASSWORD, Network::Mainnet).unwrap();
         again.receive_address().unwrap().address
     });
+
+    ring_database.assert_untouched();
 }
 
 /// Issues addresses until no more are allowed and returns the last one.

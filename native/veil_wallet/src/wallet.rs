@@ -345,6 +345,11 @@ impl Wallet {
     /// another name. [`Wallet::was_rebuilt_from_keys`] then returns true:
     /// the funds are found again by the next synchronisation, which starts
     /// from the wallet's start height.
+    ///
+    /// Opening is where the library, left to itself, makes a "shared ring
+    /// database" outside the wallet's folder. Veil's build of it does not:
+    /// a wallet's files are those next to `path` and no others, however
+    /// the wallet was made or opened. The README says what that gives up.
     pub fn open(
         lib: &WalletLibrary,
         path: &Path,

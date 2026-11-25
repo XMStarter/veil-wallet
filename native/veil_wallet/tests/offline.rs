@@ -2,7 +2,9 @@
 
 mod common;
 
-use common::{wallet_library, TempDir};
+use std::process::{Command, Stdio};
+
+use common::{names_under, wallet_library, RingDatabaseBefore, TempDir};
 use veil_wallet::{
     Amount, Error, Network, Node, SeedKind, SeedPhrase, SendAmount, Wallet, WalletLibrary,
     MAX_UNUSED_ADDRESSES,
@@ -592,4 +594,186 @@ fn a_note_is_kept_with_the_wallet_and_can_be_cleared() {
     reopened.close().unwrap();
     let reopened = Wallet::open(&lib, &path, PASSWORD, Network::Mainnet).unwrap();
     assert_eq!(reopened.note("veil.test").unwrap(), "");
+}
+
+/// Tells a run of this test program that it is the process whose wallets
+/// `a_wallet_leaves_nothing_outside_its_folder` looks at afterwards, and
+/// in which folder to keep them.
+const TRACES_WALLETS: &str = "VEIL_TEST_TRACES_WALLETS";
+const NEW_PASSWORD: &str = "a new and longer password";
+
+/// What an open wallet is asked to do, short of anything that needs a
+/// node: addresses, a note, saving, a node that is not there, and a
+/// payment that cannot be built.
+fn use_a_wallet(wallet: &mut Wallet, socks_port: u16) {
+    let own = wallet.receive_address().unwrap().address;
+    wallet.new_receive_address().unwrap();
+    wallet.set_note("veil.test", "a note").unwrap();
+    wallet.save().unwrap();
+    let node = Node::Onion {
+        host: "2gzyxa5ihm7nsggfxnu52rck2vv4rvmdlkiu3zzui5du4xyclen53wid.onion".into(),
+        port: 18081,
+        socks_port,
+    };
+    wallet.connect(&node).unwrap();
+    match wallet.refresh() {
+        Err(Error::NodeUnreachable) => {}
+        other => panic!("nothing listens for this wallet, and yet: {other:?}"),
+    }
+    let one = SendAmount::Exact("1".parse::<Amount>().unwrap());
+    assert!(wallet.prepare_send(&own, one).is_err());
+    wallet.save().unwrap();
+}
+
+/// The body of the process that `a_wallet_leaves_nothing_outside_its_folder`
+/// starts: every way a wallet is made or opened, on both networks the
+/// library keeps apart on disk, and each wallet used. Run on its own it
+/// does nothing and passes.
+#[test]
+fn wallets_are_used_in_a_process_of_their_own() {
+    let Some(folder) = std::env::var_os(TRACES_WALLETS) else {
+        return;
+    };
+    let folder = std::path::PathBuf::from(folder);
+    let library = std::env::var_os("VEIL_WALLET_LIB").expect("the process is given the library");
+    let lib = WalletLibrary::load(library).expect("wallet library loads");
+    // A port of this machine that nothing listens on: taken and let go.
+    let socks_port = std::net::TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+
+    for (name, network) in [("main", Network::Mainnet), ("stage", Network::Stagenet)] {
+        let path = folder.join(name);
+
+        // Created.
+        let (mut wallet, phrase) = Wallet::create(&lib, &path, PASSWORD, network).unwrap();
+        use_a_wallet(&mut wallet, socks_port);
+        let legacy = wallet.legacy_seed_phrase().unwrap();
+        wallet.close().unwrap();
+
+        // Restored, from either kind of phrase.
+        for (suffix, phrase, height) in [("16", &phrase, 0), ("25", &legacy, 1_234_567)] {
+            let path = folder.join(format!("{name}-{suffix}"));
+            let mut restored =
+                Wallet::restore(&lib, &path, PASSWORD, network, phrase, height).unwrap();
+            use_a_wallet(&mut restored, socks_port);
+            restored.close().unwrap();
+        }
+
+        // Opened: refused for a wrong password first, which is as far as
+        // the library has to get to make a ring database of its own.
+        match Wallet::open(&lib, &path, "not the password", network) {
+            Err(Error::WrongPassword) => {}
+            other => panic!("a wrong password: {:?}", other.err()),
+        }
+        let mut wallet = Wallet::open(&lib, &path, PASSWORD, network).unwrap();
+        use_a_wallet(&mut wallet, socks_port);
+        wallet.change_password(NEW_PASSWORD).unwrap();
+        wallet.close().unwrap();
+
+        // Opened from its keys alone, the data file being damaged.
+        std::fs::write(&path, b"not a wallet's data").unwrap();
+        let mut wallet = Wallet::open(&lib, &path, NEW_PASSWORD, network).unwrap();
+        assert!(wallet.was_rebuilt_from_keys());
+        use_a_wallet(&mut wallet, socks_port);
+        wallet.close().unwrap();
+    }
+}
+
+/// Removing a wallet removes its folder, so whatever the library keeps
+/// anywhere else would stay behind and say that a Monero wallet was used
+/// on this machine. Left to itself the library keeps a "shared ring
+/// database" there: under the user's home on Linux, and on Windows in a
+/// folder that all users of the machine share.
+///
+/// On Linux the process that uses the wallets gets an empty folder for a
+/// home, so anything made there is seen. Windows gives a test no such
+/// handle: there the place itself is looked at before and after.
+#[test]
+fn a_wallet_leaves_nothing_outside_its_folder() {
+    let Some(_lib) = wallet_library() else { return };
+    let dir = TempDir::new("traces");
+    let [home, temporary, working, wallets] =
+        ["home", "temporary", "working", "wallets"].map(|name| {
+            let folder = dir.file(name);
+            std::fs::create_dir_all(&folder).unwrap();
+            folder
+        });
+    let library = std::env::var_os("VEIL_WALLET_LIB").expect("checked by wallet_library");
+    let library = std::path::absolute(library).expect("the library's path");
+    let ring_database = RingDatabaseBefore::look();
+
+    let user = Command::new(std::env::current_exe().expect("the test program has a path"))
+        .args([
+            "--exact",
+            "wallets_are_used_in_a_process_of_their_own",
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env(TRACES_WALLETS, &wallets)
+        .env("VEIL_WALLET_LIB", &library)
+        // Where a program that knows no better puts things: the home, the
+        // folder for temporary files, and the folder it was started in.
+        .env("HOME", &home)
+        .env("TMPDIR", &temporary)
+        .env("TMP", &temporary)
+        .env("TEMP", &temporary)
+        .env_remove("XDG_DATA_HOME")
+        .env_remove("XDG_CONFIG_HOME")
+        .env_remove("XDG_CACHE_HOME")
+        .env_remove("XDG_STATE_HOME")
+        .current_dir(&working)
+        .stdin(Stdio::null())
+        .output()
+        .expect("the process that uses the wallets starts");
+    assert!(
+        user.status.success(),
+        "the process that uses the wallets failed: {}\n{}\n{}",
+        user.status,
+        String::from_utf8_lossy(&user.stdout),
+        String::from_utf8_lossy(&user.stderr)
+    );
+
+    // The wallets are where they were asked to be, which also says that
+    // the process did its work. Besides its two files a wallet has Veil's
+    // mark that it is open; on any network but the main one the library
+    // adds the wallet's first address as text; the damaged file is set
+    // aside, and the library may keep a copy of its own of it
+    // (`.unportable`).
+    let mut expected = Vec::new();
+    for (name, address_file) in [("main", false), ("stage", true)] {
+        for wallet in [name.to_string(), format!("{name}-16"), format!("{name}-25")] {
+            expected.extend([
+                wallet.clone(),
+                format!("{wallet}.keys"),
+                format!("{wallet}.lock"),
+            ]);
+            if address_file {
+                expected.push(format!("{wallet}.address.txt"));
+            }
+        }
+        expected.push(format!("{name}.unreadable-1"));
+    }
+    expected.sort();
+    let found: Vec<String> = names_under(&wallets)
+        .into_iter()
+        .filter(|name| !name.ends_with(".unportable"))
+        .collect();
+    assert_eq!(found, expected);
+
+    // And nothing is anywhere else.
+    for (what, folder) in [
+        ("its home", &home),
+        ("the folder for temporary files", &temporary),
+        ("the folder it was started in", &working),
+    ] {
+        assert_eq!(
+            names_under(folder),
+            Vec::<String>::new(),
+            "using a wallet left something in {what}"
+        );
+    }
+    ring_database.assert_untouched();
 }

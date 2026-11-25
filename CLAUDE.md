@@ -91,7 +91,8 @@ that cannot lose the user's funds.
   - `windows-app.sh`: for the owner's machine, inside WSL. Takes the app
     hosted CI built for Windows (`veil-windows.zip`, downloaded from the
     run's Artifacts), puts the wallet library next to it on a Windows
-    disk, and starts it. It starts Tor, so in a cloud session only its
+    disk, and starts it. It refuses a wallet library built from an older
+    set of patches. It starts Tor, so in a cloud session only its
     refusals and `--no-start` on made-up folders (`VEIL_WINDOWS_HOME`) may
     be tried.
 - `dart/veil_bridge`: the Dart side of the core. It calls the C interface
@@ -427,7 +428,33 @@ with its new end included: a send confirmed with the network gone is
 reported as not sent for Tor's reason, and the wallet holds what it held
 once the network is back. The log of the Linux programs of that run was
 not sent; `accept.sh` runs them first and stops when they fail, so they
-passed, which is a conclusion and not something read in a log.
+passed, which is a conclusion and not something read in a log. After that, the wallet library's "shared
+ring database", by the owner's decision switched off. The library made it
+when a wallet was opened, before the password was checked, and never
+when one was created or restored: `~/.shared-ringdb` on Linux, and on
+Windows, by the library's source, in the folder all users share
+(`C:\ProgramData\.shared-ringdb`). It stayed when the wallet was
+removed, and a database cut short ended the process when any wallet was
+opened; both were seen in a cloud session with a temporary home. The
+wallet API at the pinned commit has no call to move it or leave it out,
+so a patch does it (`monero/0005`), and the owner has to rebuild the
+library for Linux and for Windows and allow the new DLL in the
+antivirus. What is given up: a transaction built twice for the same coin
+gets new decoys the second time, which can show the node which coin is
+spent (`docs/concept.md`, "Known limitations"). The offline test
+`a_wallet_leaves_nothing_outside_its_folder` makes, restores, opens and
+uses wallets in a process whose home, temporary folder and working
+folder are empty folders and finds them empty afterwards; it fails on a
+library without the patch. It passes in a cloud session on Linux. Not run
+anywhere yet: the same test as a Windows program, where the shared
+folder cannot be moved out of the way and is looked at before and after
+instead, and the same look around the scenario on a private chain. Where
+an older library has left the folder (`~/.shared-ringdb` on the owner's
+machine, and likely the one on Windows), the tests can only see that it
+was not written to; with the folder deleted first they see that it does
+not come back. Seen on the way and left alone: on stagenet and testnet
+the library writes the wallet's first address as text next to the wallet
+(`wallet.address.txt`), inside the folder that removal deletes.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

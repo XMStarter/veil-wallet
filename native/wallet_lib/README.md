@@ -47,15 +47,16 @@ to carry their licence texts as well as monero_c's and Monero's.
 ## Veil's patches
 
 Each one is a few lines. None changes how keys, addresses, or transactions
-are computed.
+are computed; `monero/0005` changes which decoys a transaction gets when it
+is built a second time.
 
 | Patch | What it does | Why |
 |---|---|---|
 | `monero/0001` and `monero_c/0001` | Expose the wallet's existing "allow mismatched daemon version" switch through the API | A private test chain activates every protocol version from its first block, which a wallet otherwise rejects. Tests need this to send and receive without real funds. The app never turns it on: the call exists only behind the `regtest` feature of `veil_wallet`. |
 | `monero/0002` | A direct call to refresh downloads blocks even when the library's background refresh thread was never started | Without it a direct refresh reports success and downloads nothing. Veil drives the wallet from one thread and does not use the background thread. |
 | `monero/0003` and `monero_c/0002` | A switch that keeps the library's background refresh thread idle | Building or sending a transaction switches that thread on, and it then synchronises on a timer through whichever node the wallet points at. While Veil sends through its broadcast node, that would be the broadcast node. `veil_wallet` turns the thread off for every wallet it opens. |
-
 | `monero/0004` | On Windows, the library reads the paths it is given as UTF-8 | Without it, Boost.Filesystem reads them in the system's legacy code page. A wallet in a folder whose name is not ASCII was then not recognised as existing, so a second one could have been created over it. Programs that call the library's `Wallet::init` get the same setting from there, together with a log file, which Veil does not want. |
+| `monero/0005` | Opening a wallet no longer sets up the library's "shared ring database" | The library made it outside the wallet's folder: under the user's home on Linux, and on Windows in a folder all users of the machine share. It stayed when the wallet was removed, and a damaged one ended the process when any wallet was opened. The wallet API has no call to put it elsewhere or to leave it out. [`veil_wallet`'s README](../veil_wallet/README.md) says what the database is for and what is given up without it. |
 
 `build.sh` notices when the patches here have changed since a work
 directory was built: it puts the library's sources back, applies the current

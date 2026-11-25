@@ -145,7 +145,9 @@ shell:
 
 It takes the newest `veil-windows*.zip` from the Windows Downloads folder,
 unpacks it into `Veil-app` in the Windows user's home, puts the wallet
-library from `./check.sh --windows setup` next to it, and starts it. The
+library from `./check.sh --windows setup` next to it, and starts it. A
+library built before the patches in `native/wallet_lib/patches` last
+changed is refused, with the command that rebuilds it. The
 app runs from a Windows disk, not over the share to WSL, as an installed
 app would. Its wallet is its own, in `%APPDATA%\Veil`; the app started
 inside WSL keeps another.
