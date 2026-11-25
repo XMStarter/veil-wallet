@@ -409,7 +409,7 @@ fn a_transaction_would_go_to_the_first_node_that_answers() {
 }
 
 #[test]
-fn tor_dropping_mid_sync_is_reported_as_tor_and_not_as_the_node() {
+fn a_network_lost_mid_sync_is_tors_fault_from_the_next_connection_on() {
     let Some(lib) = wallet_library() else { return };
     let dir = TempDir::new("tor-drops");
     let stand_in = StandIn::start().unwrap();
@@ -417,26 +417,65 @@ fn tor_dropping_mid_sync_is_reported_as_tor_and_not_as_the_node() {
     let node = FakeNode::start(core.restore_height() + BLOCKS_AHEAD);
     stand_in.route(SYNC_HOST, SYNC_PORT, node.port());
 
-    stand_in.cut_once(SYNC_HOST, SYNC_PORT, MID_BLOCKS, AfterCut::TorNotReady);
+    // The connection breaks while blocks arrive, and the network is gone
+    // from under Tor. A connection that breaks does not say why, and Tor
+    // learns of the loss only from a connection it is asked for. The
+    // wallet library does not ask for one before it gives up, so this
+    // call still ends as the node's failure.
+    stand_in.cut_once(SYNC_HOST, SYNC_PORT, MID_BLOCKS, AfterCut::NetworkLost);
     let outcome = core.sync();
     assert!(
-        matches!(outcome, Err(CoreError::TorNotReady { .. })),
+        matches!(
+            outcome,
+            Err(CoreError::Wallet(Error::NodeUnreachable) | CoreError::TorLost { .. })
+        ),
         "{outcome:?}"
     );
     assert_eq!(stand_in.cuts(), 1, "asked: {:?}", node.asked());
 
-    // Until Tor is back, nothing more is asked of any node.
+    // The next call asks for a connection. From then on Tor says that it
+    // has lost its network, and every call ends with that, not with a
+    // complaint about the node. The node goes on being asked for, through
+    // Tor: nothing else would show that the network is back.
     stand_in.clear_requests();
-    assert!(matches!(core.sync(), Err(CoreError::TorNotReady { .. })));
-    assert!(matches!(
-        core.node_height(),
-        Err(CoreError::TorNotReady { .. })
-    ));
-    assert!(stand_in.requests().is_empty(), "{:?}", stand_in.requests());
+    let outcome = core.sync();
+    assert!(
+        matches!(outcome, Err(CoreError::TorLost { .. })),
+        "{outcome:?}"
+    );
+    assert_eq!(core.tor_status().state, State::Lost);
+    assert!(matches!(core.node_height(), Err(CoreError::TorLost { .. })));
+    let requests = stand_in.requests();
+    assert!(!requests.is_empty());
+    assert!(
+        requests
+            .iter()
+            .all(|r| r.purpose == Purpose::Sync && r.host == SYNC_HOST),
+        "{requests:?}"
+    );
 
-    // When it is, the same wallet goes on to ask the node again.
-    stand_in.set_ready(true);
+    // A transaction that no node took was not sent because of Tor. One
+    // whose outcome is unknown stays that: it may have gone out before
+    // the network did.
+    assert!(matches!(
+        core.commit_failure(Error::NoNodeToSendThrough { tried: 2 }),
+        CoreError::TorLost { .. }
+    ));
+    assert!(matches!(
+        core.commit_failure(Error::SendOutcomeUnknown),
+        CoreError::Wallet(Error::SendOutcomeUnknown)
+    ));
+
+    // The network comes back. Nobody is told; the next call gets through,
+    // and with it Tor is ready again.
+    stand_in.set_network(true);
+    assert_eq!(core.tor_status().state, State::Lost);
     assert!(core.node_height().is_ok());
+    assert_eq!(core.tor_status().state, State::Ready);
+    assert!(matches!(
+        core.commit_failure(Error::NoNodeToSendThrough { tried: 2 }),
+        CoreError::Wallet(Error::NoNodeToSendThrough { tried: 2 })
+    ));
 }
 
 #[test]
@@ -484,7 +523,7 @@ fn a_node_that_drops_mid_sync_is_left_for_the_next_one() {
 }
 
 #[test]
-fn no_other_node_is_tried_once_tor_has_dropped() {
+fn every_node_is_asked_when_the_network_is_lost_and_tor_is_what_is_named() {
     let Some(lib) = wallet_library() else { return };
     let dir = TempDir::new("tor-drops-any");
     let stand_in = StandIn::start().unwrap();
@@ -494,24 +533,46 @@ fn no_other_node_is_tried_once_tor_has_dropped() {
     let second = FakeNode::start(height);
     stand_in.route(SYNC_HOST, SYNC_PORT, first.port());
     stand_in.route(BROADCAST_HOST, BROADCAST_PORT, second.port());
+    let candidates = [
+        OnionNode::new(SYNC_HOST, SYNC_PORT).unwrap(),
+        OnionNode::new(BROADCAST_HOST, BROADCAST_PORT).unwrap(),
+    ];
 
-    stand_in.cut_once(SYNC_HOST, SYNC_PORT, MID_BLOCKS, AfterCut::TorNotReady);
-    let outcome = core.sync_with_any(
-        &[
-            OnionNode::new(SYNC_HOST, SYNC_PORT).unwrap(),
-            OnionNode::new(BROADCAST_HOST, BROADCAST_PORT).unwrap(),
-        ],
-        &mut |_| {},
-    );
+    // The network goes while the first node sends blocks. The second is
+    // asked for all the same, through Tor, and nothing reaches it. What
+    // comes out is that Tor has lost its network, not that two nodes did
+    // not answer.
+    stand_in.cut_once(SYNC_HOST, SYNC_PORT, MID_BLOCKS, AfterCut::NetworkLost);
+    let outcome = core.sync_with_any(&candidates, &mut |_| {});
     assert!(
-        matches!(outcome, Err(CoreError::TorNotReady { .. })),
+        matches!(outcome, Err(CoreError::TorLost { .. })),
         "{outcome:?}"
     );
     assert!(second.asked().is_empty(), "{:?}", second.asked());
     assert!(stand_in
         .requests()
         .iter()
-        .all(|request| request.host == SYNC_HOST));
+        .any(|request| request.host == BROADCAST_HOST));
+    assert!(stand_in
+        .requests()
+        .iter()
+        .all(|request| request.purpose == Purpose::Sync));
+
+    // The network is back, and the first node is not: asking for it says
+    // nothing about the network, so Tor still counts as lost when the
+    // second node is asked. That one answers, and that ends the loss: a
+    // node that is down cannot keep the wallet from finding out. (The
+    // second node is a fake without blocks, so in the end no node has
+    // carried the synchronisation, and that is what is said now.)
+    stand_in.set_network(true);
+    stand_in.unroute(SYNC_HOST, SYNC_PORT);
+    let outcome = core.sync_with_any(&candidates, &mut |_| {});
+    assert!(
+        matches!(outcome, Err(CoreError::NoNodeAnswered { tried: 2, .. })),
+        "{outcome:?}"
+    );
+    assert!(asked_for_blocks(&second), "{:?}", second.asked());
+    assert_eq!(core.tor_status().state, State::Ready);
 }
 
 /// How long the slow fake node takes over a request for blocks: long

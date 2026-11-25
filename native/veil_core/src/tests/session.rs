@@ -224,7 +224,7 @@ fn a_synchronisation_that_fails_says_why_and_the_session_goes_on() {
     assert!(state.balance.total.is_zero());
     assert_eq!(state.receive_address, address);
 
-    // Tor drops. The state shows it without being asked, and a
+    // Tor is not ready. The state shows it without being asked, and a
     // synchronisation fails for that reason, with no node tried.
     stand_in.set_ready(false);
     let state = wait(&session, |state| state.tor.state == State::Bootstrapping);
@@ -237,6 +237,26 @@ fn a_synchronisation_that_fails_says_why_and_the_session_goes_on() {
     };
     assert_eq!(problem.kind, ProblemKind::TorNotReady, "{problem:?}");
     assert!(stand_in.requests().is_empty());
+    stand_in.set_ready(true);
+    wait(&session, |state| state.tor.state == State::Ready);
+
+    // The network goes from under a Tor that is ready. Nothing shows it
+    // until a connection is asked for. Then the synchronisation fails for
+    // that reason, not for the nodes, which were asked for through Tor;
+    // and that it failed and what Tor says now are one change.
+    stand_in.set_network(false);
+    assert_eq!(session.state().tor.state, State::Ready);
+    session.sync();
+    let state = wait(&session, |state| {
+        state.syncs_ended == 3 || state.tor.state == State::Lost
+    });
+    assert_eq!(state.syncs_ended, 3, "{state:#?}");
+    assert_eq!(state.tor.state, State::Lost, "{state:#?}");
+    let SyncState::Failed(problem) = &state.sync else {
+        unreachable!()
+    };
+    assert_eq!(problem.kind, ProblemKind::TorLost, "{problem:?}");
+    assert!(!stand_in.requests().is_empty());
 
     // The session is still there for everything else.
     session.new_address();
@@ -244,6 +264,45 @@ fn a_synchronisation_that_fails_says_why_and_the_session_goes_on() {
         state.receive_address.as_ref().is_some_and(|a| a.index == 2)
     });
     assert_eq!(state.last_problem, None);
+    assert_eq!(session.close().phase, Phase::Closed);
+}
+
+/// Nobody has to press anything for a wallet to find its network again:
+/// while Tor says that it has lost it, the session goes on synchronising
+/// on its timer, and the first connection that gets through makes Tor
+/// ready again.
+#[test]
+fn it_goes_on_trying_while_the_network_is_lost_and_sees_it_come_back() {
+    let dir = TempDir::new("session-lost");
+    let Some(mut config) = config(&dir, "w") else {
+        return;
+    };
+    config.sync_every = Some(Duration::from_millis(300));
+    let stand_in = StandIn::start().unwrap();
+    let node = FakeNode::start(4_000_000);
+    stand_in.route(SYNC_HOST, SYNC_PORT, node.port());
+    stand_in.set_network(false);
+    let session = start(config, &stand_in, WalletSource::Create);
+    opened(&session);
+
+    let state = wait(&session, |state| state.syncs_ended >= 1);
+    assert_eq!(state.tor.state, State::Lost, "{state:#?}");
+    let SyncState::Failed(problem) = &state.sync else {
+        panic!("{state:#?}")
+    };
+    assert_eq!(problem.kind, ProblemKind::TorLost, "{problem:?}");
+    assert!(node.asked().is_empty(), "{:?}", node.asked());
+
+    // It tries again by itself, with the same outcome.
+    let tried = state.syncs_ended;
+    let state = wait(&session, |state| state.syncs_ended > tried);
+    assert_eq!(state.tor.state, State::Lost, "{state:#?}");
+
+    // The network comes back, and nobody tells the session.
+    stand_in.set_network(true);
+    let state = wait(&session, |state| state.tor.state == State::Ready);
+    assert_eq!(state.tor.message, None);
+    assert!(!node.asked().is_empty());
     assert_eq!(session.close().phase, Phase::Closed);
 }
 
@@ -706,6 +765,26 @@ fn a_wallet_is_not_made_when_tor_does_not_start() {
     });
     let state = opened(&session);
     assert_eq!(failed_with(&state.phase), Some(ProblemKind::WalletExists));
+}
+
+#[test]
+fn the_node_that_worked_is_the_one_to_start_with() {
+    let node = |host: &str| OnionNode::new(host, 18089).unwrap();
+    let (a, b, c) = (node(SYNC_HOST), node(BROADCAST_HOST), node(OWN_HOST));
+
+    // Those before it go to the end, in the order they were in.
+    let mut nodes = vec![a.clone(), b.clone(), c.clone()];
+    crate::session::start_with(&mut nodes, &c);
+    assert_eq!(nodes, [c.clone(), a.clone(), b.clone()]);
+    crate::session::start_with(&mut nodes, &a);
+    assert_eq!(nodes, [a.clone(), b.clone(), c.clone()]);
+    // The first stays first, and a node that is not on the list changes
+    // nothing.
+    crate::session::start_with(&mut nodes, &a);
+    assert_eq!(nodes, [a.clone(), b.clone(), c.clone()]);
+    let mut two = vec![a.clone(), b.clone()];
+    crate::session::start_with(&mut two, &c);
+    assert_eq!(two, [a, b]);
 }
 
 #[test]
@@ -1477,5 +1556,71 @@ mod on_a_private_chain {
         assert_eq!(state.balance.total, in_the_end);
         assert_eq!(outgoing(&state), 3);
         assert_eq!(state.sync, SyncState::NotYet);
+
+        // --- A first node that is down is not asked every time ---------------
+        // The first node is gone. The synchronisation finds that out, goes
+        // on to the second, and finishes with it.
+        stand_in.unroute(SYNC_HOST, SYNC_PORT);
+        let state = synchronised(&session);
+        assert_eq!(
+            state.node,
+            Some(OnionNode::new(BROADCAST_HOST, BROADCAST_PORT).unwrap())
+        );
+        // The next one starts with the node that worked, and does not
+        // spend its first while on the one that did not.
+        stand_in.clear_requests();
+        let state = synchronised(&session);
+        assert!(matches!(state.sync, SyncState::Done { .. }), "{state:#?}");
+        let requests = stand_in.requests();
+        assert!(!requests.is_empty());
+        assert!(
+            requests
+                .iter()
+                .all(|request| request.host == BROADCAST_HOST),
+            "{requests:?}"
+        );
+
+        // --- The network goes away, and comes back ---------------------------
+        // A transaction is under review when the network goes from under
+        // Tor. Confirmed, it is handed to no node: each is asked whether
+        // it is there, through Tor, and none can be reached. It is reported
+        // as not sent, for Tor's reason and not the nodes', and that Tor
+        // has lost its network is said in the same change. The amount is
+        // one the wallet still has after its three payments.
+        let little: Amount = "0.1".parse().unwrap();
+        session.prepare_send(&payee_address, SendAmount::Exact(little));
+        let state = wait(&session, |state| {
+            matches!(state.send, SendState::Review { .. } | SendState::Failed(_))
+        });
+        assert!(
+            matches!(state.send, SendState::Review { .. }),
+            "the transaction was not built: {:?}",
+            state.send
+        );
+        stand_in.set_network(false);
+        session.confirm_send();
+        let state = wait(&session, |state| {
+            !matches!(state.send, SendState::Review { .. } | SendState::Sending)
+        });
+        let SendState::Failed(problem) = &state.send else {
+            panic!(
+                "with no network the send was not a failure: {:?}",
+                state.send
+            );
+        };
+        assert_eq!(problem.kind, ProblemKind::TorLost, "{problem:?}");
+        assert_eq!(state.tor.state, State::Lost, "{state:#?}");
+        assert_eq!(outgoing(&state), 3);
+        session.clear_send();
+
+        // The network is back. Nobody tells the wallet: the next
+        // synchronisation gets through, Tor is ready again with it, and
+        // the wallet holds what it held, nothing having been paid.
+        stand_in.set_network(true);
+        let state = synchronised(&session);
+        assert_eq!(state.tor.state, State::Ready, "{state:#?}");
+        assert_eq!(state.balance.total, in_the_end);
+        assert_eq!(outgoing(&state), 3);
+        assert_eq!(session.close().phase, Phase::Closed);
     }
 }

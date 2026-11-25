@@ -43,7 +43,8 @@ if, at build time, Arti cannot run bridges on Android.
 - **Onion nodes only.** The app ships with a list of vetted `.onion` Monero
   nodes and picks one at random on each start. If that node stops answering
   in the middle of a synchronisation, another one from the list continues
-  it. The user can set their own node, which is the most private option.
+  it, and is the one asked first from then on: a node that is down is not
+  tried again every minute. The user can set their own node, which is the most private option.
 - **Local scanning.** Blocks are downloaded and scanned on the device. The
   view key never leaves it. Veil does not use light-wallet servers, because
   they require the view key.

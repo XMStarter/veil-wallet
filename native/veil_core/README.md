@@ -10,7 +10,9 @@ is the only way the rest of the app reaches a wallet.
   wallet is pointed at that service's loopback SOCKS listeners and at no
   other address. While Tor is not ready, every call that needs a node fails
   with `TorNotReady` before the wallet is asked to do anything. If Tor stops,
-  the listeners are gone and the wallet has nothing else to try.
+  the listeners are gone and the wallet has nothing else to try. If Tor
+  loses its network, calls fail with `TorLost` and are made through Tor
+  all the same: that is how the return of the network is found.
 - **Onion nodes only.** A node is an `OnionNode`: a `.onion` name and a
   port. Nothing else can be named.
 - **Sync and spend apart.** The wallet synchronises through the `Sync`
@@ -42,7 +44,7 @@ session.clear_send();              // once the user has seen how it went
 
 Commands return at once and their outcome appears in the state, which
 carries a revision number that goes up with every change. Problems are
-given as a kind (`WrongPassword`, `TorNotReady`, `NoNode`,
+given as a kind (`WrongPassword`, `TorNotReady`, `TorLost`, `NoNode`,
 `SendOutcomeUnknown`, and so on) for the interface to put into its own
 words, with the English text as a detail.
 
@@ -73,6 +75,11 @@ What the session holds to, whatever the interface does:
 - **Changes that belong together are one change.** The end of a
   synchronisation, the balance and history after it, and what it means
   for a send; the outcome of a send and the balance it left.
+- **The node that worked is asked first.** A session tries its nodes in
+  order for every synchronisation. Once one has carried a
+  synchronisation to its end, the list is turned so that it comes first;
+  the nodes before it, which did not answer, are tried again only when
+  it stops answering too.
 - **One wallet, one session.** A wallet that is open is marked as such
   by a lock on a file next to it (`veil_wallet`), and a second session on
   it, a second window of the app for one, fails with `WalletInUse` before
@@ -157,12 +164,25 @@ them again after a change that is meant.
 - **In the middle of a synchronisation.** While it downloads blocks, the
   wallet library asks again by itself three times. If the node stays away,
   or the connection is lost at another point, `sync` fails with the wallet's
-  `NodeUnreachable`; if Tor is not ready, with `TorNotReady`. (The Tor
-  component reports itself ready from the end of its bootstrap on and
-  does not yet notice a network that has gone away afterwards, so in the
-  app a lost network shows as the node's failure; only the stand-in in
-  the tests can drop out of being ready.) The balance stays the one from the last
-  synchronisation that finished, and the next one continues the scan.
+  `NodeUnreachable`; if Tor is not ready, with `TorNotReady`. The balance
+  stays the one from the last synchronisation that finished, and the next
+  one continues the scan.
+- **When the network under Tor goes.** Tor says so (`State::Lost`) once a
+  connection it is asked for cannot get to the first relay; see
+  `veil_tor`'s README for how that is read and what it cannot tell.
+  From then on a call that fails for want of a node fails with `TorLost`,
+  and the session reports the problem as Tor's (`tor_lost`), not as "no
+  node answered". Nothing is skipped for it: `sync_with_any` asks every
+  candidate, a send asks every node of its route, and a session goes on
+  synchronising on its timer, because the only sign of the network being
+  back is a connection that gets through. The first that does makes Tor
+  ready again. A node that is down cannot keep that from happening: its
+  failure says nothing about the network, and the next candidate is
+  asked. The call during which the network went can still end as the
+  node's failure, since a connection that breaks does not say why; the
+  next one names Tor. A send that no node took is reported as not sent,
+  with Tor as the reason; a send whose outcome is unknown stays unknown
+  whatever Tor says.
 - **With other nodes to try.** `sync_with_any` takes the candidates in the
   caller's order and moves to the next when a node cannot be reached, is
   not usable, or stops answering part way. It stops at once when Tor is no
@@ -222,14 +242,14 @@ node block until the node has answered.
 | What | Needs | Run with |
 |---|---|---|
 | Node names; Tor not ready; the wallet asks for its node by name through the sync listener only; no listeners, no connection; a web server is not a node | The wallet library for all but the first. No network: Tor is replaced by `veil_tor`'s stand-in. | `../check.sh offline` |
-| A connection cut in the middle of a synchronisation, with the node still there, with the node gone, and with Tor gone: what is reported, that the next node is tried, and that the wallet is unharmed. The node is a fake that knows its version and height and has no blocks | The wallet library. No network. | `../check.sh offline` |
+| A connection cut in the middle of a synchronisation, with the node still there, with the node gone, and with the network gone from under Tor: what is reported, that the next node is tried, and that the wallet is unharmed. With the network gone: Tor is named from the next connection on, every node is still asked, a node that is down does not hide the network's return, and a session finds the return by itself. The node is a fake that knows its version and height and has no blocks | The wallet library. No network. | `../check.sh offline` |
 | The session: a new wallet, the same wallet opened again, a wrong password, a restore, a synchronisation that fails, the timer, the cap on addresses, a send that cannot be built, a damaged data file | The wallet library. No network. | `../check.sh offline` |
 | A synchronisation told to stop: no further node is asked, and it continues where it was. In the session: a command and closing do not wait for a synchronisation, which goes on afterwards; a send asked for meanwhile waits for its end. The nodes are fakes that take their time over a request for blocks | The wallet library. No network. | `../check.sh offline` |
 | The session: the password checked and changed, and the wallet opening with the new one only; the user's own nodes used at once, kept out of plain sight, used again by the next session, and taken back; a send left unknown by an earlier session taken up again | The wallet library. No network. | `../check.sh offline` |
 | Finding the programs bridges need among those installed, and bridges checked on their way in | No network | `../check.sh offline` |
 | The C interface: requests read or refused, the state against the fixtures, null handles, a session driven through it from start to close | The wallet library for the last. No network. | `../check.sh offline` |
 | A wallet behind the stand-in on a private chain: synchronises through one listener, sends through the other, and stays silent in between | The wallet library and a Monero daemon | `../check.sh regtest` |
-| The session on a private chain: receives, is refused a send it cannot afford, reviews a send and cancels it, sends, loses the answer to a send, builds no other meanwhile and finds it before any block, fails to reach the node with a send, has that settled and sends again, and shows the same in a new session | The wallet library and a Monero daemon | `../check.sh regtest` |
+| The session on a private chain: receives, is refused a send it cannot afford, reviews a send and cancels it, sends, loses the answer to a send, builds no other meanwhile and finds it before any block, fails to reach the node with a send, has that settled and sends again, shows the same in a new session, and with the network gone from under Tor reports a confirmed send as not sent for Tor's reason and pays nothing | The wallet library and a Monero daemon | `../check.sh regtest` |
 | The session on a long private chain over a slowed line: the scan is saved on the way, and the copy taken then opens with part of the chain behind it; the recovery phrase is handed out in the middle; the wallet is closed in the middle and a later session scans the rest; the payment is there each time | The wallet library and a Monero daemon | `../check.sh regtest` |
 | On a private chain: a download cut once is retried; a node that disappears is reported and another node finishes; a send whose answer is lost is reported as unknown and turns up in the history, paid once | The wallet library and a Monero daemon | `../check.sh regtest` |
 | A new wallet synchronises with a public onion node over the real Tor network | The wallet library and the Tor network | `../check.sh tor` |

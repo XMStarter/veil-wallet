@@ -88,6 +88,18 @@ void main() {
     expect(state.lastProblem, isNull);
   });
 
+  test('a wallet whose Tor has lost its network says so', () {
+    final state = fixture('state-lost.json');
+    expect(state.phase, Phase.ready);
+    expect(state.tor.state, TorState.lost);
+    expect(state.tor.message, isNotEmpty);
+    expect(state.sync.phase, SyncPhase.failed);
+    expect(state.sync.problem!.kind, ProblemKind.torLost);
+    expect(state.send.phase, SendPhase.failed);
+    expect(state.send.problem!.kind, ProblemKind.torLost);
+    expect(state.balanceTotal, '2.00');
+  });
+
   test('a name this side does not know is an error', () {
     Map<String, dynamic> busy() => jsonDecode(
       File('../../native/veil_core/tests/fixtures/state-busy.json')

@@ -7,6 +7,7 @@ String torWords(AppLocalizations text, TorStatus tor) => switch (tor.state) {
   TorState.ready => text.torReady,
   TorState.bootstrapping => text.torConnecting(tor.percent),
   TorState.failed => text.torFailed,
+  TorState.lost => text.torLost,
 };
 
 /// How the wallet stands against the chain, in words.

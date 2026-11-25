@@ -212,8 +212,9 @@ fn commands_are_read_or_refused_with_a_reason() {
     }
 }
 
-/// A state with something in every field, and one where things went wrong.
-fn sample_states() -> [(&'static str, SessionState); 2] {
+/// A state with something in every field, one where things went wrong,
+/// and one of an open wallet whose Tor has lost its network.
+fn sample_states() -> [(&'static str, SessionState); 3] {
     let problem = |kind, detail: &str| Problem {
         kind,
         detail: detail.to_owned(),
@@ -318,7 +319,43 @@ fn sample_states() -> [(&'static str, SessionState); 2] {
         )),
         last_problem: None,
     };
-    [("state-busy.json", busy), ("state-troubled.json", troubled)]
+    let lost = SessionState {
+        revision: 19,
+        phase: Phase::Ready,
+        tor: Status {
+            state: State::Lost,
+            percent: 100,
+            message: Some("error connecting to Tor".to_owned()),
+        },
+        node: Some(OnionNode::new(SYNC_HOST, 38089).unwrap()),
+        own_nodes: Vec::new(),
+        sync: SyncState::Failed(problem(
+            ProblemKind::TorLost,
+            "Tor cannot reach its network: error connecting to Tor",
+        )),
+        syncs_ended: 5,
+        balance: Balance {
+            total: amount("2"),
+            unlocked: amount("2"),
+        },
+        receive_address: Some(ReceiveAddress {
+            index: 1,
+            address: ADDRESS.to_owned(),
+        }),
+        history: Vec::new(),
+        send: SendState::Failed(problem(
+            ProblemKind::TorLost,
+            "Tor cannot reach its network: error connecting to Tor",
+        )),
+        rebuilt_from_keys: false,
+        not_saved: None,
+        last_problem: None,
+    };
+    [
+        ("state-busy.json", busy),
+        ("state-troubled.json", troubled),
+        ("state-lost.json", lost),
+    ]
 }
 
 /// The files in `tests/fixtures` are the state as it crosses the

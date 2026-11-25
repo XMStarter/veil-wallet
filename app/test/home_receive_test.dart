@@ -13,6 +13,53 @@ import 'support.dart';
 void main() {
   setUpAll(loadFonts);
 
+  testWidgets(
+    'home says that Tor has lost its connection, and when it is back',
+    (tester) async {
+      final backend = await openWallet(tester, 'en');
+      backend.tor(TorState.ready);
+      backend.report(sync: const SyncStatus(SyncPhase.done));
+      await tester.pumpAndSettle();
+      expect(find.text('Tor is connected'), findsOneWidget);
+
+      // The device loses its network: the core says so with the
+      // synchronisation that found it out.
+      const lost = Problem(
+        ProblemKind.torLost,
+        'Tor cannot reach its network: error connecting to Tor',
+      );
+      backend.report(
+        tor: const TorStatus(TorState.lost, 100, 'error connecting to Tor'),
+        sync: const SyncStatus(SyncPhase.failed, problem: lost),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Tor has lost its connection'), findsOneWidget);
+      expect(find.text('Tor is connected'), findsNothing);
+      // Not the nodes' fault, and said so; and nothing for the user to
+      // press, because the wallet goes on trying.
+      expect(
+        find.text(
+          'Could not synchronise. Tor cannot reach its network. Check the '
+          'internet connection of this device. The wallet tries again by '
+          'itself.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.textContaining('No node answered'), findsNothing);
+
+      // The wallet is still there to look at, and to receive on.
+      expect(enabled(tester, 'Receive'), isTrue);
+
+      backend.report(
+        tor: const TorStatus(TorState.ready, 100, null),
+        sync: const SyncStatus(SyncPhase.done),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Tor is connected'), findsOneWidget);
+      expect(find.text('Synchronised'), findsOneWidget);
+    },
+  );
+
   testWidgets('home says in words what Tor and the synchronisation do', (
     tester,
   ) async {

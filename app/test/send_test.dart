@@ -271,6 +271,39 @@ void main() {
     expect(find.textContaining('the node refused it'), findsNothing);
   });
 
+  testWidgets('a send that fails because Tor lost its connection says so', (
+    tester,
+  ) async {
+    final backend = await openSend(tester, 'en');
+    await type(tester, 'Address to pay to', payee);
+    await type(tester, 'Amount, XMR', '1.5');
+    await press(tester, 'Continue');
+    // The device has lost its network by the time Send is pressed: no
+    // node can be asked, and the core says that it was Tor.
+    backend.report(
+      tor: const TorStatus(TorState.lost, 100, 'error connecting to Tor'),
+      send: const SendStatus(
+        SendPhase.failed,
+        problem: Problem(
+          ProblemKind.torLost,
+          'Tor cannot reach its network: error connecting to Tor',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('SEND'), findsOneWidget);
+    expect(
+      find.text(
+        'Tor cannot reach its network. Check the internet connection of '
+        'this device. Nothing was sent. You can try again.',
+      ),
+      findsOneWidget,
+    );
+    // The form is as it was filled in, to be sent again later.
+    expect(fieldText(tester, 'Address to pay to'), payee);
+    expect(enabled(tester, 'Continue'), isTrue);
+  });
+
   testWidgets('preparing and sending show progress, and wait in words', (
     tester,
   ) async {

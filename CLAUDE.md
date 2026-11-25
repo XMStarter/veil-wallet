@@ -54,7 +54,9 @@ that cannot lose the user's funds.
 
 - `native/` is one Cargo workspace. Run cargo from there.
   - `veil_tor`: embedded Tor client (Arti) with onion-only loopback SOCKS
-    listeners and a C interface.
+    listeners and a C interface. It reads the loss of its network from
+    the connections it is asked for (`State::Lost`); its README says how,
+    and what that cannot tell.
   - `veil_wallet`: wallet operations over the Monero wallet library. Its
     README lists library behaviours the crate guards against; read it
     before changing `wallet.rs`.
@@ -301,10 +303,10 @@ now" is no longer shown as a wrong password, a phrase that was never
 checked and cannot be read closes the wallet instead of opening Home,
 and locking or closing the window survives a failure of the backend.
 Left for tasks of their own, by the owner's decision: the Tor component
-reports itself ready from the end of its bootstrap on and does not
+reported itself ready from the end of its bootstrap on and did not
 notice a network that goes away afterwards, so the difference between a
-failure of Tor and of the node exists in the tests only (needs the `tor`
-level to work on); and the concept says that no node can link
+failure of Tor and of the node existed in the tests only (taken up after
+step 3.8, see the end of this section); and the concept says that no node can link
 synchronisation and spending, while the node synchronised with is asked
 for what a transaction is built from. Also open: a password change that
 fails after the keys file was rewritten is reported as failed although
@@ -344,13 +346,16 @@ wallet: the owner left it to be checked without one, and its tests on the
 wallet that only pretends were widened for that (a key counts as use; it
 locks from any screen and leaves no phrase on show; a wallet opened again
 locks again; the default is five minutes). They pass, and they say
-nothing about a real window's clicks and keys. A synchronisation still starts with the first candidate every
-time, so a first node that is down costs every synchronisation the time
-it takes to find that out. Bridges changed
+nothing about a real window's clicks and keys. A synchronisation started with the first candidate every
+time, so a first node that was down cost every synchronisation the time
+it takes to find that out; since step 3.8 was merged the node that
+carried a synchronisation to its end is the one asked first the next
+time (shown on a private chain only, near the end of the scenario; it
+passed there as Linux programs on commit `23882af`). Bridges changed
 in Settings take effect the next time the wallet is opened. Step 3.7 was
 merged on the owner's word after hosted CI had passed on Linux and
-Windows. Step 3.8, the app on Windows, is written and not yet accepted.
-Hosted CI, which already built the app for Windows, now makes that build
+Windows. Step 3.8, the app on Windows, is done; how it was accepted is
+told below. Hosted CI, which already built the app for Windows, now makes that build
 complete (`check.sh`: the core as a release build and the three libraries
 of Microsoft's C++ runtime next to `veil.exe`) and keeps it with the run
 as the artifact `veil-windows`; the owner allowed
@@ -379,8 +384,51 @@ for that walk were tried was not said; a second window on an open wallet
 and the auto-lock had never been seen with a real wallet before it. The
 two public faucets named at step 1.3 no longer served: one did not work
 and the other was blocked by the owner's antivirus as dangerous, so the
-coins came from the owner's own stagenet wallet. See the build plan in
-`docs/concept.md`.
+coins came from the owner's own stagenet wallet. Step 3.8 was merged on
+the owner's word after that. After it, the state of Tor when the network
+goes away, written, run on a private chain, and seen to work once with a
+real network. Arti's own status
+never goes back once it has connected, so `veil_tor` reads the loss from
+the connections it is asked for: one that fails on the way to the first
+relay makes a ready Tor `Lost`, one that gets through or is answered
+from inside the Tor network makes it ready again, and a timeout changes
+nothing, because it is also what a node that is not there looks like.
+`veil_core` then reports a failure as Tor's (`TorLost`, `tor_lost`), not
+as "no node answered", goes on asking every node through Tor, since a
+connection that gets through is the only sign of the network being back,
+and a session goes on synchronising on its timer meanwhile. A send that
+no node took is reported as not sent for Tor's reason; one whose outcome
+is unknown stays unknown. Home and Send say it in both languages. The
+stand-in loses its network the same way (`set_network`,
+`AfterCut::NetworkLost`), in place of the "not ready after a cut" it had,
+which a real Tor never does. The offline tests pass in a cloud session;
+the scenario on a private chain has a new end, a send confirmed with the
+network gone. On commit `23882af` the owner's run as Linux programs
+passed at the `offline` level and failed at `regtest` in that new end,
+for a mistake of the test's own: it asked for a payment of one and a
+half where the three payments before it had left the wallet under a
+half. It asks for a tenth now. The part of the
+scenario before it, the node that worked being asked first, passed there
+for the first time. The owner then took the network away under the app
+with a real wallet open and sent two pictures of Home: first "Tor has
+lost its connection" with the synchronisation failed for Tor's reason,
+then "Tor is connected" and "Synchronised". So Arti does give the kind
+of failure that is read as a loss there, and the wallet found the
+network again by itself. Which build it was and how the network was
+taken away was not said; the only build with this code was the Linux one
+of that run, started under WSL. Not seen: the same in the app for
+Windows, which hosted CI builds only on a pull request, a send confirmed
+with the network gone, and a loss that shows as nothing but timeouts,
+which would still read as nodes that do not answer
+(`veil_tor::service::network_after` is the place to change then). On
+commit `39a19a1`, which has the amount put right, the owner's run passed
+at the `offline` and `regtest` levels as Windows programs, the scenario
+with its new end included: a send confirmed with the network gone is
+reported as not sent for Tor's reason, and the wallet holds what it held
+once the network is back. The log of the Linux programs of that run was
+not sent; `accept.sh` runs them first and stops when they fail, so they
+passed, which is a conclusion and not something read in a log.
+See the build plan in `docs/concept.md`.
 
 ## Environment notes
 
