@@ -195,6 +195,53 @@ fn something_that_is_not_a_monero_node_is_not_synchronised_with() {
         .all(|request| request.purpose == Purpose::Sync && request.host == SYNC_HOST));
 }
 
+/// A node can send anything. Whatever it sends, the synchronisation ends,
+/// the wallet has what it had, and the program is still there: the test
+/// reaching its end is the finding, since the library that reads a node's
+/// answers is not Rust and takes the whole program with it when it falls.
+#[test]
+fn made_up_answers_from_a_node_end_the_synchronisation_and_change_nothing() {
+    use std::cell::RefCell;
+
+    let Some(lib) = wallet_library() else { return };
+    let dir = TempDir::new("made-up-node");
+    let stand_in = StandIn::start().unwrap();
+    let node = fake_node::HostileNode::start();
+    stand_in.route(SYNC_HOST, SYNC_PORT, node.port());
+    let core = RefCell::new(core_on(&lib, &dir, &stand_in));
+    let address = core.borrow_mut().receive_address().unwrap().address;
+    // No block is counted as scanned: the wallet's own height moves no
+    // further than the block it starts scanning from.
+    let start = core.borrow().restore_height();
+
+    let good = fake_node::good_answer(3_000_000);
+    let far = fake_node::good_answer(u64::MAX);
+    let none = fake_node::good_answer(0);
+    let web = b"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: 18\r\n\r\n<html>hello</html>";
+    let endless = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 99999999999\r\n\r\n{";
+    let chunked = b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\nffffffffffffffff\r\n{}";
+    // The start of a binary answer as the library's own format begins.
+    let binary = b"HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: 12\r\n\r\n\x01\x11\x01\x01\x01\x01\x02\x01\x01\xff\xff\xff";
+    let samples: [&[u8]; 8] = [&good, &far, &none, web, endless, chunked, binary, b""];
+    veil_test_guard::fuzz::bytes("node answer", &samples, 150, |bytes| {
+        node.answer_with(bytes);
+        let mut core = core.borrow_mut();
+        // It may even be taken for a node; it has no blocks to give.
+        let _ = core.sync();
+        let scanned = core.sync_progress().wallet_height;
+        assert!(scanned <= start, "{scanned} is past the start, {start}");
+        assert!(core.balance().total.is_zero());
+        assert_eq!(core.receive_address().unwrap().address, address);
+    });
+    assert_ne!(node.asked(), 0, "the wallet never asked the node anything");
+    assert!(stand_in
+        .requests()
+        .iter()
+        .all(|request| request.purpose == Purpose::Sync && request.host == SYNC_HOST));
+    // And the wallet is one that can be closed and saved.
+    core.into_inner().close().unwrap();
+}
+
 #[test]
 fn a_reopened_wallet_is_joined_to_tor_the_same_way() {
     let Some(lib) = wallet_library() else { return };

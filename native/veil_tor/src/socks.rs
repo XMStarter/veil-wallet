@@ -392,6 +392,87 @@ mod tests {
         assert_eq!(harness.connector.calls.load(Ordering::SeqCst), 0);
     }
 
+    /// Whatever bytes a program on this machine sends the listener: it
+    /// goes on serving, it ends the connection instead of holding it, and
+    /// it asks Tor for nothing but an onion service.
+    #[test]
+    fn made_up_handshakes_reach_tor_for_onion_services_only() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let harness = runtime.block_on(start(None));
+
+        let socks5 = |command: u8, kind: u8, target: &[u8], port: u16| {
+            let mut bytes = vec![5, 1, 0, 5, command, 0, kind];
+            bytes.extend_from_slice(target);
+            bytes.extend_from_slice(&port.to_be_bytes());
+            bytes
+        };
+        let named = |name: &str| {
+            let mut target = vec![name.len() as u8];
+            target.extend_from_slice(name.as_bytes());
+            target
+        };
+        let socks4a = |name: &str| {
+            let mut bytes = vec![4, 1, 0x46, 0xa1, 0, 0, 0, 1, 0];
+            bytes.extend_from_slice(name.as_bytes());
+            bytes.push(0);
+            bytes
+        };
+        let mut with_password = vec![5, 1, 2, 1, 4];
+        with_password.extend_from_slice(b"user\x04pass");
+        with_password.extend_from_slice(&socks5(1, 3, &named(ONION), 18081)[3..]);
+        let samples: Vec<Vec<u8>> = vec![
+            socks5(1, 3, &named(ONION), 18081),
+            socks5(1, 3, &named(&format!("{ONION}.")), 18081),
+            socks5(1, 3, &named("example.com"), 443),
+            socks5(1, 1, &[203, 0, 113, 7], 443),
+            socks5(
+                1,
+                4,
+                &[0x20, 1, 0xd, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                443,
+            ),
+            socks5(2, 3, &named(ONION), 80),
+            socks5(3, 3, &named(ONION), 80),
+            socks5(0xf0, 3, &named(ONION), 80),
+            socks4a(ONION),
+            socks4a("example.com"),
+            vec![4, 1, 0x01, 0xbb, 203, 0, 113, 7, 0],
+            with_password,
+            b"GET / HTTP/1.1\r\nHost: example.com\r\n\r\n".to_vec(),
+        ];
+        let samples: Vec<&[u8]> = samples.iter().map(Vec::as_slice).collect();
+
+        veil_test_guard::fuzz::bytes("socks", &samples, 400, |bytes| {
+            runtime.block_on(async {
+                let mut stream = TcpStream::connect(harness.socks).await.unwrap();
+                // The listener may hang up before everything is written.
+                let _ = stream.write_all(bytes).await;
+                let _ = stream.shutdown().await;
+                let mut answer = Vec::new();
+                tokio::time::timeout(Duration::from_secs(5), stream.read_to_end(&mut answer))
+                    .await
+                    .expect("a client that has said everything is not kept waiting")
+                    .ok();
+            });
+            if let Some((host, _)) = harness.connector.last_target.lock().unwrap().as_ref() {
+                assert!(host.ends_with(".onion"), "Tor was asked for {host:?}");
+                assert!(host.parse::<std::net::IpAddr>().is_err(), "{host:?}");
+            }
+        });
+
+        // It asked for something, or the samples went nowhere and this
+        // showed nothing; and it still serves.
+        assert_ne!(harness.connector.calls.load(Ordering::SeqCst), 0);
+        runtime.block_on(async {
+            let (mut stream, status) = socks5_connect(harness.socks, ONION, 18081).await;
+            assert_eq!(status, 0x00);
+            assert_echo(&mut stream).await;
+        });
+    }
+
     #[tokio::test]
     async fn shutdown_stops_accepting() {
         let harness = start(None).await;

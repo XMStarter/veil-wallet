@@ -86,9 +86,14 @@ that cannot lose the user's funds.
     daemon does not come up it says how it ended and shows the end of its
     log. And it reads a record of network calls for anything that leaves
     the machine (`trace.rs`, `veil-trace-check`), for the `leaks` levels.
+    And it makes up input for the tests of whatever reads text or bytes
+    from outside (`fuzz.rs`); such a test has `made_up` in its name, and
+    a new reader of outside input gets one.
   - `check.sh`: the checks by level (`offline`, `regtest`, `tor`,
-    `stagenet`, `bridges`, and `leaks` and `leaks-chain`, which run the
-    tests of the first two with every network call recorded) with a log;
+    `stagenet`, `bridges`, `leaks` and `leaks-chain`, which run the
+    tests of the first two with every network call recorded, and `fuzz`,
+    which runs the tests on made-up input for a minute each from a seed
+    of the run's own) with a log;
     `setup` prepares a machine;
     `daemons` is a diagnosis of the test daemon, not a check. With
     `--windows` in front, the levels are built for Windows on Linux and run
@@ -849,7 +854,56 @@ the first recording took 665; so did the wallet's tests, the two on a
 private chain included. With that, step 5.1 has passed the owner's run:
 `leaks` on commit `d4e3d2d` and `leaks-chain` on `7e79893`. The last
 change, keeping how each program ended in the record, has run in a
-cloud session only.
+cloud session only. Hosted CI passed on both systems, and step 5.1 was
+merged on the owner's word.
+Step 5.2, fuzzing, is written. Whatever reads text or bytes from outside
+has a test that hands it made-up input by the thousand and says what has
+to hold for every one: thirteen in Rust (`made_up` in their names, the
+input from `veil_test_guard::fuzz`) and four in the app
+(`app/test/made_up_test.dart`). The table of what is read and what has
+to hold is in `docs/development.md`, "Made-up input". In the `offline`
+level they run from a seed that never changes, three thousand inputs
+each, fewer where one costs a wallet or a synchronisation;
+`./check.sh fuzz` runs them for a minute each from a seed of the run's
+own, and a failure names the seed and the input. It is not fuzzing
+guided by coverage. What it found, each fixed with the test that shows
+it: an amount with a comma, three digits after it and something that is
+no digit before it was refused as ambiguous, with the advice to write a
+point, where it is simply no amount; a node's port was taken with a plus
+sign in front, which the standard library reads as a number; and Tor's
+listener let a name with a last dot through (`x.onion.`) and handed it to
+Arti as it stood. Arti goes by the ending `.onion` when it decides
+between an onion service and a host to reach through an exit relay; the
+Arti in use refuses a name with a last dot outright, so nothing went
+anywhere, but that was Arti's rule and not Veil's. The name is handed on
+without the dot now, and a test asks Arti itself what it takes each name
+that is let through for (by its `Debug` output, which is no promise of
+Arti's). Two more were seen while reading for these tests and are fixed
+with them. A settings file with `5.0` for the auto-lock made the app
+fail while it read its settings, before any screen: the reader now takes
+any JSON. And the settings file was written in place, so the app ended
+in the middle left half a file, which reads as no settings and so as no
+bridges; it is written next to itself and then put in place. What that
+leaves is in the concept under "Known limitations": a settings file
+that cannot be read still takes the bridges with it without a word, and
+bridges can be set only behind an open wallet, after Tor has started.
+That is for the owner to decide about. What found nothing: the wallet
+library given six hundred phrases of the right length with wrong words
+and three thousand damaged addresses, and a node that answers the
+wallet's questions with made-up bytes, which is the one of these tests
+that reaches the library's reading of what comes from the network: over
+some hundreds of answers, the synchronisation ended, no block counted
+as scanned, and the program was still there. That is little against a
+library of that size, and it says nothing about blocks and transactions,
+which no test here makes up. Tried in a cloud session: the `offline`
+level, which passes with these tests in it, `./check.sh --android
+offline`, and the `fuzz` level at thirty seconds a test. There the Rust
+tests passed, and one of the app's failed on its ninety-five-thousandth
+input for a mistake of the test's own: its second reading of an address
+took the spaces off differently from the reader, which takes one
+character more off the ends than out of the middle (U+0085). With the
+test corrected the app's tests passed from the same seed. Not run: any
+of it as Windows programs, and the `fuzz` level at its full minute.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

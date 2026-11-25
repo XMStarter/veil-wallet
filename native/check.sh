@@ -8,6 +8,7 @@
 #   ./check.sh bridges     Tor through obfs4 and Snowflake bridges
 #   ./check.sh leaks       the offline tests again, with every network call recorded: none may leave the machine
 #   ./check.sh leaks-chain the same for the tests on a private chain (starts a Monero daemon)
+#   ./check.sh fuzz        the tests on made-up input again, for a minute each and from a seed of this run's own
 #   ./check.sh daemons     not a check: starts test daemons in pairs to see why one may not come up
 #   ./check.sh flutter     installs the pinned Flutter and nothing else (what hosted CI runs first)
 #   ./check.sh setup       once per machine: packages, Rust, the wallet library
@@ -74,7 +75,7 @@ elif [ "$windows" = 1 ]; then
   setup_hint="./check.sh --windows setup"
   # WSL hands a Windows program only the variables named here; /p turns a
   # Linux path into the Windows one.
-  export WSLENV="${WSLENV:+$WSLENV:}VEIL_WALLET_LIB/p:VEIL_MONEROD/p:VEIL_REQUIRE_WALLET_LIB:VEIL_DAEMON_ROUNDS:VEIL_TEST_NODES:VEIL_TEST_ONION:CI:GITHUB_ACTIONS"
+  export WSLENV="${WSLENV:+$WSLENV:}VEIL_WALLET_LIB/p:VEIL_MONEROD/p:VEIL_REQUIRE_WALLET_LIB:VEIL_DAEMON_ROUNDS:VEIL_TEST_NODES:VEIL_TEST_ONION:VEIL_FUZZ_SEED:VEIL_FUZZ_SECONDS:VEIL_FUZZ_CASES:CI:GITHUB_ACTIONS"
 else
   out_dir="$lib_dir/out"
   wallet_lib="$out_dir/libmonero_wallet2_api_c.so"
@@ -135,7 +136,7 @@ dart_program() {
 }
 
 usage() {
-  sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 # cargo with the target of this run. An empty array needs this spelling in
@@ -290,6 +291,40 @@ dart_side() {
       step "$dart" format --output=none --set-exit-if-changed . &&
       step "$dart" analyze --fatal-infos &&
       step "$dart" test
+  )
+}
+
+# The tests that hand made-up input to whatever reads text or bytes from
+# outside (`made_up` in their names; `veil_test_guard/src/fuzz.rs` makes the
+# input). The offline level runs them too, a few thousand inputs each from
+# a seed that never changes. Here each runs for a time, from a seed of this
+# run's own, so that every run tries inputs no run has tried. A failure
+# names the seed and the number of the input.
+level_fuzz() {
+  if [ -z "${VEIL_WALLET_LIB:-}" ] && [ "$(wallet_lib_state)" = current ]; then
+    export VEIL_WALLET_LIB="$wallet_lib"
+  fi
+  if [ -n "${VEIL_WALLET_LIB:-}" ]; then
+    echo "wallet library: $VEIL_WALLET_LIB"
+  else
+    echo "wallet library: not built or built from older patches; what it reads is not tried"
+  fi
+  export VEIL_FUZZ_SEED="${VEIL_FUZZ_SEED:-$(date +%s)}"
+  export VEIL_FUZZ_SECONDS="${VEIL_FUZZ_SECONDS:-60}"
+  echo "seed:    $VEIL_FUZZ_SEED"
+  echo "time:    $VEIL_FUZZ_SECONDS seconds for each test"
+  step cargo_for_target test --workspace --locked --no-fail-fast made_up || return 1
+  if [ "$windows" = 1 ] || [ -z "$(dart_program)" ]; then
+    echo
+    echo "The app's tests on made-up input: not run here, for want of Flutter."
+    return 0
+  fi
+  local flutter="$flutter_dir/flutter/bin/flutter" offline=()
+  if [ "${CARGO_NET_OFFLINE:-}" = true ]; then offline=(--offline); fi
+  (
+    cd "$here/../app" &&
+      step "$flutter" --no-version-check pub get --enforce-lockfile "${offline[@]}" &&
+      step "$flutter" --no-version-check test --no-pub --timeout none test/made_up_test.dart
   )
 }
 
@@ -809,7 +844,7 @@ for level in "$@"; do
     offline) ;;
     flutter) ;;
     ndk) ;;
-    regtest | tor | stagenet | bridges | daemons | setup | app | leaks | leaks-chain)
+    regtest | tor | stagenet | bridges | daemons | setup | app | leaks | leaks-chain | fuzz)
       if in_hosted_ci; then
         echo "refused: '$level' does not run in hosted CI. Only 'offline' does." >&2
         echo "See docs/development.md, \"Hosted CI and the hosting account\"." >&2
@@ -830,7 +865,7 @@ done
 
 if [ "$windows" = 1 ] && ! can_run_windows_programs; then
   case " $* " in
-    *" offline "* | *" regtest "* | *" tor "* | *" stagenet "* | *" daemons "*)
+    *" offline "* | *" regtest "* | *" tor "* | *" stagenet "* | *" daemons "* | *" fuzz "*)
       echo "error: --windows runs the tests as Windows programs, which works inside" >&2
       echo "WSL on a Windows machine. This is not WSL." >&2
       exit 2

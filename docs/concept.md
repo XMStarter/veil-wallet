@@ -327,8 +327,11 @@ run where is set out in [development.md](development.md).
       address anywhere else, and no name may be looked up.
    2. *Fuzzing* of everything that reads text from outside: addresses and
       payment links, amounts, nodes, bridge lines, recovery phrases, the
-      requests of the C interface, and the first bytes of a connection to
-      Tor's listeners.
+      requests of the C interface, the first bytes of a connection to
+      Tor's listeners, the app's settings file, and what a node answers.
+      Thousands of made-up inputs each, from a seed, with something that
+      has to hold for every one of them. It is not guided by which code an
+      input reaches.
    3. *External audit.* What an auditor needs to begin: what is in scope,
       what the wallet defends against and what it does not, and how to
       build it and run its checks. The audit itself is the owner's to
@@ -355,6 +358,16 @@ run where is set out in [development.md](development.md).
   failure, the node is asked twice, and the coin is what the two requests
   have in common. The node learns which earlier transaction the money
   came from. It learns no address and no amount.
+- **A settings file that cannot be read takes the bridges with it, and
+  the app does not say so.** Language, theme, auto-lock and bridges are
+  kept in a plain file, because bridges have to be known before a wallet
+  is open. A file that is damaged reads as no settings: the app starts
+  with its defaults, which is without bridges, and Tor then connects
+  directly the next time the wallet is opened. The file is replaced whole
+  when it is saved, so the app being ended in the middle no longer
+  damages it; a fault of the disk or an edit by hand still can. Bridges
+  are set in Settings, which is behind an open wallet, so there is no way
+  yet to put them back before Tor has started.
 - **Polyseed is not supported by the official Monero GUI wallet.** Feather,
   Cake, and several other wallets do support it.
 

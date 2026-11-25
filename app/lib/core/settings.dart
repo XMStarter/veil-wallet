@@ -62,8 +62,9 @@ class AppSettings {
           ? language as String
           : null,
       dark: dark == true,
-      autoLockMinutes: autoLockChoices.contains(minutes)
-          ? minutes as int
+      // A whole number, not `5.0`, which equals 5 and is no `int`.
+      autoLockMinutes: minutes is int && autoLockChoices.contains(minutes)
+          ? minutes
           : defaultAutoLock,
       bridges: bridges is List
           ? bridges.whereType<String>().toList()
@@ -83,9 +84,15 @@ class AppSettings {
     }
   }
 
+  /// Writes the settings to [file], whole or not at all: to a file next
+  /// to it first, which then takes its place. Written in place, a process
+  /// ended in the middle would leave half a file, which reads as no
+  /// settings, and with them the bridges would be gone unnoticed.
   Future<void> save(String file) async {
     await File(file).parent.create(recursive: true);
-    await File(file).writeAsString(jsonEncode(toJson()), flush: true);
+    final fresh = File('$file.new');
+    await fresh.writeAsString(jsonEncode(toJson()), flush: true);
+    await fresh.rename(file);
   }
 }
 

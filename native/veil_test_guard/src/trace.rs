@@ -633,4 +633,48 @@ mod tests {
         let alone = r#"connect(3, {sa_family=AF_INET, sin_port=htons(443), sin_addr=inet_addr("198.51.100.7")}, 16) = 0"#;
         assert_eq!(whats(alone), vec!["an address outside this machine"]);
     }
+
+    /// A record is what a tool wrote, and may be cut short or garbled.
+    /// Whatever stands in it, reading it does not fail, and a connection
+    /// that leaves the machine is found after it all the same.
+    #[test]
+    fn made_up_records_are_read_and_hide_nothing_that_follows() {
+        let samples = [
+            r#"940   socket(AF_INET, SOCK_STREAM|SOCK_CLOEXEC|SOCK_NONBLOCK, IPPROTO_IP) = 21"#,
+            r#"940   bind(21, {sa_family=AF_INET, sin_port=htons(0), sin_addr=inet_addr("127.0.0.1")}, 16 <unfinished ...>"#,
+            r#"940   <... bind resumed>)               = 0"#,
+            r#"941   connect(27, {sa_family=AF_INET6, sin6_port=htons(8080), sin6_flowinfo=htonl(0), inet_pton(AF_INET6, "::1", &sin6_addr), sin6_scope_id=0}, 28) = 0"#,
+            r#"941   connect(29, {sa_family=AF_UNIX, sun_path="/var/run/nscd/socket"}, 110) = 0"#,
+            r#"941   sendto(29, "\2\0\0\0\4\0\0\0\f\0\0\0example.com\0", 24, MSG_NOSIGNAL, NULL, 0) = 24"#,
+            r#"941   sendto(25, "data", 4, MSG_NOSIGNAL, NULL, 0) = 4"#,
+            r#"942   execve("/usr/bin/veil", ["veil", "sync"], 0x7ffd /* 30 vars */) = 0"#,
+            r#"942   clone3({flags=CLONE_VM|CLONE_VFORK, exit_signal=SIGCHLD, stack=0x7f, stack_size=0x9000}, 88) = 943"#,
+            r#"943   +++ exited with 0 +++"#,
+            r#"7 connect(3, {sa_family=AF_INET, sin_port=htons(443), sin_addr=inet_addr("93.184.216.34")}, 16) = 0"#,
+        ];
+        let outside = r#"7 connect(3, {sa_family=AF_INET, sin_port=htons(443), sin_addr=inet_addr("203.0.113.7")}, 16) = 0"#;
+        crate::fuzz::texts("record", &samples, |text| {
+            let lines = text.lines().count();
+            let report = read(text, &[]);
+            assert!(report.sockets <= lines);
+            assert!(report
+                .findings
+                .iter()
+                .all(|finding| (1..=lines).contains(&finding.line)));
+
+            // The same record with a connection outside as its last line.
+            // The line break is put in whether or not the text ends with
+            // one: a line that was cut short is then the one before.
+            let longer = format!("{text}\n{outside}\n");
+            let last = longer.lines().count();
+            let report = read(&longer, &[]);
+            assert!(
+                report
+                    .findings
+                    .iter()
+                    .any(|finding| finding.line == last && finding.text == outside),
+                "the connection outside was not found"
+            );
+        });
+    }
 }

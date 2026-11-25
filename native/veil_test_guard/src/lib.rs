@@ -10,12 +10,15 @@
 //! daemon in the workspace, so that no test can start one around the check,
 //! and [`trace`], which reads a record of the tests' network calls for
 //! anything that leaves the machine (`veil-trace-check`, `check.sh leaks`).
+//! And [`fuzz`], which makes up input for whatever reads text or bytes
+//! from outside (`check.sh fuzz`).
 //!
 //! The reason is in `docs/development.md`, "Hosted CI and the hosting
 //! account".
 
 use std::ffi::OsString;
 
+pub mod fuzz;
 mod regtest;
 pub mod trace;
 

@@ -62,17 +62,7 @@ fn serve(mut stream: TcpStream, height: u64, delay: Duration, log: &Mutex<Vec<St
         let (kind, reply) = if path == "/json_rpc" {
             let method = json_string(&body, "method").unwrap_or_default();
             log.lock().unwrap().push(format!("{path} {method}"));
-            // One answer for every method: each reads the fields it knows.
-            // Version 3.16 is what the pinned wallet library speaks.
-            let reply = format!(
-                "{{\"jsonrpc\":\"2.0\",\"id\":\"0\",\"result\":{{\"status\":\"OK\",\
-                 \"untrusted\":false,\"version\":{version},\"release\":true,\
-                 \"current_height\":{height},\"height\":{height},\"target_height\":0,\
-                 \"enabled\":true,\"earliest_height\":1,\"hard_forks\":[{hard_forks}]}}}}",
-                version = (3 << 16) | 16,
-                hard_forks = hard_forks(),
-            );
-            ("application/json", reply.into_bytes())
+            ("application/json", json_reply(height).into_bytes())
         } else {
             log.lock().unwrap().push(path);
             std::thread::sleep(delay);
@@ -85,6 +75,81 @@ fn serve(mut stream: TcpStream, height: u64, delay: Duration, log: &Mutex<Vec<St
         if stream.write_all(head.as_bytes()).is_err() || stream.write_all(&reply).is_err() {
             return;
         }
+    }
+}
+
+/// One answer for every method: each reads the fields it knows.
+/// Version 3.16 is what the pinned wallet library speaks.
+fn json_reply(height: u64) -> String {
+    format!(
+        "{{\"jsonrpc\":\"2.0\",\"id\":\"0\",\"result\":{{\"status\":\"OK\",\
+         \"untrusted\":false,\"version\":{version},\"release\":true,\
+         \"current_height\":{height},\"height\":{height},\"target_height\":0,\
+         \"enabled\":true,\"earliest_height\":1,\"hard_forks\":[{hard_forks}]}}}}",
+        version = (3 << 16) | 16,
+        hard_forks = hard_forks(),
+    )
+}
+
+/// What [`FakeNode`] sends for a JSON-RPC call, head and all: the bytes a
+/// node's answer is made of.
+pub fn good_answer(height: u64) -> Vec<u8> {
+    let reply = json_reply(height);
+    format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{reply}",
+        reply.len()
+    )
+    .into_bytes()
+}
+
+/// A node that answers whatever it is asked with the bytes it was last
+/// given, and hangs up: a node that is broken, or is somebody's attempt
+/// on the wallet.
+pub struct HostileNode {
+    port: u16,
+    answer: Arc<Mutex<Vec<u8>>>,
+    asked: Arc<Mutex<usize>>,
+}
+
+impl HostileNode {
+    pub fn start() -> HostileNode {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("loopback port");
+        let port = listener.local_addr().expect("local address").port();
+        let answer = Arc::new(Mutex::new(Vec::new()));
+        let asked = Arc::new(Mutex::new(0));
+        let (says, counts) = (Arc::clone(&answer), Arc::clone(&asked));
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else { return };
+                let (says, counts) = (Arc::clone(&says), Arc::clone(&counts));
+                std::thread::spawn(move || {
+                    if read_request(&mut stream).is_some() {
+                        *counts.lock().unwrap() += 1;
+                        let answer = says.lock().unwrap().clone();
+                        let _ = stream.write_all(&answer);
+                    }
+                });
+            }
+        });
+        HostileNode {
+            port,
+            answer,
+            asked,
+        }
+    }
+
+    pub fn port(&self) -> u16 {
+        self.port
+    }
+
+    /// What every request is answered with from now on.
+    pub fn answer_with(&self, bytes: &[u8]) {
+        *self.answer.lock().unwrap() = bytes.to_vec();
+    }
+
+    /// How many requests it has answered.
+    pub fn asked(&self) -> usize {
+        *self.asked.lock().unwrap()
     }
 }
 

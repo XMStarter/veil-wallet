@@ -55,6 +55,7 @@ machine. The log of that run is the evidence that the step is done.
 | `bridges` | Tor through obfs4 and Snowflake bridges, a bridge that does not exist, and the tool synchronising through bridges. | The owner's machine |
 | `leaks` | The Rust tests of `offline` once more, with every network call of theirs recorded: none may name an address outside the machine. Needs the wallet library and `strace`; Linux only. | Any Linux machine with the wallet library |
 | `leaks-chain` | The same for the tests of `regtest`. Starts a Monero daemon, whose own calls are left out. | The owner's machine |
+| `fuzz` | The tests on made-up input once more, each for a minute and from a seed of this run's own. Uses the wallet library when it has been built. | Any machine; not hosted CI |
 
 The two `leaks` levels check the rule that nothing reaches the network
 except through Tor, from outside the programs. In the tests Tor is a
@@ -70,6 +71,53 @@ no finding: Tor's code asks who owns its files, and the machine's own
 lists answer. What these levels do not see: the real Tor client, whose
 connections leave the machine and are meant to; the app's window and
 Flutter's own code; and anything on Windows or Android.
+
+### Made-up input
+
+Whatever reads text or bytes that come from outside has a test that hands
+it made-up input by the thousand: good inputs damaged in one or a few
+places, two good ones joined, the characters parsers trip over (nothing,
+very long runs, signs and separators, other scripts, zero bytes, text
+that is no text), and bytes from nothing. Each test says what has to hold
+for every input, which is more than "it does not fall over" wherever more
+can be said:
+
+| What is read | What has to hold |
+|---|---|
+| An amount (`veil_wallet/src/amount.rs`) | It is the amount written, by a second reading with wider numbers, or it is refused; written out, it reads as the same amount. |
+| A recovery phrase (`seed.rs`) | 16 or 25 words or refused; the words as typed, in small letters; nothing of it in `Debug` output. |
+| A node (`veil_core/src/node.rs`) | An onion name of letters, digits, hyphens and dots, and a port in digits, or refused. |
+| A name in a SOCKS request (`veil_tor/src/onion.rs`) | What is let through ends in `.onion`, and Arti itself takes it for an onion service or refuses it: never for a host to reach through an exit relay. |
+| The bytes of a SOCKS handshake (`socks.rs`) | The listener goes on serving, ends the connection, and asks Tor for an onion service or for nothing. |
+| Bridge lines (`bridges.rs`) | Bridges, or refused with the number of the line; lines that say something are never a direct connection. |
+| A start request and a command of the C interface (`veil_core/src/ffi.rs`) | Read as what they say or refused with one of the reasons that exist; a refusal does not repeat the recovery phrase. |
+| Bytes handed to the C interface | An answer in JSON every time, and nothing started. |
+| What a node answers (`veil_core/src/tests.rs`) | The synchronisation ends, no block counts as scanned, the balance is nothing, and the program is still there. This one reaches the wallet library's own reading of a node. |
+| An address, and a phrase of the right length, in the wallet library (`veil_wallet/tests/offline.rs`) | Only a whole address passes; a phrase is refused and leaves no file, or is a wallet. |
+| A record of network calls (`veil_test_guard/src/trace.rs`) | It is read, and a connection outside is found after whatever stands before it. |
+| A code or a paste, a phrase, lines of bridges and nodes, the settings file (`app/test/made_up_test.dart`) | Nothing is added to an address or an amount; words are letters; a settings file of any content costs settings and nothing else. |
+
+The input comes from `veil_test_guard::fuzz` for Rust and
+`app/test/made_up.dart` for Dart, and from a seed. In the `offline` level
+the seed is always the same and each test gets three thousand inputs
+(fewer where one costs a wallet or a synchronisation), so that level
+passes or fails the same way every time. `./check.sh fuzz` runs the same
+tests, the ones with `made_up` in their names, for a minute each from a
+seed taken from the clock, and writes the seed into the log. A failure
+names the seed, the number of the input and the input; the test run by
+itself with `VEIL_FUZZ_SEED` and `VEIL_FUZZ_CASES` as the message gives
+them fails on it again. `VEIL_FUZZ_SECONDS` sets another time.
+
+What this is not: fuzzing guided by coverage, where a tool watches which
+code an input reaches and steers towards the rest. For readers of this
+size, damaged and random input finds most of what there is; for the
+wallet library, which is large and not ours, it only scratches. Not
+covered at all: Arti's own reading of what the Tor network sends, the
+wallet library's reading of blocks and transactions, and the Kotlin side
+of the app.
+
+A new reader of outside input gets a test of this kind in the same
+change, with `made_up` in its name.
 
 `./check.sh setup` prepares a Debian or Ubuntu machine once: system
 packages, among them the transport programs for bridges, Rust, the

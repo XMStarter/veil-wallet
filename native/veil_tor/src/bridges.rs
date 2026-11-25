@@ -284,4 +284,61 @@ mod tests {
         assert!(!shown.contains("cert="), "{shown}");
         assert!(shown.contains("1 hidden"), "{shown}");
     }
+
+    /// Whatever is typed or pasted where bridges go: it is read as
+    /// bridges or refused with the number of the line, and it is never
+    /// quietly a direct connection.
+    #[test]
+    fn made_up_bridge_lines_are_bridges_or_refused() {
+        let file = format!("# from a friend\n\n{OBFS4}\n  {PLAIN}  \r\n{SNOWFLAKE}\n");
+        let samples = [OBFS4, SNOWFLAKE, WEBTUNNEL, PLAIN, file.as_str()];
+        veil_test_guard::fuzz::texts("bridges", &samples, |text| {
+            let lines = Bridges::lines_from_text(text);
+            // Every line that says something is kept, as it stands.
+            let said: Vec<&str> = text
+                .lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty() && !line.starts_with('#'))
+                .collect();
+            assert_eq!(lines, said);
+            let mut bridges = Bridges {
+                lines,
+                transports: Vec::new(),
+            };
+            assert_eq!(bridges.is_empty(), said.is_empty());
+            // Nothing of a line where a log would get it.
+            let shown = format!("{bridges:?}");
+            assert!(said
+                .iter()
+                .all(|line| line.len() < 8 || !shown.contains(line)));
+
+            match bridges.transports_needed() {
+                Ok(needed) => {
+                    // Without their programs, bridges that need some are
+                    // not a configuration.
+                    if !needed.is_empty() {
+                        assert!(matches!(
+                            configure(&bridges),
+                            Err(TorError::TransportMissing { .. })
+                        ));
+                    }
+                    // With them, Tor takes the lines or says why not.
+                    let names: Vec<&str> = needed.iter().map(String::as_str).collect();
+                    bridges.transports = vec![program(&names)];
+                    if needed.is_empty() {
+                        bridges.transports.clear();
+                    }
+                    match configure(&bridges) {
+                        Ok(()) | Err(TorError::Config(_) | TorError::TransportName { .. }) => {}
+                        Err(other) => panic!("an unexpected refusal: {other}"),
+                    }
+                }
+                Err(TorError::Bridge { number, .. }) => {
+                    assert!((1..=said.len()).contains(&number), "line {number}");
+                    assert!(matches!(configure(&bridges), Err(TorError::Bridge { .. })));
+                }
+                Err(other) => panic!("an unexpected refusal: {other}"),
+            }
+        });
+    }
 }
