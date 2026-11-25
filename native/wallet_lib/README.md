@@ -44,6 +44,56 @@ sources fetched over HTTPS and checked by hash.
 Because the Windows DLL contains those libraries, a build that ships it has
 to carry their licence texts as well as monero_c's and Monero's.
 
+### For Android
+
+```bash
+native/wallet_lib/build.sh ~/veil-wallet-lib --android
+```
+
+builds the library for Android on 64-bit ARM, on Linux, into
+`out/android/arm64-v8a`. As for Windows, Monero's own dependency build
+compiles Boost, OpenSSL, ZeroMQ, Unbound, libsodium and the others from
+source, and they are linked into the one file, which then needs nothing
+but what every Android has (`libc`, `libm`, `libdl`, `liblog`). The same
+note about licence texts applies. There is no daemon for Android: tests
+that need one run on a desktop. About ten minutes on top of the download.
+
+The compiler is the one Monero's dependency build pins and downloads from
+Google, checked by hash: the Android NDK, release 17b, of 2018. It is not
+the NDK the core and the app are built with (`../check.sh` pins that one);
+the library carries its own copy of the C++ runtime and talks to the rest
+through a C interface, so the two do not have to match. Its age shows in
+three places, each handled in `build.sh` and explained there:
+
+- The compiler is itself a program of 2018 and asks for a system library
+  under its old name, `libtinfo.so.5`. Where the system only has the
+  current one, the build offers that under the old name, in a folder of
+  its own and to its own programs only.
+- One file monero_c adds to Monero uses a C++ feature the compiler does
+  not have. A patch that only this build applies writes the same thing
+  the long way (see the table below).
+- monero_c's build files ask the linker for the C++ runtime by the name
+  newer NDKs use; the build tells the linker which files that is.
+
+The Android build has a source tree of its own under the work directory
+(`android/`), so that its extra patch touches nothing the Linux and
+Windows libraries are built from.
+
+monero_c's own Android build was not used, for the reason given for
+Windows: it is a build system of its author's that fetches and builds many
+tools before it gets to the library. Moving Monero's dependency build to
+the current NDK instead would mean maintaining that build; it has not been
+tried.
+
+The library as its authors build it keeps a small database of its own,
+the "shared ring database", in the user's home folder
+(`~/.shared-ringdb`), outside the wallet's files. No build of Veil's
+makes it, on Android or anywhere else: see `monero/0005` in the table
+below.
+
+Only 64-bit ARM is built. That is what phones are; an emulator on a desktop
+is a different processor and cannot load this library.
+
 ## Veil's patches
 
 Each one is a few lines. None changes how keys, addresses, or transactions
@@ -57,6 +107,7 @@ is built a second time.
 | `monero/0003` and `monero_c/0002` | A switch that keeps the library's background refresh thread idle | Building or sending a transaction switches that thread on, and it then synchronises on a timer through whichever node the wallet points at. While Veil sends through its broadcast node, that would be the broadcast node. `veil_wallet` turns the thread off for every wallet it opens. |
 | `monero/0004` | On Windows, the library reads the paths it is given as UTF-8 | Without it, Boost.Filesystem reads them in the system's legacy code page. A wallet in a folder whose name is not ASCII was then not recognised as existing, so a second one could have been created over it. Programs that call the library's `Wallet::init` get the same setting from there, together with a log file, which Veil does not want. |
 | `monero/0005` | Opening a wallet no longer sets up the library's "shared ring database" | The library made it outside the wallet's folder: under the user's home on Linux, and on Windows in a folder all users of the machine share. It stayed when the wallet was removed, and a damaged one ended the process when any wallet was opened. The wallet API has no call to put it elsewhere or to leave it out. [`veil_wallet`'s README](../veil_wallet/README.md) says what the database is for and what is given up without it. |
+| `android/bc-ur/0001`, for the Android build only | In a library monero_c adds to Monero for payment codes shown as pictures, three places name the element type of a vector instead of leaving it to the compiler | The compiler Monero's dependency build uses for Android cannot work it out. The meaning is the same for every compiler. Veil does not call this code; the library does not build without it. |
 
 `build.sh` notices when the patches here have changed since a work
 directory was built: it puts the library's sources back, applies the current

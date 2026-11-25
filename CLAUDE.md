@@ -73,7 +73,9 @@ that cannot lose the user's funds.
     only; do not add another network to it.
   - `wallet_lib`: pinned build script for the wallet library, Veil's
     patches to it, and the bindings generator. After changing a patch, run
-    `build.sh` again and regenerate the bindings.
+    `build.sh` again and regenerate the bindings. `--android` builds it
+    for Android on 64-bit ARM from a source tree of its own, with a patch
+    only that build has (`patches/android`); the README says why.
   - `veil_test_guard`: called first by every test that starts Tor or a
     daemon; fails the test on a CI runner. A new test of that kind calls it
     too. It also starts the daemon for tests, one at a time, and when the
@@ -83,7 +85,11 @@ that cannot lose the user's funds.
     `stagenet`, `bridges`) with a log; `setup` prepares a machine;
     `daemons` is a diagnosis of the test daemon, not a check. With
     `--windows` in front, the levels are built for Windows on Linux and run
-    as Windows programs through WSL.
+    as Windows programs through WSL. With `--android` in front there are
+    four: `ndk` installs the pinned Android NDK, `setup` adds the Android
+    SDK and the wallet library for Android, `offline` lints and builds
+    for Android and runs nothing, and `app` builds the app as an APK with
+    the core and the wallet library inside.
   - `accept.sh`: the owner's acceptance run in one command, step after
     step: the latest commits, `check.sh` as Linux and as Windows programs,
     the logs to send, then the app. It starts a daemon, so it is not for
@@ -98,7 +104,9 @@ that cannot lose the user's funds.
 - `dart/veil_bridge`: the Dart side of the core. It calls the C interface
   in `veil_core/src/ffi.rs`; the state crosses as JSON, pinned by
   `native/veil_core/tests/fixtures`, which both sides test against.
-- `app/`: the app, written with Flutter, for Linux and Windows first. So
+- `app/`: the app, written with Flutter, for Linux, Windows and Android
+  (`app/android`; the Android side answers one question, where the app's
+  files go, and the libraries are found there by name). So
   far the way to an open wallet (create, recovery phrase, restore, unlock),
   Home, Receive, Send, and Settings.
   Screens talk to `WalletBackend` (`app/lib/core`), never to the core
@@ -421,7 +429,96 @@ of that run, started under WSL. Not seen: the same in the app for
 Windows, which hosted CI builds only on a pull request, a send confirmed
 with the network gone, and a loss that shows as nothing but timeouts,
 which would still read as nodes that do not answer
-(`veil_tor::service::network_after` is the place to change then). On
+(`veil_tor::service::network_after` is the place to change then).
+That work was merged on the owner's word after hosted CI had passed on
+both systems. Next is step 4, Android, in the six parts listed in the
+build plan. Step 4.1, the core for Android, is written; nothing of it can
+be run before there is an app on a phone, so no run of the owner's is
+asked for until step 4.2. `./check.sh --android offline` lints the Rust
+code for Android on 64-bit ARM, builds the core as a library, and
+compiles the tests; it passed in a cloud session at the first try, Arti
+and its cryptography included, with the NDK release the pinned Flutter
+uses (`r28c`, pinned in `check.sh` by checksum). The wallet library for
+Android is built by `wallet_lib/build.sh --android` in ten minutes with
+Monero's own dependency build, which brings the NDK release of 2018 that
+Monero pins. Three things make up for that compiler's age, each in
+`build.sh`: the system's `libtinfo` offered under its old name to the
+compiler, a patch of three lines to a library monero_c adds (`bc-ur`),
+applied in a source tree only the Android build uses, and the name of
+the C++ runtime told to the linker. The result needs only what every
+Android has, exports the sixty-three functions Veil calls, and is laid
+out for devices with 16-kilobyte pages, as the core is. None of it has
+been loaded by anything. Hosted CI now also builds the core for Android
+on its Linux runner, which downloads the pinned NDK; that part of the
+workflow has not run yet. Step 4.2, the app on a phone, is written as
+far as a cloud session can take it: `./check.sh --android app` builds an
+APK of fifty-four megabytes with the app, the core and the wallet
+library, for 64-bit ARM and Android 7 or later. Looked at from outside:
+its one permission is the network, nothing of Google's services is in
+it, Android copies its data to no backup, and its four libraries lie in
+the package the way devices with 16-kilobyte pages want them. It is
+signed with the build machine's debug key. It has never been installed
+or started: whether the core finds the wallet library by name, whether
+Tor starts in an app's storage, and how the screens sit on a phone are
+all still to be seen, on the owner's phone. The owner installed the
+APK, and both ways to a wallet failed: restoring with "this is not a
+recovery phrase", making a new one with "the wallet could not be marked
+as open ... try_lock() not supported". One cause: Rust's standard
+library has no file locks for Android and says so only when asked, so
+the mark that keeps a wallet from being opened twice could not be made.
+The lock is now taken with the system's `flock` directly on every
+system that has it, which is also what the tests on Linux run. The
+restore had hidden the reason because the session called every refusal
+of a restore a wrong phrase; a mark that cannot be made is an error of
+its own now, and an invalid phrase is shown with what the library said.
+What that first try did show: the app starts on a phone, the core finds
+the wallet library inside the package, and Tor starts in the app's
+storage, since the mark is made after all three. The words of a phrase
+are now also taken without full stops, commas and numbers, which a
+phone's keyboard or a note adds. The change of the lock made an
+unrelated test fail every time, the fake node suddenly "incompatible":
+the fake did not list the protocol upgrades with its version, the
+library then takes a path that can read a variable nothing has set, and
+what it decides there moved with the layout of the program. The fake
+lists them now, like every current node; the library's side is noted in
+`native/veil_wallet/README.md` and not patched. With the APK built from
+commit `a5f5c00` the owner then reported from the phone that everything
+works and that coins are sent. So on a phone the wallet opens, Tor
+connects, the wallet synchronises, and a payment goes out, on stagenet.
+What else was looked at was not said: whether the wallet was made new or
+restored, how the screens sit, and the phone and its Android are not
+known. That APK was built in a cloud session and signed with that
+session's debug key; one built on the owner's machine has another key
+and does not install over it. The owner said more afterwards: the phone
+is a Samsung Galaxy A17; a wallet made new and a wallet restored from
+its phrase both work there; Tor connects and the wallet synchronises;
+and nothing on the screens is cut off. The version of Android was not
+said. On commit `4dafd44` the owner's run passed at the `offline` and
+`regtest` levels as Linux programs, with the lock taken the new way, and
+at the `offline` level as Windows programs. The `regtest` level as
+Windows programs did not finish: the test program of `veil_core` ended
+with status 116 after its first seven tests, none of which touches a
+wallet, where a failed test ends with 101. Nothing says which test it
+ended in, because the tests run side by side and hold their output back.
+The cause is not known. Two readings of the number, neither shown: the
+last byte of Windows' code for a damaged heap (`0xC0000374`), or
+Linux's "stale file handle", which would point at the file share
+between WSL and Windows that has failed in other ways before. The same
+tests without the `regtest` feature had passed as Windows programs
+minutes earlier in the same run, and the level had passed on `39a19a1`.
+`check.sh` now runs the tests again one at a time, with their output,
+when a test program ends this way, so that the next run names the test;
+that part has only been tried with a stand-in for cargo. Run again by
+itself on commit `be063de`, which differs only in that script, the
+`regtest` level passed as Windows programs, all fifty-three tests of
+`veil_core`. So the ending with 116 has happened once and did not come
+back; its cause was not found, and a run that passes afterwards does not
+show that nothing is wrong. With that, step 4.2 has passed the owner's
+run on both systems and on the phone. Hosted CI, with its new build for
+Android, has not run. The wallet library's "shared
+ring database", which the library makes outside Veil's own folder on a
+desktop, was noticed here; the end of this section tells what was done
+about it. On
 commit `39a19a1`, which has the amount put right, the owner's run passed
 at the `offline` and `regtest` levels as Windows programs, the scenario
 with its new end included: a send confirmed with the network gone is
@@ -437,9 +534,10 @@ Windows, by the library's source, in the folder all users share
 removed, and a database cut short ended the process when any wallet was
 opened; both were seen in a cloud session with a temporary home. The
 wallet API at the pinned commit has no call to move it or leave it out,
-so a patch does it (`monero/0005`), and the owner has to rebuild the
-library for Linux and for Windows and allow the new DLL in the
-antivirus. What is given up: a transaction built twice for the same coin
+so a patch does it (`monero/0005`), which the Android build applies as
+well, and the owner has to rebuild the library for Linux, for Windows
+and for Android (`./check.sh setup`, `--windows setup`, `--android
+setup`) and allow the new DLL in the antivirus. What is given up: a transaction built twice for the same coin
 gets new decoys the second time, which can show the node which coin is
 spent (`docs/concept.md`, "Known limitations"). The offline test
 `a_wallet_leaves_nothing_outside_its_folder` makes, restores, opens and
@@ -448,7 +546,9 @@ folder are empty folders and finds them empty afterwards; it fails on a
 library without the patch. It passes in a cloud session on Linux. Not run
 anywhere yet: the same test as a Windows program, where the shared
 folder cannot be moved out of the way and is looked at before and after
-instead, and the same look around the scenario on a private chain. Where
+instead, the same look around the scenario on a private chain, and
+anything on Android, whose library has not been built with the patch.
+Where
 an older library has left the folder (`~/.shared-ringdb` on the owner's
 machine, and likely the one on Windows), the tests can only see that it
 was not written to; with the folder deleted first they see that it does
@@ -469,7 +569,11 @@ See the build plan in `docs/concept.md`.
   Once, loading the DLL failed there with Windows error 995 (operation
   aborted) in one test and worked in every other; if it comes back, the
   first thing to try is loading it from a Windows disk, not over the WSL
-  file share.
+  file share. Once, a test program run as a Windows program ended with
+  status 116 a second or so after starting and passed when run again;
+  `check.sh` now runs such a program's tests again one at a time to name
+  the test, and what that run prints is the first thing to read if it
+  comes back.
   Each run of `veil.exe` takes 15 to 20 seconds there before it does
   anything, from loading over the WSL file share and being scanned. Tor connects
   from that machine without bridges, so the `bridges` level shows there
@@ -485,6 +589,11 @@ See the build plan in `docs/concept.md`.
   reporting switched off (`flutter --disable-analytics`,
   `dart --disable-analytics`) before anything else is run. The tools
   complain about running as root; that is harmless there.
+- Android in a cloud session: `./check.sh --android ndk` and
+  `--android offline` work there, and so does `wallet_lib/build.sh
+  --android`. Nothing built for Android can be started there. The hosts
+  an app's build needs (Google's and Maven's package servers, Gradle's)
+  answered when asked.
 - The wallet library can be built in a cloud session from source with
   `native/wallet_lib/build.sh` (about half an hour; install the packages
   listed at the top of the script first). Building it is fine; `monerod`

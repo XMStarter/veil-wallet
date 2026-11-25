@@ -16,5 +16,9 @@ libloading = "0.8"
 thiserror = "2"
 zeroize = "1"
 
+# For the lock that marks a wallet as open: see `lock_now` in wallet.rs.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 veil_test_guard = { path = "../veil_test_guard" }

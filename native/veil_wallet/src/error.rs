@@ -50,6 +50,12 @@ pub enum Error {
     #[error("the wallet is open in another program; close it there first")]
     WalletInUse,
 
+    /// The wallet could not be marked as open, so it was not opened or
+    /// made: without the mark a second program could take the same wallet.
+    /// This is about the file the mark is kept in, not about the wallet.
+    #[error("the wallet could not be marked as open ({file}): {reason}")]
+    NotMarked { file: PathBuf, reason: String },
+
     /// A wallet file already exists at the target path.
     #[error("a wallet already exists at {0}")]
     WalletExists(PathBuf),

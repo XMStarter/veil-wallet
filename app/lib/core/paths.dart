@@ -2,10 +2,17 @@ import 'dart:io';
 
 /// Where the app keeps its files and finds its native parts.
 ///
-/// Everything is worked out from the environment the system gives the
-/// app; no package is involved.
+/// On a desktop everything is worked out from the environment the system
+/// gives the app. On Android the system is asked for the one folder that
+/// is the app's own ([AppPaths.onAndroid]). No package is involved.
 class AppPaths {
   AppPaths._(this.dataDir, this._programDir, this._environment);
+
+  /// For Android, where [filesDir] is the app's private storage: no other
+  /// app can read it. The two libraries are inside the app's package and
+  /// are asked for by name; Android knows where they are.
+  factory AppPaths.onAndroid(String filesDir) =>
+      AppPaths._(filesDir, '', const {}).._android = true;
 
   /// For the running app.
   factory AppPaths.forThisDevice() => AppPaths.from(
@@ -43,6 +50,12 @@ class AppPaths {
   final String _programDir;
   final Map<String, String> _environment;
   bool _windows = false;
+  bool _android = false;
+
+  /// Whether [coreLibrary] and [walletLibrary] are files that can be
+  /// looked for. On Android they are names, found by the system inside
+  /// the app's package, where no file can be looked for.
+  bool get librariesAreFiles => !_android;
 
   String get _separator => _windows ? r'\' : '/';
 
@@ -68,7 +81,9 @@ class AppPaths {
   /// The core: where `VEIL_CORE_LIB` says, or else shipped with the app.
   String get coreLibrary =>
       _environment['VEIL_CORE_LIB'] ??
-      (_windows
+      (_android
+          ? 'libveil_core.so'
+          : _windows
           ? '$_programDir\\veil_core.dll'
           : '$_programDir/lib/libveil_core.so');
 
@@ -76,7 +91,9 @@ class AppPaths {
   /// shipped with the app.
   String get walletLibrary =>
       _environment['VEIL_WALLET_LIB'] ??
-      (_windows
+      (_android
+          ? 'libmonero_wallet2_api_c.so'
+          : _windows
           ? '$_programDir\\libmonero_wallet2_api_c.dll'
           : '$_programDir/lib/libmonero_wallet2_api_c.so');
 }

@@ -6,6 +6,22 @@ void main() {
   test('a phrase is its words, however it was typed', () {
     expect(phraseWords('  Alpha  beta\n\tGAMMA '), ['alpha', 'beta', 'gamma']);
     expect(phraseWords(''), isEmpty);
+    // As a phone's keyboard or a note may hand it over: a full stop after
+    // two spaces, commas, numbers in front, a space that is not a space.
+    expect(phraseWords('alpha.  Beta, gamma'), ['alpha', 'beta', 'gamma']);
+    expect(phraseWords('1. alpha 2) beta\n3.gamma'), [
+      'alpha',
+      'beta',
+      'gamma',
+    ]);
+    expect(phraseWords('alpha\u00a0beta\u200b gamma'), [
+      'alpha',
+      'beta',
+      'gamma',
+    ]);
+    // Letters of other alphabets and accents are letters.
+    expect(phraseWords('Ábaco niño café'), ['ábaco', 'niño', 'café']);
+    expect(phraseWords('cafe\u0301'), ['cafe\u0301']);
     expect(isPhraseLength(16), isTrue);
     expect(isPhraseLength(25), isTrue);
     for (final count in [0, 1, 12, 15, 17, 24, 26]) {
@@ -38,6 +54,31 @@ void main() {
       windows: false,
     );
     expect(moved.dataDir, '/data/veil');
+  });
+
+  test('on Android, in the app\'s own storage, with libraries by name', () {
+    final paths = AppPaths.onAndroid(
+      '/data/user/0/io.github.xmstarter.veil/files',
+    );
+    const files = '/data/user/0/io.github.xmstarter.veil/files';
+    expect(paths.dataDir, files);
+    expect(paths.walletFile, '$files/stagenet/wallet');
+    expect(paths.walletKeysFile, '$files/stagenet/wallet.keys');
+    expect(paths.settingsFile, '$files/settings.json');
+    expect(paths.torStateDir, '$files/tor/state');
+    expect(paths.torCacheDir, '$files/tor/cache');
+    // Inside the app's package there are no files to look for: Android
+    // finds a library by its name.
+    expect(paths.librariesAreFiles, isFalse);
+    expect(paths.coreLibrary, 'libveil_core.so');
+    expect(paths.walletLibrary, 'libmonero_wallet2_api_c.so');
+
+    final desktop = AppPaths.from(
+      environment: {'HOME': '/home/anna'},
+      program: '/opt/veil/veil',
+      windows: false,
+    );
+    expect(desktop.librariesAreFiles, isTrue);
   });
 
   test('on Windows, under the user\'s application data', () {
