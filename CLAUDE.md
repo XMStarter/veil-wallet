@@ -386,8 +386,8 @@ two public faucets named at step 1.3 no longer served: one did not work
 and the other was blocked by the owner's antivirus as dangerous, so the
 coins came from the owner's own stagenet wallet. Step 3.8 was merged on
 the owner's word after that. After it, the state of Tor when the network
-goes away, written and seen to work once with a real network; its run on
-a private chain is still owed. Arti's own status
+goes away, written, run on a private chain, and seen to work once with a
+real network. Arti's own status
 never goes back once it has connected, so `veil_tor` reads the loss from
 the connections it is asked for: one that fails on the way to the first
 relay makes a ready Tor `Lost`, one that gets through or is answered
@@ -407,7 +407,7 @@ network gone. On commit `23882af` the owner's run as Linux programs
 passed at the `offline` level and failed at `regtest` in that new end,
 for a mistake of the test's own: it asked for a payment of one and a
 half where the three payments before it had left the wallet under a
-half. It asks for a tenth now, which has not been run. The part of the
+half. It asks for a tenth now. The part of the
 scenario before it, the node that worked being asked first, passed there
 for the first time. The owner then took the network away under the app
 with a real wallet open and sent two pictures of Home: first "Tor has
@@ -420,7 +420,14 @@ of that run, started under WSL. Not seen: the same in the app for
 Windows, which hosted CI builds only on a pull request, a send confirmed
 with the network gone, and a loss that shows as nothing but timeouts,
 which would still read as nodes that do not answer
-(`veil_tor::service::network_after` is the place to change then).
+(`veil_tor::service::network_after` is the place to change then). On
+commit `39a19a1`, which has the amount put right, the owner's run passed
+at the `offline` and `regtest` levels as Windows programs, the scenario
+with its new end included: a send confirmed with the network gone is
+reported as not sent for Tor's reason, and the wallet holds what it held
+once the network is back. The log of the Linux programs of that run was
+not sent; `accept.sh` runs them first and stops when they fail, so they
+passed, which is a conclusion and not something read in a log.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
