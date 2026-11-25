@@ -86,9 +86,10 @@ that cannot lose the user's funds.
     `daemons` is a diagnosis of the test daemon, not a check. With
     `--windows` in front, the levels are built for Windows on Linux and run
     as Windows programs through WSL. With `--android` in front there are
-    three: `ndk` installs the pinned Android NDK, `setup` adds the wallet
-    library for Android, and `offline` lints and builds for Android and
-    runs nothing.
+    four: `ndk` installs the pinned Android NDK, `setup` adds the Android
+    SDK and the wallet library for Android, `offline` lints and builds
+    for Android and runs nothing, and `app` builds the app as an APK with
+    the core and the wallet library inside.
   - `accept.sh`: the owner's acceptance run in one command, step after
     step: the latest commits, `check.sh` as Linux and as Windows programs,
     the logs to send, then the app. It starts a daemon, so it is not for
@@ -102,7 +103,9 @@ that cannot lose the user's funds.
 - `dart/veil_bridge`: the Dart side of the core. It calls the C interface
   in `veil_core/src/ffi.rs`; the state crosses as JSON, pinned by
   `native/veil_core/tests/fixtures`, which both sides test against.
-- `app/`: the app, written with Flutter, for Linux and Windows first. So
+- `app/`: the app, written with Flutter, for Linux, Windows and Android
+  (`app/android`; the Android side answers one question, where the app's
+  files go, and the libraries are found there by name). So
   far the way to an open wallet (create, recovery phrase, restore, unlock),
   Home, Receive, Send, and Settings.
   Screens talk to `WalletBackend` (`app/lib/core`), never to the core
@@ -446,7 +449,20 @@ Android has, exports the sixty-three functions Veil calls, and is laid
 out for devices with 16-kilobyte pages, as the core is. None of it has
 been loaded by anything. Hosted CI now also builds the core for Android
 on its Linux runner, which downloads the pinned NDK; that part of the
-workflow has not run yet. On
+workflow has not run yet. Step 4.2, the app on a phone, is written as
+far as a cloud session can take it: `./check.sh --android app` builds an
+APK of fifty-four megabytes with the app, the core and the wallet
+library, for 64-bit ARM and Android 7 or later. Looked at from outside:
+its one permission is the network, nothing of Google's services is in
+it, Android copies its data to no backup, and its four libraries lie in
+the package the way devices with 16-kilobyte pages want them. It is
+signed with the build machine's debug key. It has never been installed
+or started: whether the core finds the wallet library by name, whether
+Tor starts in an app's storage, and how the screens sit on a phone are
+all still to be seen, on the owner's phone. The wallet library's "shared
+ring database" is not made on Android, where an app has no home folder;
+on a desktop the library makes it in the user's home folder, outside
+Veil's own, which was noticed here and is not dealt with. On
 commit `39a19a1`, which has the amount put right, the owner's run passed
 at the `offline` and `regtest` levels as Windows programs, the scenario
 with its new end included: a send confirmed with the network gone is

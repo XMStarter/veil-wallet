@@ -85,6 +85,12 @@ tools before it gets to the library. Moving Monero's dependency build to
 the current NDK instead would mean maintaining that build; it has not been
 tried.
 
+On Android the library runs without one thing it has on a desktop. It
+keeps a small database of its own, the "shared ring database", in the
+user's home folder (`~/.shared-ringdb`), outside the wallet's files. An
+Android app has no home folder, the database cannot be made, and the
+library goes on without it, which it is written to do.
+
 Only 64-bit ARM is built. That is what phones are; an emulator on a desktop
 is a different processor and cannot load this library.
 

@@ -296,6 +296,10 @@ run where is set out in [development.md](development.md).
   program that Tor starts, and whether an app can ship and start one on
   Android is still to be verified. Arti builds for Android as part of the
   core; it has not been run there.
+- **The app's name on Android.** Android knows an app by an identifier
+  that can never change once people have the app. For now it is
+  `io.github.xmstarter.veil`, after the project's place on GitHub. It is
+  to be settled, with the name, before anything is published.
 - **The compiler of the wallet library for Android.** Monero's dependency
   build brings its own Android compiler, a release of 2018, and the
   library is built with it; the core and the app are built with the

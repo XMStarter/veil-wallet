@@ -40,6 +40,31 @@ void main() {
     expect(moved.dataDir, '/data/veil');
   });
 
+  test('on Android, in the app\'s own storage, with libraries by name', () {
+    final paths = AppPaths.onAndroid(
+      '/data/user/0/io.github.xmstarter.veil/files',
+    );
+    const files = '/data/user/0/io.github.xmstarter.veil/files';
+    expect(paths.dataDir, files);
+    expect(paths.walletFile, '$files/stagenet/wallet');
+    expect(paths.walletKeysFile, '$files/stagenet/wallet.keys');
+    expect(paths.settingsFile, '$files/settings.json');
+    expect(paths.torStateDir, '$files/tor/state');
+    expect(paths.torCacheDir, '$files/tor/cache');
+    // Inside the app's package there are no files to look for: Android
+    // finds a library by its name.
+    expect(paths.librariesAreFiles, isFalse);
+    expect(paths.coreLibrary, 'libveil_core.so');
+    expect(paths.walletLibrary, 'libmonero_wallet2_api_c.so');
+
+    final desktop = AppPaths.from(
+      environment: {'HOME': '/home/anna'},
+      program: '/opt/veil/veil',
+      windows: false,
+    );
+    expect(desktop.librariesAreFiles, isTrue);
+  });
+
   test('on Windows, under the user\'s application data', () {
     final paths = AppPaths.from(
       environment: {'APPDATA': r'C:\Users\anna\AppData\Roaming'},

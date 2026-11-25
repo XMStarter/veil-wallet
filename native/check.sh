@@ -22,7 +22,8 @@
 # nothing is run, because nothing here can run it:
 #   ./check.sh --android offline   lint, the core built for Android, the tests compiled
 #   ./check.sh --android ndk       installs the pinned Android NDK and nothing else
-#   ./check.sh --android setup     once per machine: the NDK and the wallet library for Android
+#   ./check.sh --android setup     once per machine: the NDK, the Android SDK, the wallet library for Android
+#   ./check.sh --android app       the app as one file to install on a phone (an APK)
 # The other levels are tests, and tests run on a desktop.
 #
 # `offline` runs anywhere, hosted CI included. Every other level refuses to
@@ -92,9 +93,21 @@ flutter_dir="${VEIL_FLUTTER_DIR:-$HOME/veil-flutter}"
 # (a7b54a5de87fecd125a17d54f73c446199e72a64); this is the SHA-256 of the
 # file with that SHA-1.
 android_ndk_release="r28c"
+android_ndk_version="28.2.13676358"
 android_ndk_sha256="dfb20d396df28ca02a8c708314b814a4d961dc9074f9a161932746f815aa552f"
 android_dir="${VEIL_ANDROID_DIR:-$HOME/veil-android}"
-android_ndk="$android_dir/android-ndk-$android_ndk_release"
+# The rest of what building an app for Android takes: Google's Android
+# SDK. Its command-line tools are pinned here like the NDK (SHA-1 in the
+# same list: e025545c62a8e64c7559119566a569fb1dec5f60); the packages they
+# then fetch are checked by the tools themselves against that list. The
+# NDK lies inside the SDK, under the name the app's build looks for it
+# by, so that there is one copy of it and not a second, downloaded by
+# that build.
+android_sdk="$android_dir/sdk"
+android_ndk="$android_sdk/ndk/$android_ndk_version"
+android_tools_release="16111833"
+android_tools_sha256="0877a1d048fe4a24efe2eff536ca4223f7adeb58648bb81909d33c446918cfa8"
+android_sdk_packages=("platforms;android-36" "build-tools;36.0.0" "platform-tools")
 # The oldest Android the core is built for: the oldest the pinned Flutter
 # builds apps for.
 android_api=24
@@ -116,7 +129,7 @@ dart_program() {
 }
 
 usage() {
-  sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 # cargo with the target of this run. An empty array needs this spelling in
@@ -336,6 +349,61 @@ level_daemons() {
   step cargo_for_target test -p veil_test_guard --locked --lib -- --ignored --nocapture daemons_started_side_by_side_come_up
 }
 
+# The app for Android, as the one file a phone installs. The core, built
+# here, and the wallet library, built by setup, go inside it.
+level_app() {
+  if [ "$android" != 1 ]; then
+    echo "error: 'app' goes with --android. On a desktop, 'offline' builds the app." >&2
+    return 1
+  fi
+  android_env || return 1
+  require_wallet_lib || return 1
+  local flutter="$flutter_dir/flutter/bin/flutter"
+  if [ ! -x "$flutter" ]; then
+    echo "error: Flutter is not installed in $flutter_dir. Run ./check.sh setup." >&2
+    return 1
+  fi
+  if [ ! -x "$android_sdk/cmdline-tools/latest/bin/sdkmanager" ]; then
+    echo "error: the Android SDK is not in $android_sdk. Run $setup_hint." >&2
+    return 1
+  fi
+  # Where the app's build takes libraries from to put them in the package.
+  local libs="$here/../app/android/app/src/main/jniLibs/arm64-v8a"
+  local apk="$here/../app/build/app/outputs/flutter-apk/app-release.apk"
+  local offline=()
+  if [ "${CARGO_NET_OFFLINE:-}" = true ]; then offline=(--offline); fi
+  step cargo_for_target build -p veil_core --release --locked &&
+    mkdir -p "$libs" &&
+    step cp "$here/target/aarch64-linux-android/release/libveil_core.so" "$wallet_lib" "$libs/" || return 1
+  (
+    cd "$here/../app" &&
+      export ANDROID_HOME="$android_sdk" ANDROID_SDK_ROOT="$android_sdk" &&
+      step "$flutter" --no-version-check pub get --enforce-lockfile "${offline[@]}" &&
+      step "$flutter" --no-version-check build apk --release --no-pub --target-platform android-arm64
+  ) || return 1
+  echo
+  echo "the app for Android: $apk"
+  hand_over_apk "$apk"
+}
+
+# Under WSL, puts the app into the Windows Downloads folder as veil.apk,
+# from where it can be copied to a phone. Elsewhere it says where the file
+# is and leaves it there.
+hand_over_apk() {
+  local apk="$1" profile downloads
+  if can_run_windows_programs && command -v cmd.exe >/dev/null 2>&1 && command -v wslpath >/dev/null 2>&1; then
+    profile="$(cd /mnt/c 2>/dev/null && cmd.exe /c 'echo %USERPROFILE%' 2>/dev/null | tr -d '\r')"
+    if [ -n "$profile" ]; then
+      downloads="$(wslpath -u "$profile")/Downloads"
+      if [ -d "$downloads" ] && cp "$apk" "$downloads/veil.apk"; then
+        echo "copied to the Windows Downloads folder as veil.apk"
+      fi
+    fi
+  fi
+  echo "To install: copy the file to the phone and open it there. Android asks"
+  echo "once whether apps may be installed from where it was opened."
+}
+
 level_ndk() {
   if [ "$android" != 1 ]; then
     echo "error: 'ndk' goes with --android: ./check.sh --android ndk" >&2
@@ -349,20 +417,55 @@ level_ndk() {
 install_android_ndk() {
   if [ -x "$android_ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" ] &&
     [ "$(cat "$android_dir/installed-ndk" 2>/dev/null)" = "$android_ndk_release" ]; then
-    echo "Android NDK $android_ndk_release: installed in $android_dir"
+    echo "Android NDK $android_ndk_release: installed in $android_ndk"
     return 0
   fi
   echo
-  echo "--- installing the Android NDK $android_ndk_release into $android_dir"
+  echo "--- installing the Android NDK $android_ndk_release into $android_ndk"
   local name="android-ndk-$android_ndk_release-linux.zip"
-  local archive="$android_dir/$name"
-  mkdir -p "$android_dir" && rm -rf "$android_ndk" &&
+  local archive="$android_dir/$name" unpacked="$android_dir/unpacked-ndk"
+  mkdir -p "$android_sdk/ndk" && rm -rf "$android_ndk" "$unpacked" &&
     curl --proto '=https' --tlsv1.2 -sSf -o "$archive" "https://dl.google.com/android/repository/$name" &&
     echo "$android_ndk_sha256  $archive" | sha256sum -c - &&
-    unzip -q "$archive" -d "$android_dir" || return 1
-  rm -f "$archive"
+    unzip -q "$archive" -d "$unpacked" &&
+    mv "$unpacked/android-ndk-$android_ndk_release" "$android_ndk" || return 1
+  rm -rf "$archive" "$unpacked"
   echo "$android_ndk_release" >"$android_dir/installed-ndk" &&
     echo "Android NDK $android_ndk_release: installed"
+}
+
+# The Android SDK: its command-line tools, checked against their checksum,
+# and with them the packages an app's build needs. Installing them means
+# accepting Google's licence for the Android SDK, which this does in the
+# name of whoever runs it, and says so.
+install_android_sdk() {
+  local manager="$android_sdk/cmdline-tools/latest/bin/sdkmanager"
+  if [ -x "$manager" ] &&
+    [ "$(cat "$android_dir/installed-sdk" 2>/dev/null)" = "$android_tools_release ${android_sdk_packages[*]}" ]; then
+    echo "Android SDK: installed in $android_sdk"
+    return 0
+  fi
+  if ! command -v java >/dev/null; then
+    echo "error: the Android SDK's tools need Java, and there is none." >&2
+    return 1
+  fi
+  echo
+  echo "--- installing the Android SDK into $android_sdk"
+  local name="commandlinetools-linux-${android_tools_release}_latest.zip"
+  local archive="$android_dir/$name" unpacked="$android_dir/unpacked-tools"
+  mkdir -p "$android_sdk/cmdline-tools" && rm -rf "$android_sdk/cmdline-tools/latest" "$unpacked" &&
+    curl --proto '=https' --tlsv1.2 -sSf -o "$archive" "https://dl.google.com/android/repository/$name" &&
+    echo "$android_tools_sha256  $archive" | sha256sum -c - &&
+    unzip -q "$archive" -d "$unpacked" &&
+    mv "$unpacked/cmdline-tools" "$android_sdk/cmdline-tools/latest" || return 1
+  rm -rf "$archive" "$unpacked"
+  echo "Accepting the licence of the Android SDK for you. Its text:"
+  echo "https://developer.android.com/studio/terms"
+  # The tool asks once per licence and reads the answers from here.
+  yes 2>/dev/null | "$manager" --sdk_root="$android_sdk" --licenses >/dev/null || true
+  "$manager" --sdk_root="$android_sdk" "${android_sdk_packages[@]}" >/dev/null || return 1
+  echo "$android_tools_release ${android_sdk_packages[*]}" >"$android_dir/installed-sdk" &&
+    echo "Android SDK: installed"
 }
 
 level_setup() {
@@ -382,11 +485,12 @@ level_setup() {
       xz-utils bc bsdmainutils patch unzip"
   fi
   if [ "$android" = 1 ]; then
-    # What Monero's dependency build asks for, and `python` by that name,
-    # which the NDK that build brings along starts its tools with.
+    # What Monero's dependency build asks for; `python` by that name,
+    # which the NDK that build brings along starts its tools with; and
+    # Java, which the tools that build an app for Android are written in.
     packages="git curl ca-certificates build-essential cmake ninja-build pkg-config
       autoconf automake libtool python3 python-is-python3 gperf bzip2
-      xz-utils bc bsdmainutils patch unzip"
+      xz-utils bc bsdmainutils patch unzip openjdk-17-jdk-headless"
   fi
   local package missing=""
   for package in $packages; do
@@ -417,8 +521,10 @@ level_setup() {
   step cargo --version || return 1
   if [ "$android" = 1 ]; then
     install_android_ndk &&
+      install_android_sdk &&
       step rustup target add aarch64-linux-android &&
-      step "$here/wallet_lib/build.sh" "$lib_dir" --android
+      step "$here/wallet_lib/build.sh" "$lib_dir" --android &&
+      install_flutter
   elif [ "$windows" = 1 ]; then
     step rustup target add x86_64-pc-windows-gnu &&
       step "$here/wallet_lib/build.sh" "$lib_dir" --windows --with-daemon
@@ -575,9 +681,9 @@ fi
 for level in "$@"; do
   if [ "$android" = 1 ]; then
     case "$level" in
-      offline | ndk | setup | -h | --help | help) ;;
+      offline | ndk | setup | app | -h | --help | help) ;;
       *)
-        echo "error: with --android there are 'offline', 'ndk' and 'setup'. '$level' is a" >&2
+        echo "error: with --android there are 'offline', 'ndk', 'setup' and 'app'. '$level' is a" >&2
         echo "test or belongs to a desktop, and nothing built for Android can be run here." >&2
         exit 2
         ;;
@@ -587,7 +693,7 @@ for level in "$@"; do
     offline) ;;
     flutter) ;;
     ndk) ;;
-    regtest | tor | stagenet | bridges | daemons | setup)
+    regtest | tor | stagenet | bridges | daemons | setup | app)
       if in_hosted_ci; then
         echo "refused: '$level' does not run in hosted CI. Only 'offline' does." >&2
         echo "See docs/development.md, \"Hosted CI and the hosting account\"." >&2

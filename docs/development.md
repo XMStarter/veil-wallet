@@ -152,6 +152,29 @@ loads, and compiles every test without running one. The tests themselves
 run on Linux and Windows as before; that the same code behaves the same on
 a phone is seen only on a phone, from the app.
 
+`setup` also installs what building the app takes: Java from the
+distribution and Google's Android SDK, its command-line tools checked
+against their checksum. Installing the SDK means accepting its
+[licence](https://developer.android.com/studio/terms); `setup` does that
+for whoever runs it and says so.
+
+```bash
+./check.sh --android app
+```
+
+builds the app as one file to install, `app-release.apk`, with the core
+and the wallet library inside, and under WSL copies it to the Windows
+Downloads folder as `veil.apk`. Copy it to a phone with a 64-bit ARM
+processor and Android 7 or later, and open it there; Android asks once
+whether apps may be installed from where the file was opened. The app is
+a real wallet on stagenet and connects to Tor.
+
+The file is signed with a key Android's tools make on the machine that
+builds it. That is enough to install it on one's own phone; a second
+machine has another key, and Android refuses an update signed with a
+different key until the app is removed, which removes its wallet too. A
+key for releases belongs to the release step.
+
 ### The app on Windows
 
 An app for Windows can only be built on Windows, with Microsoft's tools,
