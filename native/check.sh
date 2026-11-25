@@ -295,8 +295,35 @@ level_regtest() {
   fi
   export VEIL_MONEROD="$monerod"
   # The wallet alone, then the wallet behind the stand-in for Tor.
-  step cargo_for_target test -p veil_wallet --features regtest --locked &&
-    step cargo_for_target test -p veil_core --features regtest --locked
+  step cargo_for_target test -p veil_wallet --features regtest --locked || return
+  step cargo_for_target test -p veil_core --features regtest --locked
+  local status=$?
+  where_it_ended "$status" -p veil_core --features regtest --locked
+  return "$status"
+}
+
+# A test that fails makes cargo end with 101, and the log says which test
+# and why. Any other ending means the test program itself was ended, by a
+# crash or by the system, and then the log says nothing: the tests run
+# side by side and their output is held back until each has finished. So
+# the same tests are run once more, one after the other and with their
+# output, to see which one it ends in. This is a diagnosis and never turns
+# a failed run into a passed one: the caller still reports the first
+# ending.
+where_it_ended() {
+  local status="$1"
+  shift
+  if [ "$status" = 0 ] || [ "$status" = 101 ]; then
+    return 0
+  fi
+  echo
+  echo "The test program did not finish: it ended with $status, where a failed"
+  echo "test ends with 101. Running the same tests again one at a time, with"
+  echo "their output, to see where. The level has failed either way."
+  step cargo_for_target test "$@" -- --test-threads=1 --nocapture
+  local again=$?
+  echo
+  echo "one at a time it ended with $again"
 }
 
 level_tor() {

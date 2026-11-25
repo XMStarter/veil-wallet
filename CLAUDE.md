@@ -488,9 +488,28 @@ What else was looked at was not said: whether the wallet was made new or
 restored, how the screens sit, and the phone and its Android are not
 known. That APK was built in a cloud session and signed with that
 session's debug key; one built on the owner's machine has another key
-and does not install over it. Not run since the lock was changed: the
-`regtest` level, on either system, and hosted CI, which has the new
-build for Android in it. The wallet library's "shared
+and does not install over it. The owner said more afterwards: the phone
+is a Samsung Galaxy A17; a wallet made new and a wallet restored from
+its phrase both work there; Tor connects and the wallet synchronises;
+and nothing on the screens is cut off. The version of Android was not
+said. On commit `4dafd44` the owner's run passed at the `offline` and
+`regtest` levels as Linux programs, with the lock taken the new way, and
+at the `offline` level as Windows programs. The `regtest` level as
+Windows programs did not finish: the test program of `veil_core` ended
+with status 116 after its first seven tests, none of which touches a
+wallet, where a failed test ends with 101. Nothing says which test it
+ended in, because the tests run side by side and hold their output back.
+The cause is not known. Two readings of the number, neither shown: the
+last byte of Windows' code for a damaged heap (`0xC0000374`), or
+Linux's "stale file handle", which would point at the file share
+between WSL and Windows that has failed in other ways before. The same
+tests without the `regtest` feature had passed as Windows programs
+minutes earlier in the same run, and the level had passed on `39a19a1`.
+`check.sh` now runs the tests again one at a time, with their output,
+when a test program ends this way, so that the next run names the test;
+that part has only been tried with a stand-in for cargo. Step 4.2 is not
+accepted until that level passes. Hosted CI, with its new build for
+Android, has not run. The wallet library's "shared
 ring database" is not made on Android, where an app has no home folder;
 on a desktop the library makes it in the user's home folder, outside
 Veil's own, which was noticed here and is not dealt with. On
