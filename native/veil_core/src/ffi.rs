@@ -163,8 +163,17 @@ fn nodes_in(request: &Map<String, Value>) -> Result<Vec<OnionNode>, Problem> {
 }
 
 /// The bridges in the `bridges` of a request, a list of bridge lines that
-/// may be left out, with the programs their transports need.
+/// may be left out, with the programs their transports need. The programs
+/// are looked for in the request's `transport_dir` first, if it has one:
+/// the folder an app keeps the programs it brings along in.
 fn bridges_in(request: &Map<String, Value>) -> Result<Bridges, Problem> {
+    let shipped = match request.get("transport_dir") {
+        None | Some(Value::Null) => None,
+        Some(dir) => Some(PathBuf::from(
+            dir.as_str()
+                .ok_or_else(|| bad_request("`transport_dir` is not text"))?,
+        )),
+    };
     let lines = match request.get("bridges") {
         None | Some(Value::Null) => return Ok(Bridges::none()),
         Some(lines) => lines
@@ -188,8 +197,8 @@ fn bridges_in(request: &Map<String, Value>) -> Result<Bridges, Problem> {
         kind: ProblemKind::InvalidBridge,
         detail: error.to_string(),
     })?;
-    bridges.transports =
-        crate::transports::programs_for(&needed, Vec::new()).map_err(|missing| Problem {
+    bridges.transports = crate::transports::programs_with(&needed, Vec::new(), shipped.as_deref())
+        .map_err(|missing| Problem {
             kind: ProblemKind::TransportMissing,
             detail: missing.to_string(),
         })?;
@@ -593,8 +602,9 @@ pub unsafe extern "C" fn veil_session_command(
 }
 
 /// Checks bridge lines without starting anything: `{"bridges": ["obfs4
-/// ...", ...]}`. Returns null if every line is a bridge and a program is
-/// installed for every transport they need; otherwise a JSON object
+/// ...", ...]}`, with a `transport_dir` if the app brings transport
+/// programs along. Returns null if every line is a bridge and a program is
+/// there for every transport they need; otherwise a JSON object
 /// `{"kind", "detail"}`, to be freed with `veil_string_free`, with the kind
 /// `invalid_bridge` or `transport_missing`.
 ///

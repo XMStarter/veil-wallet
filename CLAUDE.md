@@ -76,6 +76,10 @@ that cannot lose the user's funds.
     `build.sh` again and regenerate the bindings. `--android` builds it
     for Android on 64-bit ARM from a source tree of its own, with a patch
     only that build has (`patches/android`); the README says why.
+  - `transports`: pinned build script for the transport program the app
+    for Android brings along for bridges (the Tor Project's lyrebird,
+    for obfs4, Snowflake and WebTunnel), and why it is built the way it
+    is. It is under the GPL; the README says what that means.
   - `veil_test_guard`: called first by every test that starts Tor or a
     daemon; fails the test on a CI runner. A new test of that kind calls it
     too. It also starts the daemon for tests, one at a time, and when the
@@ -87,9 +91,10 @@ that cannot lose the user's funds.
     `--windows` in front, the levels are built for Windows on Linux and run
     as Windows programs through WSL. With `--android` in front there are
     four: `ndk` installs the pinned Android NDK, `setup` adds the Android
-    SDK and the wallet library for Android, `offline` lints and builds
-    for Android and runs nothing, and `app` builds the app as an APK with
-    the core and the wallet library inside.
+    SDK, the wallet library and the transport program for Android,
+    `offline` lints and builds for Android and runs nothing, and `app`
+    builds the app as an APK with the core, the wallet library and the
+    transport program inside.
   - `accept.sh`: the owner's acceptance run in one command, step after
     step: the latest commits, `check.sh` as Linux and as Windows programs,
     the logs to send, then the app. It starts a daemon, so it is not for
@@ -712,7 +717,38 @@ was not said; the owner did say that the fingerprint opens the wallet
 after a wrong password was typed, which is as meant on the screen that
 opens the wallet. So Android's key store and its question work on that
 phone as called. No run on the owner's desktop was made for this step:
-neither the core nor the wallet library changed in it.
+neither the core nor the wallet library changed in it. Hosted CI passed
+on both systems, and step 4.5 was merged on the owner's word.
+Step 4.6, bridges on Android, is written and has not been on a phone.
+A phone has no transport programs installed and lets an app start only
+what came in its package, so the package now carries one: lyrebird, the
+Tor Project's program for obfs4, Snowflake and WebTunnel, built for
+Android on 64-bit ARM from source by `native/transports/build.sh` in
+half a minute. Its source is pinned by commit, its Go packages by its
+own `go.sum`, Go itself by checksum, and the C compiler is the pinned
+NDK's; built twice in a cloud session in different folders it came out
+the same byte for byte. It is built with the NDK's C compiler because a
+Go program on Android finds names on the network only through the
+system's C library, and with a linker flag one of Snowflake's packages
+needs; the README there says why. It goes into the package as
+`liblyrebird.so`, untouched, and the package's native parts are now
+unpacked when the app is installed, which is the one place Android lets
+an app start a program from; the APK is twenty-nine megabytes where it
+was fifty-four, because they are compressed in it now. The core looks
+for a transport program first in a folder the app names
+(`transport_dir` in a start request and in `veil_check_bridges`,
+`veil_core::transports::programs_with`), under its own name or as
+`lib<name>.so`; the app for Android names the folder Android unpacked
+the package into. Offline tests cover the search and the way through
+the C interface and the Dart side. Not known until a phone shows it:
+whether Arti can start the program there, which is what the concept's
+fallback to the reference Tor implementation was about, and whether a
+bridge then carries a connection. lyrebird is under the GNU General
+Public License, version 3 or later, and Veil under MIT; they are
+separate programs, but a package with lyrebird inside has to be handed
+on under lyrebird's terms for that part. That is an open decision in
+the concept, for the owner, before a release; it does not stand in the
+way of trying the app on the owner's own phone.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

@@ -51,6 +51,11 @@ class MainActivity : FlutterActivity() {
                     // and it goes when the app is removed.
                     "filesDir" -> result.success(filesDir.absolutePath)
 
+                    // Where Android unpacked the native parts of the
+                    // package: the one folder whose files an app may
+                    // start. The transport program for bridges is there.
+                    "libraryDir" -> result.success(applicationInfo.nativeLibraryDir)
+
                     // While a recovery phrase is on the screen the system
                     // takes no picture of the window: no screenshot, no
                     // recording, no preview among the recent apps.

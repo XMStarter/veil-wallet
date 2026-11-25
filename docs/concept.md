@@ -318,8 +318,8 @@ run where is set out in [development.md](development.md).
    5. *Biometric unlock* through the hardware-backed key store: the
       wallet opened for a fingerprint or a face, where the user switches
       that on.
-   6. *Bridges on Android:* whether an app can ship and start a transport
-      program.
+   6. *Bridges on Android:* the app carries a transport program, built
+      from source, and Tor starts it from the app's package.
 5. **Hardening.** Network-level leak checks, fuzzing of address and URI
    parsing, an external audit.
 6. **Release.** Open source, reproducible builds, signed APKs, F-Droid.
@@ -357,9 +357,19 @@ run where is set out in [development.md](development.md).
 - **Tor implementation.** Arti is used and works on Linux and Windows.
   Bridges work through it on Linux for obfs4 and Snowflake; WebTunnel is
   set up the same way but has not been tried. A transport is a separate
-  program that Tor starts, and whether an app can ship and start one on
-  Android is still to be verified. Arti itself runs there: inside the app
-  on a phone it connected and carried a synchronisation and a payment.
+  program that Tor starts. The app for Android carries one, the Tor
+  Project's lyrebird, built from source; whether Arti can start it on a
+  phone is still to be seen there. Arti itself runs on a phone: inside
+  the app it connected and carried a synchronisation and a payment.
+- **The licence of the transport program.** lyrebird is under the GNU
+  General Public License, version 3 or later; Veil is under the MIT
+  licence. They are separate programs, and Tor starts the one as a
+  process of its own, so Veil's code stays as it is licensed. But a
+  package with lyrebird inside has to be handed on under lyrebird's
+  terms for that part: its licence texts with it, and its source
+  offered. To be settled before a release, with advice from somebody
+  who knows licences: carry it and meet those terms, as Tor Browser
+  does, or leave bridges on Android to a separate download.
 - **The app's name on Android.** Android knows an app by an identifier
   that can never change once people have the app. For now it is
   `io.github.xmstarter.veil`, after the project's place on GitHub. It is

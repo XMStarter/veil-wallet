@@ -21,6 +21,7 @@ class SessionConfig {
     required this.source,
     this.nodes = const [],
     this.bridges = const [],
+    this.transportDir,
     this.restoreHeight,
     this.syncEvery,
   });
@@ -42,6 +43,12 @@ class SessionConfig {
   /// Bridge lines to reach Tor through, one bridge each. Empty: Tor is
   /// connected to directly. With bridges set they are the only way in.
   final List<String> bridges;
+
+  /// The folder the app keeps the transport programs it brings along in,
+  /// if it brings any: looked in before the programs installed on the
+  /// machine. A program may lie there as `lib<name>.so`, which is how one
+  /// travels in a package for Android.
+  final String? transportDir;
   final WalletSource source;
 
   /// Where scanning starts when restoring from a 25-word phrase.
@@ -59,6 +66,7 @@ class SessionConfig {
     'tor': {'state_dir': torStateDir, 'cache_dir': torCacheDir},
     'nodes': nodes,
     'bridges': bridges,
+    'transport_dir': ?transportDir,
     'restore_height': ?restoreHeight,
     'sync_every_seconds': ?syncEvery?.inSeconds,
   };
@@ -174,9 +182,13 @@ class VeilCore {
   /// Checks bridge lines without starting anything. Null if every line is
   /// a bridge and a program is installed for every transport they need;
   /// otherwise the problem, of the kind [ProblemKind.invalidBridge] or
-  /// [ProblemKind.transportMissing].
-  Problem? checkBridges(List<String> lines) {
-    final request = jsonEncode({'bridges': lines}).toNativeUtf8();
+  /// [ProblemKind.transportMissing]. [transportDir] is the folder of the
+  /// programs the app brings along, as in [SessionConfig.transportDir].
+  Problem? checkBridges(List<String> lines, {String? transportDir}) {
+    final request = jsonEncode({
+      'bridges': lines,
+      'transport_dir': ?transportDir,
+    }).toNativeUtf8();
     try {
       return _takeProblem(_checkBridges(request));
     } finally {

@@ -72,6 +72,15 @@ void main() {
     expect(paths.librariesAreFiles, isFalse);
     expect(paths.coreLibrary, 'libveil_core.so');
     expect(paths.walletLibrary, 'libmonero_wallet2_api_c.so');
+    // Not told where the package was unpacked, it brings no transport
+    // program along.
+    expect(paths.transportDir, isNull);
+
+    // Told, that folder is where the transport program for bridges is.
+    const unpacked = '/data/app/~~x/io.github.xmstarter.veil-y/lib/arm64';
+    final withPrograms = AppPaths.onAndroid(files, libraryDir: unpacked);
+    expect(withPrograms.transportDir, unpacked);
+    expect(withPrograms.dataDir, files);
 
     final desktop = AppPaths.from(
       environment: {'HOME': '/home/anna'},
@@ -79,6 +88,8 @@ void main() {
       windows: false,
     );
     expect(desktop.librariesAreFiles, isTrue);
+    // A desktop uses the transport programs installed on the machine.
+    expect(desktop.transportDir, isNull);
   });
 
   test('on Windows, under the user\'s application data', () {

@@ -142,7 +142,9 @@ separator, as people type it.
 
 Only `stagenet` is accepted as a network. Bridges are given at the start as
 a list of bridge lines; the programs their transports need are looked for
-among those installed on the machine (`src/transports.rs`), and a line that
+in the folder the request names as `transport_dir`, if the app brings any
+along, and then among those installed on the machine
+(`src/transports.rs`), and a line that
 is not a bridge or a transport without a program refuses the start, as
 `veil_check_bridges` would have said beforehand.
 

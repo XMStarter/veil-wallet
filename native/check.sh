@@ -22,7 +22,8 @@
 # nothing is run, because nothing here can run it:
 #   ./check.sh --android offline   lint, the core built for Android, the tests compiled
 #   ./check.sh --android ndk       installs the pinned Android NDK and nothing else
-#   ./check.sh --android setup     once per machine: the NDK, the Android SDK, the wallet library for Android
+#   ./check.sh --android setup     once per machine: the NDK, the Android SDK, the wallet library and the
+#                                  transport program for Android
 #   ./check.sh --android app       the app as one file to install on a phone (an APK)
 # The other levels are tests, and tests run on a desktop.
 #
@@ -54,6 +55,9 @@ case "${1:-}" in
 esac
 
 lib_dir="${VEIL_WALLET_LIB_DIR:-$HOME/veil-wallet-lib}"
+# Where the transport program the app for Android brings along for Tor
+# bridges is built (transports/build.sh).
+transport_dir="${VEIL_TRANSPORT_DIR:-$HOME/veil-transports}"
 if [ "$android" = 1 ]; then
   out_dir="$lib_dir/out/android/arm64-v8a"
   wallet_lib="$out_dir/libmonero_wallet2_api_c.so"
@@ -399,9 +403,13 @@ level_app() {
   local apk="$here/../app/build/app/outputs/flutter-apk/app-release.apk"
   local offline=()
   if [ "${CARGO_NET_OFFLINE:-}" = true ]; then offline=(--offline); fi
+  # The transport program for bridges: built here if it is not yet, which
+  # takes half a minute and the network once, and nothing after that.
+  step env ANDROID_NDK_ROOT="$android_ndk" "$here/transports/build.sh" "$transport_dir" || return 1
   step cargo_for_target build -p veil_core --release --locked &&
     mkdir -p "$libs" &&
-    step cp "$here/target/aarch64-linux-android/release/libveil_core.so" "$wallet_lib" "$libs/" || return 1
+    step cp "$here/target/aarch64-linux-android/release/libveil_core.so" "$wallet_lib" \
+      "$transport_dir/out/android/arm64-v8a/liblyrebird.so" "$libs/" || return 1
   (
     cd "$here/../app" &&
       export ANDROID_HOME="$android_sdk" ANDROID_SDK_ROOT="$android_sdk" &&
@@ -562,6 +570,7 @@ level_setup() {
       install_android_sdk &&
       step rustup target add aarch64-linux-android &&
       step "$here/wallet_lib/build.sh" "$lib_dir" --android &&
+      step env ANDROID_NDK_ROOT="$android_ndk" "$here/transports/build.sh" "$transport_dir" &&
       install_flutter
   elif [ "$windows" = 1 ]; then
     step rustup target add x86_64-pc-windows-gnu &&

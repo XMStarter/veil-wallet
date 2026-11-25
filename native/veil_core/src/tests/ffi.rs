@@ -682,4 +682,31 @@ fn bridges_are_checked_before_anything_is_started() {
     assert_eq!(check("not json").unwrap()["kind"], "bad_request");
     // SAFETY: null is allowed.
     assert!(!unsafe { veil_check_bridges(std::ptr::null()) }.is_null());
+
+    // An app that brings a transport program along says where it lies,
+    // and that one is used, under the name it has in a package for
+    // Android. Whatever is installed on this machine comes after it.
+    let obfs4 = "obfs4 192.0.2.55:38114 316E643333645F6D79216558614D3931657A5F5F \
+                 cert=YXJlIGZyZXF1ZW50bHkgZnVsbCBvZiBsaXR0bGUgbWVzc2FnZXMgeW91IGNhbiBmaW5kLg \
+                 iat-mode=0";
+    let shipped = dir.file("shipped");
+    std::fs::create_dir_all(&shipped).unwrap();
+    let packaged = shipped.join("liblyrebird.so");
+    std::fs::write(&packaged, b"").unwrap();
+    let mut config: Value = serde_json::from_str(&config_json(&dir, "create")).unwrap();
+    config["bridges"] = serde_json::json!([obfs4]);
+    config["transport_dir"] = serde_json::json!(shipped);
+    let (started, _) = parse_start(&config.to_string(), None).unwrap();
+    let programs = started.tor.bridges.transports;
+    assert_eq!(programs.len(), 1, "{programs:?}");
+    assert_eq!(programs[0].path, packaged);
+    assert_eq!(programs[0].protocols, vec!["obfs4"]);
+    assert_eq!(
+        check(&serde_json::json!({ "bridges": [obfs4], "transport_dir": shipped }).to_string()),
+        None
+    );
+    // A folder that is not text is a request nobody can read.
+    config["transport_dir"] = serde_json::json!(7);
+    let refused = parse_start(&config.to_string(), None).map(|_| ());
+    assert_eq!(refused.unwrap_err().kind, ProblemKind::BadRequest);
 }
