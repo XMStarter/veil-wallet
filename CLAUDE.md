@@ -762,9 +762,24 @@ about Tor, means Tor had connected through the bridge, and nodes that
 do not answer at the first try are what the public stagenet nodes have
 done before, here through a connection several times slower. Whether
 the bridge had a part in it was not looked into. Not tried: WebTunnel,
-and a network that blocks Tor, since the owner's does not. The owner's
-run on the desktop for this step, which changes the core, has not been
-sent yet.
+and a network that blocks Tor, since the owner's does not. On commit
+`241dd5f` the owner's run passed at the `offline` and `regtest` levels
+as Linux programs and at the `offline` level as Windows programs. The
+`regtest` level as Windows programs failed in one test of `veil_core`,
+`a_session_is_driven_through_the_interface_from_start_to_close`: after
+its sixty seconds the session was still opening, at its very first
+state. The seven other tests that open a wallet and started with it
+were reported as running for over a minute too, tests that take
+seconds, and then passed; they have no limit of their own. The same
+test program had passed minutes earlier in the same run without the
+`regtest` feature. That is the picture of the wallet DLL taking over a
+minute to load the first time in a freshly built program, which this
+machine has shown before in other forms; that it was the loading and
+not the first call after it was not seen. Nothing of this step is in
+that test's way. The tests that wait with a limit now load the library
+first, outside what they time, and a loading that takes five seconds or
+more says so in the test's output. Whether that is enough, the next run
+as Windows programs shows.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
@@ -783,7 +798,10 @@ See the build plan in `docs/concept.md`.
   status 116 a second or so after starting and passed when run again;
   `check.sh` now runs such a program's tests again one at a time to name
   the test, and what that run prints is the first thing to read if it
-  comes back.
+  comes back. Once, the tests of `veil_core` that open a wallet all
+  stood for over a minute at the start of a freshly built test program
+  and then went on; the one with a limit failed. The tests now load the
+  wallet library before they time anything and say when that took long.
   Each run of `veil.exe` takes 15 to 20 seconds there before it does
   anything, from loading over the WSL file share and being scanned. Tor connects
   from that machine without bridges, so the `bridges` level shows there

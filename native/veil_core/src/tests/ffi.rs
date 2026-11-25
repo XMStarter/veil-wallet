@@ -484,8 +484,8 @@ fn a_wallet_that_is_not_there_fails_before_tor_is_started() {
 
 #[test]
 fn a_session_is_driven_through_the_interface_from_start_to_close() {
-    if std::env::var_os("VEIL_WALLET_LIB").is_none() {
-        eprintln!("skipped: set VEIL_WALLET_LIB to the wallet library to run this test");
+    // Loaded here, before any wait with a limit begins; see the function.
+    if super::wallet_library().is_none() {
         return;
     }
     let dir = TempDir::new("ffi-session");

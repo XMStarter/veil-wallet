@@ -27,17 +27,9 @@ const OWN_HOST: &str = "vww6ybal4bd7szmgncyruucpgfkqahzddi37ktceo3ah7ngmcopnpyyd
 /// The configuration of a session whose wallet is `name` in `dir`, or
 /// `None`, which skips the test, when there is no wallet library.
 fn config(dir: &TempDir, name: &str) -> Option<SessionConfig> {
-    let wallet_library = match std::env::var_os("VEIL_WALLET_LIB") {
-        Some(path) => path.into(),
-        None => {
-            assert!(
-                std::env::var_os("VEIL_REQUIRE_WALLET_LIB").is_none(),
-                "VEIL_WALLET_LIB is not set but the wallet library is required"
-            );
-            eprintln!("skipped: set VEIL_WALLET_LIB to the wallet library to run this test");
-            return None;
-        }
-    };
+    // Loaded here, before any wait with a limit begins; see the function.
+    super::wallet_library()?;
+    let wallet_library = std::env::var_os("VEIL_WALLET_LIB")?.into();
     Some(SessionConfig {
         wallet_library,
         wallet_path: dir.file(name),
