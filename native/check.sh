@@ -348,7 +348,9 @@ traced_tests() {
   # four times slower and the daemon too slow to answer in time.
   # --no-fail-fast: a test that fails does not keep the rest from being
   # recorded.
-  CARGO_NET_OFFLINE=true strace -f --seccomp-bpf -qq -o "$record" \
+  # -q and not -qq: how each program ended stays in the record, so that
+  # the record alone says whether the test programs passed.
+  CARGO_NET_OFFLINE=true strace -f --seccomp-bpf -q -o "$record" \
     -e trace=network,execve,clone,clone3,fork,vfork \
     cargo test "$@" --locked --no-fail-fast
   local status=$?

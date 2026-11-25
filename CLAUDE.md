@@ -834,8 +834,16 @@ all. The recording now uses the kernel's own filter (`strace
 --seccomp-bpf`), which stops a program only at the calls that are
 recorded: the wallet's offline tests take 19 seconds that way where
 they took 107, with the same record, 26 unrecorded. And a test that
-fails no longer keeps the rest from being recorded. Whether the daemon
-now answers in time is for the next run of `leaks-chain` to show.
+fails no longer keeps the rest from being recorded. The owner ran
+`leaks-chain` again on commit `7e79893` and sent the record, not the
+log. Read in a cloud session, it holds 436 sockets and 692 addresses
+and nothing that leaves the machine, and nothing either with the six
+daemons of that run not left out (442 sockets, 866 addresses). The
+wallet's own tests on a private chain are in it this time. Whether the
+tests passed while recorded the record does not say: it was made
+without the lines for how a program ended, which it has from now on
+(`strace -q` in place of `-qq`). The log of that run says it and has
+not been seen.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
