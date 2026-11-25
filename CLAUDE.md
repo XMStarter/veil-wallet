@@ -814,10 +814,28 @@ the cache was not running, so nothing was even asked. The reader now
 judges that cache by what it is asked: about a host is a finding, about
 a user or a group is not. That it does fail was tried on a small
 program that connects outside, looks a name up and binds to every
-interface: seven findings. `leaks-chain` has not run anywhere: it
-starts a daemon. What these levels cannot see: the real Tor client,
-whose connections leave the machine and are meant to, the app's window
-and Flutter's own code, and anything on Windows or Android.
+interface: seven findings. What these levels cannot see: the real Tor
+client, whose connections leave the machine and are meant to, the app's
+window and Flutter's own code, and anything on Windows or Android. On
+commit `d4e3d2d` the owner ran both levels and sent the log and the two
+records. `leaks` passed there with the same numbers as in a cloud
+session, 352 sockets and 665 addresses, none leaving the machine.
+`leaks-chain` failed, and not for a leak: its record, 360 sockets and
+607 addresses, holds nothing that leaves the machine, and read again
+without the daemon left out it still holds nothing, so the test daemon
+keeps to loopback too. What failed was one test while it was recorded,
+`a_long_scan_is_saved_on_the_way_gives_way_and_misses_nothing`: the
+daemon did not answer a request for blocks within the five minutes the
+helper gives it. The recording stopped every program at every call it
+made, the daemon included, and the test program took eleven minutes
+where it takes six. Because cargo stops at the first test program that
+fails, the wallet's own tests on a private chain were not recorded at
+all. The recording now uses the kernel's own filter (`strace
+--seccomp-bpf`), which stops a program only at the calls that are
+recorded: the wallet's offline tests take 19 seconds that way where
+they took 107, with the same record, 26 unrecorded. And a test that
+fails no longer keeps the rest from being recorded. Whether the daemon
+now answers in time is for the next run of `leaks-chain` to show.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

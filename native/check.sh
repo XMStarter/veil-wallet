@@ -342,9 +342,15 @@ traced_tests() {
     step cargo build -p veil_test_guard --bin veil-trace-check --locked || return 1
   echo
   echo "--- the same tests, with their network calls recorded in $record"
-  CARGO_NET_OFFLINE=true strace -f -qq -o "$record" \
+  # --seccomp-bpf: the kernel stops a program only at the calls that are
+  # recorded and lets every other call through at full speed. Without it
+  # each call of every program is stopped, which made the wallet's tests
+  # four times slower and the daemon too slow to answer in time.
+  # --no-fail-fast: a test that fails does not keep the rest from being
+  # recorded.
+  CARGO_NET_OFFLINE=true strace -f --seccomp-bpf -qq -o "$record" \
     -e trace=network,execve,clone,clone3,fork,vfork \
-    cargo test "$@" --locked
+    cargo test "$@" --locked --no-fail-fast
   local status=$?
   if [ "$status" != 0 ]; then
     echo "the tests failed while recorded (exit $status); the record is read all the same" >&2
