@@ -386,7 +386,8 @@ two public faucets named at step 1.3 no longer served: one did not work
 and the other was blocked by the owner's antivirus as dangerous, so the
 coins came from the owner's own stagenet wallet. Step 3.8 was merged on
 the owner's word after that. After it, the state of Tor when the network
-goes away, written and not yet tried on a real network. Arti's own status
+goes away, written and seen to work once with a real network; its run on
+a private chain is still owed. Arti's own status
 never goes back once it has connected, so `veil_tor` reads the loss from
 the connections it is asked for: one that fails on the way to the first
 relay makes a ready Tor `Lost`, one that gets through or is answered
@@ -408,10 +409,18 @@ for a mistake of the test's own: it asked for a payment of one and a
 half where the three payments before it had left the wallet under a
 half. It asks for a tenth now, which has not been run. The part of the
 scenario before it, the node that worked being asked first, passed there
-for the first time. Not known: which kind of failure Arti gives
-when the owner's machine really loses its network. If it is only
-timeouts, the app will go on saying that no node answered, and the
-reading in `veil_tor::service::network_after` is the place to change.
+for the first time. The owner then took the network away under the app
+with a real wallet open and sent two pictures of Home: first "Tor has
+lost its connection" with the synchronisation failed for Tor's reason,
+then "Tor is connected" and "Synchronised". So Arti does give the kind
+of failure that is read as a loss there, and the wallet found the
+network again by itself. Which build it was and how the network was
+taken away was not said; the only build with this code was the Linux one
+of that run, started under WSL. Not seen: the same in the app for
+Windows, which hosted CI builds only on a pull request, a send confirmed
+with the network gone, and a loss that shows as nothing but timeouts,
+which would still read as nodes that do not answer
+(`veil_tor::service::network_after` is the place to change then).
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
