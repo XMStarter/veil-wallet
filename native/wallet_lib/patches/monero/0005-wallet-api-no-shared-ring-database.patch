@@ -1,0 +1,36 @@
+diff --git a/src/wallet/api/wallet.cpp b/src/wallet/api/wallet.cpp
+index cf67ae6..ee89553 100644
+--- a/src/wallet/api/wallet.cpp
++++ b/src/wallet/api/wallet.cpp
+@@ -107,19 +107,6 @@ namespace {
+     // Connection timeout 20 sec
+     static const int    DEFAULT_CONNECTION_TIMEOUT_MILLIS = 1000 * 20;
+ 
+-    std::string get_default_ringdb_path(cryptonote::network_type nettype)
+-    {
+-      boost::filesystem::path dir = tools::get_default_data_dir();
+-      // remove .bitmonero, replace with .shared-ringdb
+-      dir = dir.remove_filename();
+-      dir /= ".shared-ringdb";
+-      if (nettype == cryptonote::TESTNET)
+-        dir /= "testnet";
+-      else if (nettype == cryptonote::STAGENET)
+-        dir /= "stagenet";
+-      return dir.string();
+-    }
+-
+     void checkMultisigWalletReady(const tools::wallet2* wallet) {
+         if (!wallet) {
+             throw runtime_error("Wallet is not initialized yet");
+@@ -783,7 +770,10 @@ bool WalletImpl::open(const std::string &path, const std::string &password)
+             // Rebuilding wallet cache, using refresh height from .keys file
+             m_rebuildWalletCache = true;
+         }
+-        m_wallet->set_ring_database(get_default_ringdb_path(m_wallet->nettype()));
++        // No ring database: it would be made outside the wallet's own
++        // folder, under the user's home or, on Windows, in a folder all
++        // users of the machine share, and a wallet that is created or
++        // restored never had one.
+         m_wallet->load(path, password);
+ 
+         m_password = password;

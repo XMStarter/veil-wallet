@@ -163,6 +163,10 @@ if, at build time, Arti cannot run bridges on Android.
   keys, its data, and what the app remembered about it. It asks for the
   password and says first that only the recovery phrase brings the wallet
   back. The funds are not touched; they belong to whoever has the phrase.
+  Nothing of the wallet lies anywhere but in its own folder: the wallet
+  library would keep a database of its own outside it, shared by every
+  Monero wallet on the machine, and Veil's build of the library does not
+  make it.
 - **Encryption.** The wallet file is encrypted with the user's password. On
   Android, biometric unlock is available through the hardware-backed key
   store.
@@ -280,6 +284,17 @@ run where is set out in [development.md](development.md).
   to feed the wallet distorted data. Choosing randomly among several nodes
   reduces this. Running your own node removes it.
 - **A hot wallet is not protected against a compromised device.**
+- **A payment that is built twice can show a node which coin it spends.**
+  A transaction hides the coin it spends among decoys, which the wallet
+  asks its node for. The official wallet writes down which decoys it
+  chose, in a database outside the wallet's folder, and takes the same
+  ones again. Veil keeps no such database: it would stay behind when the
+  wallet is removed and show that a Monero wallet was used on the device,
+  and a damaged one would keep every wallet from opening. So when a
+  payment is reviewed, cancelled and made again, or sent again after a
+  failure, the node is asked twice, and the coin is what the two requests
+  have in common. The node learns which earlier transaction the money
+  came from. It learns no address and no amount.
 - **Polyseed is not supported by the official Monero GUI wallet.** Feather,
   Cake, and several other wallets do support it.
 

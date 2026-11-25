@@ -216,7 +216,15 @@ void main() {
     final wallet = Directory(paths().walletDir);
     await wallet.create(recursive: true);
     // What a wallet leaves in its folder, by name; no wallet is opened.
-    for (final name in ['wallet', 'wallet.keys', 'wallet.unreadable-1']) {
+    // The wallet library keeps nothing outside that folder, which
+    // `native/veil_wallet/tests/offline.rs` checks with real wallets.
+    for (final name in [
+      'wallet',
+      'wallet.keys',
+      'wallet.lock',
+      'wallet.unreadable-1',
+      'wallet.unportable',
+    ]) {
       await File('${wallet.path}/$name').writeAsString('x');
     }
     await backend.confirmPhrase();
