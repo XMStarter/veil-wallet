@@ -174,11 +174,9 @@ pub struct Wallet {
 /// keeps a lock of its own, for every wallet it has open.
 fn mark_in_use(path: &Path) -> Result<std::fs::File, Error> {
     let name = in_use_name(path);
-    let failed = |error: std::io::Error| {
-        Error::Wallet(format!(
-            "the wallet could not be marked as open ({}): {error}",
-            name.display()
-        ))
+    let failed = |error: std::io::Error| Error::NotMarked {
+        file: name.clone(),
+        reason: error.to_string(),
     };
     let file = std::fs::OpenOptions::new()
         .create(true)
@@ -186,10 +184,47 @@ fn mark_in_use(path: &Path) -> Result<std::fs::File, Error> {
         .write(true)
         .open(&name)
         .map_err(failed)?;
+    match lock_now(&file) {
+        Ok(true) => Ok(file),
+        Ok(false) => Err(Error::WalletInUse),
+        Err(error) => Err(failed(error)),
+    }
+}
+
+/// Takes the lock on `file` if nobody has it, without waiting. `false`
+/// means that somebody has. The lock goes with the open file: it is let go
+/// when the file is closed or its process ends.
+///
+/// The standard library has this as `File::try_lock`, but not for every
+/// system: on Android it answers "not supported", which kept every wallet
+/// there from being opened or made. The call it makes on Linux, `flock`,
+/// exists on Android as well, so here it is made directly, on every
+/// system that has it. That also means the lock an Android phone uses is
+/// the one the tests on Linux exercise.
+#[cfg(unix)]
+fn lock_now(file: &std::fs::File) -> std::io::Result<bool> {
+    use std::os::fd::AsRawFd;
+    // SAFETY: the descriptor belongs to `file`, which is open for the
+    // whole of the call, and `flock` touches nothing else.
+    if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0 {
+        return Ok(true);
+    }
+    let error = std::io::Error::last_os_error();
+    if error.kind() == std::io::ErrorKind::WouldBlock {
+        Ok(false)
+    } else {
+        Err(error)
+    }
+}
+
+/// See the other `lock_now`. On Windows the standard library's lock is
+/// there and is what the tests run as Windows programs exercise.
+#[cfg(not(unix))]
+fn lock_now(file: &std::fs::File) -> std::io::Result<bool> {
     match file.try_lock() {
-        Ok(()) => Ok(file),
-        Err(std::fs::TryLockError::WouldBlock) => Err(Error::WalletInUse),
-        Err(std::fs::TryLockError::Error(error)) => Err(failed(error)),
+        Ok(()) => Ok(true),
+        Err(std::fs::TryLockError::WouldBlock) => Ok(false),
+        Err(std::fs::TryLockError::Error(error)) => Err(error),
     }
 }
 

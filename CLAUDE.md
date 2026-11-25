@@ -459,7 +459,28 @@ the package the way devices with 16-kilobyte pages want them. It is
 signed with the build machine's debug key. It has never been installed
 or started: whether the core finds the wallet library by name, whether
 Tor starts in an app's storage, and how the screens sit on a phone are
-all still to be seen, on the owner's phone. The wallet library's "shared
+all still to be seen, on the owner's phone. The owner installed the
+APK, and both ways to a wallet failed: restoring with "this is not a
+recovery phrase", making a new one with "the wallet could not be marked
+as open ... try_lock() not supported". One cause: Rust's standard
+library has no file locks for Android and says so only when asked, so
+the mark that keeps a wallet from being opened twice could not be made.
+The lock is now taken with the system's `flock` directly on every
+system that has it, which is also what the tests on Linux run. The
+restore had hidden the reason because the session called every refusal
+of a restore a wrong phrase; a mark that cannot be made is an error of
+its own now, and an invalid phrase is shown with what the library said.
+What that first try did show: the app starts on a phone, the core finds
+the wallet library inside the package, and Tor starts in the app's
+storage, since the mark is made after all three. The words of a phrase
+are now also taken without full stops, commas and numbers, which a
+phone's keyboard or a note adds. The change of the lock made an
+unrelated test fail every time, the fake node suddenly "incompatible":
+the fake did not list the protocol upgrades with its version, the
+library then takes a path that can read a variable nothing has set, and
+what it decides there moved with the layout of the program. The fake
+lists them now, like every current node; the library's side is noted in
+`native/veil_wallet/README.md` and not patched. The wallet library's "shared
 ring database" is not made on Android, where an app has no home folder;
 on a desktop the library makes it in the user's home folder, outside
 Veil's own, which was noticed here and is not dealt with. On

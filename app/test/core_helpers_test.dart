@@ -6,6 +6,22 @@ void main() {
   test('a phrase is its words, however it was typed', () {
     expect(phraseWords('  Alpha  beta\n\tGAMMA '), ['alpha', 'beta', 'gamma']);
     expect(phraseWords(''), isEmpty);
+    // As a phone's keyboard or a note may hand it over: a full stop after
+    // two spaces, commas, numbers in front, a space that is not a space.
+    expect(phraseWords('alpha.  Beta, gamma'), ['alpha', 'beta', 'gamma']);
+    expect(phraseWords('1. alpha 2) beta\n3.gamma'), [
+      'alpha',
+      'beta',
+      'gamma',
+    ]);
+    expect(phraseWords('alpha\u00a0beta\u200b gamma'), [
+      'alpha',
+      'beta',
+      'gamma',
+    ]);
+    // Letters of other alphabets and accents are letters.
+    expect(phraseWords('Ábaco niño café'), ['ábaco', 'niño', 'café']);
+    expect(phraseWords('cafe\u0301'), ['cafe\u0301']);
     expect(isPhraseLength(16), isTrue);
     expect(isPhraseLength(25), isTrue);
     for (final count in [0, 1, 12, 15, 17, 24, 26]) {

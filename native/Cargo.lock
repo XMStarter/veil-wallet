@@ -5075,6 +5075,7 @@ dependencies = [
 name = "veil_wallet"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "libloading",
  "thiserror 2.0.21",
  "veil_test_guard",

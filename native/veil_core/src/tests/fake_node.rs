@@ -68,8 +68,9 @@ fn serve(mut stream: TcpStream, height: u64, delay: Duration, log: &Mutex<Vec<St
                 "{{\"jsonrpc\":\"2.0\",\"id\":\"0\",\"result\":{{\"status\":\"OK\",\
                  \"untrusted\":false,\"version\":{version},\"release\":true,\
                  \"current_height\":{height},\"height\":{height},\"target_height\":0,\
-                 \"enabled\":true,\"earliest_height\":1}}}}",
+                 \"enabled\":true,\"earliest_height\":1,\"hard_forks\":[{hard_forks}]}}}}",
                 version = (3 << 16) | 16,
+                hard_forks = hard_forks(),
             );
             ("application/json", reply.into_bytes())
         } else {
@@ -85,6 +86,46 @@ fn serve(mut stream: TcpStream, height: u64, delay: Duration, log: &Mutex<Vec<St
             return;
         }
     }
+}
+
+/// The protocol upgrades of the main network, each with the height it
+/// began at, as a node of today lists them with its version. The tests'
+/// wallets are wallets of the main network.
+///
+/// A node that leaves the list out is taken for an old one, and the wallet
+/// library then asks it a second question and reads the answer from a
+/// variable that nothing has set if that question fails
+/// (`wallet2::check_hard_fork_version`). A test here began to fail, the
+/// node suddenly "incompatible", after a change that had nothing to do
+/// with nodes, and has passed since the list is sent; that is as far as
+/// the cause was followed. Every node that is kept up to date sends the
+/// list, and so does this one.
+const MAINNET_HARD_FORKS: [(u8, u64); 16] = [
+    (1, 1),
+    (2, 1_009_827),
+    (3, 1_141_317),
+    (4, 1_220_516),
+    (5, 1_288_616),
+    (6, 1_400_000),
+    (7, 1_546_000),
+    (8, 1_685_555),
+    (9, 1_686_275),
+    (10, 1_788_000),
+    (11, 1_788_720),
+    (12, 1_978_433),
+    (13, 2_210_000),
+    (14, 2_210_720),
+    (15, 2_688_888),
+    (16, 2_689_608),
+];
+
+/// [`MAINNET_HARD_FORKS`] as the items of a JSON list.
+fn hard_forks() -> String {
+    MAINNET_HARD_FORKS
+        .iter()
+        .map(|(version, height)| format!("{{\"hf_version\":{version},\"height\":{height}}}"))
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 /// Reads one HTTP request and returns its path and body.
