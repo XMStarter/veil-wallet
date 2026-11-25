@@ -140,9 +140,11 @@ app looks for the core and the wallet library in its own folder, next to
   storage, which no other app can read and Android copies to no backup;
   the core and the wallet library are inside the package. It has no
   transport programs, so bridges cannot be used there yet.
-- What a phone asks for is written and has not been tried on one: no
-  picture of the app while a recovery phrase is shown or typed, Share on
-  Receive, a code read with the camera on Send, and the app's own icon.
+- What a phone asks for has been tried on one phone, the owner's, and
+  worked there: no picture of the app while a recovery phrase is shown
+  or typed, Share on Receive, a code read with the camera on Send, a
+  copied address gone from the clipboard after a minute, and the app's
+  own icon.
   The code is read by ZXing with the screen from
   `zxing-android-embedded`, both under the Apache licence 2.0, whose text
   a build that ships them has to carry. They are the app's only

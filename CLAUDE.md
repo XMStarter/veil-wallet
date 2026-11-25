@@ -533,7 +533,15 @@ both only where the device can; the code is read by ZXing through
 Flutter, and the camera is its second permission. The icon is the
 profile cut out of the logo, until there is a mark made for it. Tests on
 the wallet and device that only pretend cover the Dart side of all of
-it; the Kotlin side is compiled into an APK and nothing more. The
+it; the Kotlin side was compiled into an APK and nothing more. With the
+APK built from commit `c0c176c`, installed over the one before on the
+same phone, the owner went through five things and reported that all
+five work: the icon, no screenshot of the screen with the phrase while
+Home can be photographed, a copied address gone from the clipboard after
+a minute, Share on Receive, and a code read with the camera into the
+form on Send. Not run with it: the owner's run on the desktop, which
+waits for the change to the wallet library in pull request 16 so that
+the libraries are rebuilt once. The
 wallet library's "shared
 ring database" is not made on Android, where an app has no home folder;
 on a desktop the library makes it in the user's home folder, outside
