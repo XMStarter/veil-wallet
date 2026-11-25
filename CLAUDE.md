@@ -593,8 +593,26 @@ step 4.3, with one conflict, in this file. In a cloud session the
 libraries for Linux and for Android were rebuilt with the new patch, the
 offline level passed on the joined code, the test that looks outside the
 wallet's folder included, and an APK was built with the rebuilt library.
-That APK has not been on a phone, and the owner's machine has not yet
-rebuilt its three libraries or run anything on the joined code.
+On that commit, `42132ee`, the owner rebuilt the library for Linux and
+for Windows (`./check.sh setup`, `--windows setup`), and the run passed
+at the `offline` and `regtest` levels as Linux and as Windows programs.
+With it ran for the first time: the test that looks outside the wallet's
+folder as a Windows program, the same look around the scenario on a
+private chain on both systems, and the removal of the address file as a
+Windows program. Whether the folders an older library had left
+(`~/.shared-ringdb`, `C:\ProgramData\.shared-ringdb`) were deleted before
+that run is not known; if they were still there, the run shows that they
+were not written to and not that they would not come back. The owner
+installed the APK with the rebuilt library over the one before and
+reported that it works; what was asked for was that the wallet opens and
+synchronises. With that, step 4.3 has passed the owner's run on both
+systems and on the phone. `./check.sh --android setup`, run on the
+owner's machine for the first time, did not get past its first download:
+Google's server answered 404 for the pinned NDK, where the same address
+answers a cloud session with the file. Why is not known; the script now
+names the address it could not download. Nothing depends on it while the
+APKs are built in a cloud session, and the owner's machine has no
+library for Android.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
@@ -633,7 +651,10 @@ See the build plan in `docs/concept.md`.
   `--android offline` work there, and so does `wallet_lib/build.sh
   --android`. Nothing built for Android can be started there. The hosts
   an app's build needs (Google's and Maven's package servers, Gradle's)
-  answered when asked.
+  answered when asked. On the owner's machine the first of those
+  downloads, the pinned NDK from `dl.google.com`, was answered with 404,
+  once, cause unknown; the other hosts were not reached because the
+  script stopped there.
 - The wallet library can be built in a cloud session from source with
   `native/wallet_lib/build.sh` (about half an hour; install the packages
   listed at the top of the script first). Building it is fine; `monerod`
