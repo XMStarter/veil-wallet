@@ -88,7 +88,9 @@ if, at build time, Arti cannot run bridges on Android.
 - The user pastes or scans an address, enters an amount, and sees a review
   screen with the fee and the total before anything is sent. A payment
   link, `monero:` followed by an address, is read like an address, with
-  its amount if it names one. (Scanning comes with the phone.)
+  its amount if it names one. On a phone a code is read with the camera,
+  on the device itself: the picture goes nowhere, and the camera is asked
+  for the first time a code is to be read.
 - The address is shown in groups of four characters with the beginning and
   the end highlighted, so it is easy to compare with the original.
 - Before a transaction is handed to a node, the node is asked whether it
@@ -134,7 +136,10 @@ if, at build time, Arti cannot run bridges on Android.
   remember a block height, which is the main cause of "restored but the
   balance is zero" complaints.
 - **Showing the phrase.** It is shown once and then verified by asking for a
-  few of the words. Screenshots are blocked on that screen.
+  few of the words. On a phone, no picture can be taken of the app while
+  a phrase is shown or typed: no screenshot, no recording, and no preview
+  among the recent apps. Every other screen can be photographed, which is
+  how a problem gets reported.
 - **Restoring.** Both Polyseed (16 words) and the classic Monero phrase
   (25 words) are accepted. For the classic phrase the app asks for an
   approximate creation date. (For now it asks for a block number instead:
@@ -171,8 +176,11 @@ if, at build time, Arti cannot run bridges on Android.
   Android, biometric unlock is available through the hardware-backed key
   store.
 - **On-device protection.** A way to lock the wallet at any time and
-  auto-lock. Clearing the clipboard and switching off Android's cloud
-  backup belong to the Android step and are not done yet. A locked wallet
+  auto-lock. An address that was copied is taken out of the clipboard a
+  minute later, if it is still what the clipboard holds; a phone lets an
+  app look into the clipboard only while it is in front, so there it can
+  take until the app is opened again. On Android the wallet's files are
+  copied to no backup and to no other device. A locked wallet
   is closed: Tor is stopped, and only the password opens it again. The
   wallet locks itself after five minutes without use; that can be set to
   one, fifteen or sixty minutes, and not switched off. It does not lock in

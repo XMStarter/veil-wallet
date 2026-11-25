@@ -431,6 +431,17 @@ hand_over_apk() {
   echo "once whether apps may be installed from where it was opened."
 }
 
+# Downloads the address `$2` into the file `$1`, over HTTPS only. When that
+# fails it names the address: curl alone says how the server answered and
+# not what it was asked for, and the same address can answer one machine
+# and not another.
+fetch() {
+  curl --proto '=https' --tlsv1.2 -sSf -o "$1" "$2" && return 0
+  echo "error: could not download $2" >&2
+  echo "Whether it answers from this machine: curl -sSI '$2' | head -n 1" >&2
+  return 1
+}
+
 level_ndk() {
   if [ "$android" != 1 ]; then
     echo "error: 'ndk' goes with --android: ./check.sh --android ndk" >&2
@@ -452,7 +463,7 @@ install_android_ndk() {
   local name="android-ndk-$android_ndk_release-linux.zip"
   local archive="$android_dir/$name" unpacked="$android_dir/unpacked-ndk"
   mkdir -p "$android_sdk/ndk" && rm -rf "$android_ndk" "$unpacked" &&
-    curl --proto '=https' --tlsv1.2 -sSf -o "$archive" "https://dl.google.com/android/repository/$name" &&
+    fetch "$archive" "https://dl.google.com/android/repository/$name" &&
     echo "$android_ndk_sha256  $archive" | sha256sum -c - &&
     unzip -q "$archive" -d "$unpacked" &&
     mv "$unpacked/android-ndk-$android_ndk_release" "$android_ndk" || return 1
@@ -481,7 +492,7 @@ install_android_sdk() {
   local name="commandlinetools-linux-${android_tools_release}_latest.zip"
   local archive="$android_dir/$name" unpacked="$android_dir/unpacked-tools"
   mkdir -p "$android_sdk/cmdline-tools" && rm -rf "$android_sdk/cmdline-tools/latest" "$unpacked" &&
-    curl --proto '=https' --tlsv1.2 -sSf -o "$archive" "https://dl.google.com/android/repository/$name" &&
+    fetch "$archive" "https://dl.google.com/android/repository/$name" &&
     echo "$android_tools_sha256  $archive" | sha256sum -c - &&
     unzip -q "$archive" -d "$unpacked" &&
     mv "$unpacked/cmdline-tools" "$android_sdk/cmdline-tools/latest" || return 1
@@ -655,7 +666,7 @@ install_flutter() {
   fi
   local archive="$flutter_dir/${name##*/}"
   mkdir -p "$flutter_dir" && rm -rf "$flutter_dir/flutter" &&
-    curl --proto '=https' --tlsv1.2 -sSf -o "$archive" "$base/$name" &&
+    fetch "$archive" "$base/$name" &&
     echo "$sha  $archive" | sha256sum -c - || return 1
   case "$archive" in
     *.zip) unzip -q "$archive" -d "$flutter_dir" ;;

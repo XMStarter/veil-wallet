@@ -31,7 +31,15 @@ class _RestoreScreenState extends State<RestoreScreen> {
   Problem? _problem;
 
   @override
+  void initState() {
+    super.initState();
+    // No picture is taken of this screen: see [Device.secretShown].
+    widget.backend.device.secretShown();
+  }
+
+  @override
   void dispose() {
+    widget.backend.device.secretGone();
     _phrase.dispose();
     _height.dispose();
     super.dispose();

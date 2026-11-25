@@ -163,8 +163,11 @@ void main() {
   testWidgets('the recovery phrase is shown again only for the password', (
     tester,
   ) async {
-    await openSettings(tester, 'en');
+    final backend = await openSettings(tester, 'en');
+    expect(backend.device.guarded, isFalse);
     await openLine(tester, 'Recovery phrase');
+    // From the question for the password on, no picture is taken.
+    expect(backend.device.guarded, isTrue);
     final first = testPhrase.split(' ').first;
     expect(find.text(first), findsNothing);
     await type(tester, 'Password', 'not the password');
@@ -183,6 +186,8 @@ void main() {
     // The password is gone from the screen.
     expect(find.text('Password'), findsNothing);
     expect(tester.takeException(), isNull);
+    await press(tester, 'Back');
+    expect(backend.device.guarded, isFalse);
   });
 
   testWidgets('the wallet locks itself when it is not used', (tester) async {

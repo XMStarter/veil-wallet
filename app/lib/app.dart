@@ -50,6 +50,9 @@ class _VeilAppState extends State<VeilApp> {
     super.initState();
     // Closing the window saves the wallet and stops Tor first.
     _lifecycle = AppLifecycleListener(
+      // A copied address whose minute ran out while the app was in the
+      // background is taken out of the clipboard now.
+      onResume: () => widget.backend.device.resumed(),
       onExitRequested: () async {
         try {
           await widget.backend.close();

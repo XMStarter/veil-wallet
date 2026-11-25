@@ -43,7 +43,8 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
   Future<void> _copy(String address) async {
     var taken = true;
     try {
-      await Clipboard.setData(ClipboardData(text: address));
+      // For a while, not for good: the device takes it out again.
+      await widget.backend.device.copy(address);
     } on PlatformException {
       taken = false;
     } on MissingPluginException {
@@ -54,6 +55,17 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
       _copied = taken ? address : null;
       _copyFailed = !taken;
     });
+  }
+
+  /// Hands the address to another app, where the device has a way to.
+  Future<void> _share(String address) async {
+    try {
+      await widget.backend.device.share(address);
+    } on PlatformException {
+      // Nothing to share into after all; the address is still on show.
+    } on MissingPluginException {
+      // The same.
+    }
   }
 
   void _another() {
@@ -83,6 +95,14 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
               label: text.receiveCopy,
               onPressed: receive == null ? null : () => _copy(receive.address),
             ),
+            if (widget.backend.device.canShare)
+              VeilButton(
+                label: text.receiveShare,
+                primary: false,
+                onPressed: receive == null
+                    ? null
+                    : () => _share(receive.address),
+              ),
             VeilButton(
               label: text.receiveNew,
               primary: false,

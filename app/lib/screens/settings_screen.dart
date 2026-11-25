@@ -500,7 +500,15 @@ class _ShowPhraseScreenState extends State<ShowPhraseScreen> {
   String? _phrase;
 
   @override
+  void initState() {
+    super.initState();
+    // No picture is taken of this screen: see [Device.secretShown].
+    widget.backend.device.secretShown();
+  }
+
+  @override
   void dispose() {
+    widget.backend.device.secretGone();
     _password.dispose();
     super.dispose();
   }

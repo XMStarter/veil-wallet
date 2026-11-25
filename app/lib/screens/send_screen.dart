@@ -89,6 +89,30 @@ class _SendScreenState extends State<SendScreen> {
     });
   }
 
+  /// Reads an address, or a payment link with its amount, from a code in
+  /// front of the camera.
+  Future<void> _scan(String prompt) async {
+    String? text;
+    try {
+      text = await widget.backend.device.scan(prompt);
+    } on PlatformException {
+      text = null;
+    } on MissingPluginException {
+      text = null;
+    }
+    // Nothing read: the user gave up, or the camera was not allowed. The
+    // form stays as it was.
+    if (!mounted || text == null || text.trim().isEmpty) return;
+    final target = readPayment(text.trim());
+    setState(() {
+      _nothingToPaste = false;
+      _refused = null;
+      _address.text = target.address;
+      final amount = target.amount;
+      if (amount != null && !_everything) _amount.text = amount;
+    });
+  }
+
   void _prepare() {
     if (!_filled) return;
     // A stale refusal goes first, so that the one shown is this attempt's.
@@ -170,6 +194,11 @@ class _SendScreenState extends State<SendScreen> {
           label: text.sendPaste,
           onPressed: preparing ? null : _paste,
         ),
+        if (widget.backend.device.canScan)
+          VeilQuietButton(
+            label: text.sendScan,
+            onPressed: preparing ? null : () => _scan(text.sendScanPrompt),
+          ),
         const SizedBox(height: 8),
         if (_everything)
           Notice(text.sendEverythingOn)

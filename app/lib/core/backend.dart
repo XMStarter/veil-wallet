@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:veil_bridge/veil_bridge.dart';
 
+import 'device.dart';
 import 'settings.dart';
 
+export 'device.dart' show Device;
 export 'settings.dart' show AppSettings;
 
 export 'package:veil_bridge/veil_bridge.dart'
@@ -38,6 +40,10 @@ const everything = 'all';
 /// What the screens need from the wallet. The app gives them the real one,
 /// which runs the core; tests give them one that only pretends.
 abstract class WalletBackend {
+  /// The device the app runs on, for the few things the screens ask of
+  /// it directly.
+  Device get device;
+
   /// Whether this device already has a wallet.
   Future<bool> walletExists();
 

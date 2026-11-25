@@ -369,6 +369,30 @@ void main() {
     expect(enabled(tester, 'Continue'), isTrue);
   });
 
+  testWidgets('a phone reads the address from a code', (tester) async {
+    final backend = await openSend(tester, 'en');
+    // A desktop has no camera for it, and no button.
+    expect(find.text('SCAN A CODE'), findsNothing);
+    await press(tester, 'Back');
+
+    backend.device.canScan = true;
+    await press(tester, 'Send');
+    // The user gives up, or does not allow the camera: nothing changes.
+    await press(tester, 'Scan a code');
+    expect(backend.device.prompts, [
+      'Point the camera at the code of the address',
+    ]);
+    expect(fieldText(tester, 'Address to pay to'), '');
+
+    // A code as Receive draws it, with an amount as some wallets add.
+    backend.device.scanReads = 'monero:$payee?tx_amount=2.5';
+    await press(tester, 'Scan a code');
+    expect(fieldText(tester, 'Address to pay to'), payee);
+    expect(fieldText(tester, 'Amount, XMR'), '2.5');
+    expect(enabled(tester, 'Continue'), isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('an empty clipboard is said to be empty', (tester) async {
     clipboard(tester);
     await openSend(tester, 'en');

@@ -105,8 +105,11 @@ that cannot lose the user's funds.
   in `veil_core/src/ffi.rs`; the state crosses as JSON, pinned by
   `native/veil_core/tests/fixtures`, which both sides test against.
 - `app/`: the app, written with Flutter, for Linux, Windows and Android
-  (`app/android`; the Android side answers one question, where the app's
-  files go, and the libraries are found there by name). So
+  (`app/android`; the libraries are found there by name, and what only
+  the system can do goes through `lib/core/device.dart` to
+  `MainActivity`: where the app's files go, no picture of a screen with
+  a phrase, Share, a code read with the camera, the clipboard emptied).
+  So
   far the way to an open wallet (create, recovery phrase, restore, unlock),
   Home, Receive, Send, and Settings.
   Screens talk to `WalletBackend` (`app/lib/core`), never to the core
@@ -514,8 +517,32 @@ itself on commit `be063de`, which differs only in that script, the
 `veil_core`. So the ending with 116 has happened once and did not come
 back; its cause was not found, and a run that passes afterwards does not
 show that nothing is wrong. With that, step 4.2 has passed the owner's
-run on both systems and on the phone. Hosted CI, with its new build for
-Android, has not run. The wallet library's "shared
+run on both systems and on the phone. Hosted CI then passed on both
+systems, its Linux job building the core for Android for the first time,
+in twelve minutes where it took six, and steps 4.1 and 4.2 were merged on
+the owner's word. Step 4.3, what a phone asks for, is written and has
+not been on a phone. No picture can be taken of the app while a recovery
+phrase is shown or typed (Android's `FLAG_SECURE`, put up by the four
+screens that have a phrase on them and taken down when the last is
+gone); every other screen can still be photographed, which is how the
+owner reports problems. An address that was copied is taken out of the
+clipboard a minute later if it is still there, on every system, and on a
+phone when the app is next in front if the minute ran out in the
+background. Receive has Share and Send reads a code with the camera,
+both only where the device can; the code is read by ZXing through
+`zxing-android-embedded`, the app's first dependency on Android besides
+Flutter, and the camera is its second permission. The icon is the
+profile cut out of the logo, until there is a mark made for it. Tests on
+the wallet and device that only pretend cover the Dart side of all of
+it; the Kotlin side was compiled into an APK and nothing more. With the
+APK built from commit `c0c176c`, installed over the one before on the
+same phone, the owner went through five things and reported that all
+five work: the icon, no screenshot of the screen with the phrase while
+Home can be photographed, a copied address gone from the clipboard after
+a minute, Share on Receive, and a code read with the camera into the
+form on Send. Not run with it: the owner's run on the desktop, which
+waits for the change to the wallet library in pull request 16 so that
+the libraries are rebuilt once. The wallet library's "shared
 ring database", which the library makes outside Veil's own folder on a
 desktop, was noticed here; the end of this section tells what was done
 about it. On
@@ -561,6 +588,31 @@ finds it, so that is for good, and a wallet made earlier loses it the
 first time it is opened. An offline test shows it on all three networks,
 a changed password included, and fails without the removal. This needs
 no patch to the library.
+That work and step 4.3 then met: `main` was merged into the branch of
+step 4.3, with one conflict, in this file. In a cloud session the
+libraries for Linux and for Android were rebuilt with the new patch, the
+offline level passed on the joined code, the test that looks outside the
+wallet's folder included, and an APK was built with the rebuilt library.
+On that commit, `42132ee`, the owner rebuilt the library for Linux and
+for Windows (`./check.sh setup`, `--windows setup`), and the run passed
+at the `offline` and `regtest` levels as Linux and as Windows programs.
+With it ran for the first time: the test that looks outside the wallet's
+folder as a Windows program, the same look around the scenario on a
+private chain on both systems, and the removal of the address file as a
+Windows program. Whether the folders an older library had left
+(`~/.shared-ringdb`, `C:\ProgramData\.shared-ringdb`) were deleted before
+that run is not known; if they were still there, the run shows that they
+were not written to and not that they would not come back. The owner
+installed the APK with the rebuilt library over the one before and
+reported that it works; what was asked for was that the wallet opens and
+synchronises. With that, step 4.3 has passed the owner's run on both
+systems and on the phone. `./check.sh --android setup`, run on the
+owner's machine for the first time, did not get past its first download:
+Google's server answered 404 for the pinned NDK, where the same address
+answers a cloud session with the file. Why is not known; the script now
+names the address it could not download. Nothing depends on it while the
+APKs are built in a cloud session, and the owner's machine has no
+library for Android.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
@@ -599,7 +651,10 @@ See the build plan in `docs/concept.md`.
   `--android offline` work there, and so does `wallet_lib/build.sh
   --android`. Nothing built for Android can be started there. The hosts
   an app's build needs (Google's and Maven's package servers, Gradle's)
-  answered when asked.
+  answered when asked. On the owner's machine the first of those
+  downloads, the pinned NDK from `dl.google.com`, was answered with 404,
+  once, cause unknown; the other hosts were not reached because the
+  script stopped there.
 - The wallet library can be built in a cloud session from source with
   `native/wallet_lib/build.sh` (about half an hour; install the packages
   listed at the top of the script first). Building it is fine; `monerod`
