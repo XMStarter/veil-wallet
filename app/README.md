@@ -154,9 +154,8 @@ app looks for the core and the wallet library in its own folder, next to
   dependency on Android besides Flutter. The camera was the app's only
   permission besides the network until the next point.
 - Background synchronisation on a phone has been tried on one phone, the
-  owner's, where all of it worked but Back on the first screen, which
-  sometimes ended the app; what was done about that has not been on a
-  phone yet. While a wallet is open, `WalletService` holds the app's process
+  owner's, and worked there, after Back on the first screen, which
+  sometimes ended the app, was put right. While a wallet is open, `WalletService` holds the app's process
   up with a notice ("The wallet is open", "… and synchronising"), and
   the phone awake while the wallet connects, synchronises or sends; it
   ends when the wallet is locked. For that the app has four more

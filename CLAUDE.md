@@ -671,7 +671,14 @@ alone: the app now always tells Android that it deals with Back itself
 without it), so Back reaches `MainActivity.popSystemNavigator`, and
 `MainActivity.finish` puts the app behind the others instead of ending
 its screen, whoever asks. The second is Kotlin and has only been
-compiled.
+compiled. With the APK built from commit `1fd8479` the owner tried Back
+on Home with a wallet open both ways, the app opened from the screen
+that installed it and from the home screen, and reported that both
+work: the app goes behind the others and the wallet stays open. Which
+of the two changes did it cannot be told from that, and whether the
+reading above was the cause was not shown either. No run on the
+owner's desktop was made for this step: neither the core nor the wallet
+library changed in it, and the offline level passed in a cloud session.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
