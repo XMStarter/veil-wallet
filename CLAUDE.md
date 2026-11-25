@@ -842,8 +842,14 @@ daemons of that run not left out (442 sockets, 866 addresses). The
 wallet's own tests on a private chain are in it this time. Whether the
 tests passed while recorded the record does not say: it was made
 without the lines for how a program ended, which it has from now on
-(`strace -q` in place of `-qq`). The log of that run says it and has
-not been seen.
+(`strace -q` in place of `-qq`). The log of that run came afterwards
+and says it: the level passed. All fifty-six tests of `veil_core`
+passed while recorded, the long scan among them, in 311 seconds where
+the first recording took 665; so did the wallet's tests, the two on a
+private chain included. With that, step 5.1 has passed the owner's run:
+`leaks` on commit `d4e3d2d` and `leaks-chain` on `7e79893`. The last
+change, keeping how each program ended in the record, has run in a
+cloud session only.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
