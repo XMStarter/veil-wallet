@@ -507,8 +507,13 @@ tests without the `regtest` feature had passed as Windows programs
 minutes earlier in the same run, and the level had passed on `39a19a1`.
 `check.sh` now runs the tests again one at a time, with their output,
 when a test program ends this way, so that the next run names the test;
-that part has only been tried with a stand-in for cargo. Step 4.2 is not
-accepted until that level passes. Hosted CI, with its new build for
+that part has only been tried with a stand-in for cargo. Run again by
+itself on commit `be063de`, which differs only in that script, the
+`regtest` level passed as Windows programs, all fifty-three tests of
+`veil_core`. So the ending with 116 has happened once and did not come
+back; its cause was not found, and a run that passes afterwards does not
+show that nothing is wrong. With that, step 4.2 has passed the owner's
+run on both systems and on the phone. Hosted CI, with its new build for
 Android, has not run. The wallet library's "shared
 ring database" is not made on Android, where an app has no home folder;
 on a desktop the library makes it in the user's home folder, outside
@@ -534,7 +539,11 @@ See the build plan in `docs/concept.md`.
   Once, loading the DLL failed there with Windows error 995 (operation
   aborted) in one test and worked in every other; if it comes back, the
   first thing to try is loading it from a Windows disk, not over the WSL
-  file share.
+  file share. Once, a test program run as a Windows program ended with
+  status 116 a second or so after starting and passed when run again;
+  `check.sh` now runs such a program's tests again one at a time to name
+  the test, and what that run prints is the first thing to read if it
+  comes back.
   Each run of `veil.exe` takes 15 to 20 seconds there before it does
   anything, from loading over the WSL file share and being scanned. Tor connects
   from that machine without bridges, so the `bridges` level shows there
