@@ -158,11 +158,24 @@ class MainActivity : FlutterActivity() {
     /**
      * Going back from the first screen puts the app behind the others,
      * as the home button does. Flutter would end the screen here, and the
-     * wallet with it.
+     * wallet with it. The Dart side sees to it that Back always comes to
+     * the app (`onNavigationNotification` in `lib/app.dart`), and this
+     * is where it ends up when there is no screen to go back to.
      */
     override fun popSystemNavigator(): Boolean {
         moveTaskToBack(true)
         return true
+    }
+
+    /**
+     * This screen is never ended from inside the app, whoever asks:
+     * ending it would take an open wallet along. When Android deals with
+     * Back by itself it ends the screen of an app that was not started
+     * from the home screen, and that request arrives here. The app taken
+     * off the list of recent apps does not come this way.
+     */
+    override fun finish() {
+        moveTaskToBack(true)
     }
 
     override fun onDestroy() {

@@ -153,15 +153,19 @@ app looks for the core and the wallet library in its own folder, next to
   a build that ships them has to carry. They are the app's only
   dependency on Android besides Flutter. The camera was the app's only
   permission besides the network until the next point.
-- Background synchronisation on a phone is written and has not been on
-  one. While a wallet is open, `WalletService` holds the app's process
+- Background synchronisation on a phone has been tried on one phone, the
+  owner's, where all of it worked but Back on the first screen, which
+  sometimes ended the app; what was done about that has not been on a
+  phone yet. While a wallet is open, `WalletService` holds the app's process
   up with a notice ("The wallet is open", "… and synchronising"), and
   the phone awake while the wallet connects, synchronises or sends; it
   ends when the wallet is locked. For that the app has four more
   permissions: two for such a service, one to show its notice (asked for
   once, the first time a wallet is open; refused, the app is kept
   running all the same), and one to keep the processor running. Back
-  from the first screen puts the app behind the others. The app taken
+  from the first screen puts the app behind the others; the app always
+  takes Back itself for that, because Android, left to deal with it,
+  ends the screen of an app that was not started from the home screen. The app taken
   off the list of recent apps, or its screen destroyed by Android while
   a wallet is open, ends the process at once, because the wallet cannot
   be reached without the Dart side: the wallet is then as it was last

@@ -217,6 +217,18 @@ class _VeilAppState extends State<VeilApp> {
       behavior: HitTestBehavior.translucent,
       child: MaterialApp(
         navigatorKey: _navigator,
+        // Android asks an app whether it deals with Back itself. Flutter
+        // answers "no" on the first screen, and Android then decides
+        // alone: an app started from the home screen goes behind the
+        // others, one started any other way (from the screen that
+        // installed it, say) has its screen ended, and with it, here,
+        // an open wallet. So the answer is always "yes": Back comes to
+        // the app, which goes back a screen if there is one and
+        // otherwise asks to be put behind the others (`MainActivity`).
+        onNavigationNotification: (_) {
+          unawaited(SystemNavigator.setFrameworkHandlesBack(true));
+          return true;
+        },
         onGenerateTitle: (context) => AppLocalizations.of(context)!.appName,
         debugShowCheckedModeBanner: false,
         theme: veilTheme(dark: widget.backend.settings.value.dark),

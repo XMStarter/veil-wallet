@@ -3,6 +3,7 @@
 
 import 'dart:ui';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:veil/core/backend.dart';
 
@@ -190,6 +191,65 @@ void main() {
     await pumpApp(tester, 'en', backend: backend);
     await leaveAndReturn(tester);
     expect(backend.device.presences.nonNulls, isEmpty);
+  });
+
+  testWidgets('Back always comes to the app, which never ends its screen '
+      'with it', (tester) async {
+    // What the app says to the system, as a phone would hear it.
+    final said = <MethodCall>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        said.add(call);
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    bool? handlesBack() =>
+        said
+                .where(
+                  (call) =>
+                      call.method == 'SystemNavigator.setFrameworkHandlesBack',
+                )
+                .lastOrNull
+                ?.arguments
+            as bool?;
+    int left() =>
+        said.where((call) => call.method == 'SystemNavigator.pop').length;
+
+    final backend = FakeBackend(hasWallet: true, confirmed: true);
+    await pumpApp(tester, 'en', backend: backend);
+    // On the first screen too, where there is nothing to go back to:
+    // left to itself, Android may end the screen there.
+    expect(handlesBack(), isTrue);
+    await type(tester, 'Password', testPassword);
+    await press(tester, 'Open wallet');
+    expect(find.text('WALLET'), findsOneWidget);
+    expect(handlesBack(), isTrue);
+
+    // Back on Home asks to leave, which on a phone puts the app behind
+    // the others. The wallet stays open and the phone goes on being told.
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(left(), 1);
+    expect(backend.state.value, isNotNull);
+    expect(backend.device.presence, isNotNull);
+    expect(find.text('WALLET'), findsOneWidget);
+
+    // Back on a screen behind which there is another goes back to it.
+    await press(tester, 'Receive');
+    expect(find.text('WALLET'), findsNothing);
+    expect(handlesBack(), isTrue);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(left(), 1);
+    expect(find.text('WALLET'), findsOneWidget);
+    expect(handlesBack(), isTrue);
   });
 
   testWidgets('a phone that slept through the time to the auto-lock '

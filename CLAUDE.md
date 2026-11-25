@@ -648,7 +648,30 @@ exempted from battery saving, which Veil does not ask for; a service in
 the foreground with the processor held awake is said to keep it, and
 that is from memory of Android's code, not from its documents), what
 Samsung adds to Android's restrictions, and how the six hours a day
-that Android 15 gives such a service show.
+that Android 15 gives such a service show. With the APK built from
+commit `c652005` the owner went through seven things on the phone and
+reported that all but one work. Asked for were: the question about
+notices, the notice and what it says, a long synchronisation that has
+gone on after ten to fifteen minutes with the screen off, the notice
+gone after locking, the auto-lock after more than five minutes behind
+other apps, and the app taken off the list of recent apps starting
+again with the question for the password and no "open elsewhere". The
+one: Back on the first screen sometimes closed the app, took the notice
+away and started the synchronisation over, and sometimes did not. That
+is the screen being ended, and the process with it as written above.
+Why only sometimes was not seen on the phone; the reading that fits is
+that Android dealt with Back by itself. Flutter tells Android that it
+has nothing to go back to on its first screen, and Android then puts an
+app behind the others only if it was started from the home screen, and
+ends the screen of one started any other way, such as from the screen
+that installed it. Whether that is what happened, and which Android the
+phone has, is not known. Two things are done about it, each enough
+alone: the app now always tells Android that it deals with Back itself
+(`onNavigationNotification` in `app.dart`; a test shows it and fails
+without it), so Back reaches `MainActivity.popSystemNavigator`, and
+`MainActivity.finish` puts the app behind the others instead of ending
+its screen, whoever asks. The second is Kotlin and has only been
+compiled.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
