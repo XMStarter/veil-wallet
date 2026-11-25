@@ -552,9 +552,15 @@ Where
 an older library has left the folder (`~/.shared-ringdb` on the owner's
 machine, and likely the one on Windows), the tests can only see that it
 was not written to; with the folder deleted first they see that it does
-not come back. Seen on the way and left alone: on stagenet and testnet
-the library writes the wallet's first address as text next to the wallet
-(`wallet.address.txt`), inside the folder that removal deletes.
+not come back. Seen on the way, and then removed at the owner's word: on
+stagenet and testnet the library writes the wallet's primary address as
+plain text next to a wallet it creates or restores
+(`wallet.address.txt`). `Wallet` now takes that file away whenever a
+wallet is made or opened; the library writes it again only where it
+finds it, so that is for good, and a wallet made earlier loses it the
+first time it is opened. An offline test shows it on all three networks,
+a changed password included, and fails without the removal. This needs
+no patch to the library.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

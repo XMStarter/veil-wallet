@@ -222,7 +222,6 @@ void main() {
       'wallet',
       'wallet.keys',
       'wallet.lock',
-      'wallet.address.txt',
       'wallet.unreadable-1',
       'wallet.unportable',
     ]) {

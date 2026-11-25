@@ -738,21 +738,18 @@ fn a_wallet_leaves_nothing_outside_its_folder() {
 
     // The wallets are where they were asked to be, which also says that
     // the process did its work. Besides its two files a wallet has Veil's
-    // mark that it is open; on any network but the main one the library
-    // adds the wallet's first address as text; the damaged file is set
-    // aside, and the library may keep a copy of its own of it
-    // (`.unportable`).
+    // mark that it is open; the damaged file is set aside, and the library
+    // may keep a copy of its own of it (`.unportable`). The text file with
+    // the wallet's address, which the library writes on any network but
+    // the main one, is not among them.
     let mut expected = Vec::new();
-    for (name, address_file) in [("main", false), ("stage", true)] {
+    for name in ["main", "stage"] {
         for wallet in [name.to_string(), format!("{name}-16"), format!("{name}-25")] {
             expected.extend([
                 wallet.clone(),
                 format!("{wallet}.keys"),
                 format!("{wallet}.lock"),
             ]);
-            if address_file {
-                expected.push(format!("{wallet}.address.txt"));
-            }
         }
         expected.push(format!("{name}.unreadable-1"));
     }
@@ -776,4 +773,55 @@ fn a_wallet_leaves_nothing_outside_its_folder() {
         );
     }
     ring_database.assert_untouched();
+}
+
+/// On a test network the library writes the primary address of a wallet it
+/// makes into a text file next to it. Veil never shows that address, and a
+/// wallet's folder should say nothing that the wallet's password does not
+/// protect.
+#[test]
+fn the_wallets_address_is_not_left_as_text_next_to_it() {
+    let Some(lib) = wallet_library() else { return };
+    for network in [Network::Stagenet, Network::Testnet, Network::Mainnet] {
+        let dir = TempDir::new("address-file");
+        let path = dir.file("w");
+        let address_file = dir.file("w.address.txt");
+
+        // Created, and restored from either kind of phrase.
+        let (mut wallet, phrase) = Wallet::create(&lib, &path, PASSWORD, network).unwrap();
+        let address = wallet.receive_address().unwrap();
+        let legacy = wallet.legacy_seed_phrase().unwrap();
+        wallet.close().unwrap();
+        for (name, phrase) in [("r16", &phrase), ("r25", &legacy)] {
+            let restored =
+                Wallet::restore(&lib, &dir.file(name), PASSWORD, network, phrase, 0).unwrap();
+            restored.close().unwrap();
+        }
+        assert_eq!(
+            files_in(&dir.0),
+            [
+                "r16", "r16.keys", "r16.lock", "r25", "r25.keys", "r25.lock", "w", "w.keys",
+                "w.lock"
+            ],
+            "{network:?}"
+        );
+
+        // A wallet made before Veil took the file away still has it. A
+        // wrong password changes nothing; opening the wallet removes it.
+        std::fs::write(&address_file, "what the library wrote here").unwrap();
+        assert!(Wallet::open(&lib, &path, "not the password", network).is_err());
+        assert!(address_file.exists(), "{network:?}");
+        let mut wallet = Wallet::open(&lib, &path, PASSWORD, network).unwrap();
+        assert!(!address_file.exists(), "{network:?}");
+
+        // The library writes the keys again when the password changes, and
+        // the text file with them where there is one. There is none.
+        wallet.change_password(NEW_PASSWORD).unwrap();
+        wallet.save().unwrap();
+        wallet.close().unwrap();
+        let mut wallet = Wallet::open(&lib, &path, NEW_PASSWORD, network).unwrap();
+        assert_eq!(wallet.receive_address().unwrap(), address);
+        wallet.close().unwrap();
+        assert!(!address_file.exists(), "{network:?}");
+    }
 }
