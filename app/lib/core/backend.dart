@@ -4,7 +4,7 @@ import 'package:veil_bridge/veil_bridge.dart';
 import 'device.dart';
 import 'settings.dart';
 
-export 'device.dart' show Device;
+export 'device.dart' show Device, Presence;
 export 'settings.dart' show AppSettings;
 
 export 'package:veil_bridge/veil_bridge.dart'

@@ -15,7 +15,9 @@ synchronises by itself, a minute after the last time. If the device
 loses its network, Home says that Tor has lost its connection and that
 this, not the nodes, is why the synchronisation failed; the wallet goes
 on trying by itself and says so when Tor is connected again. An address
-that was copied is taken out of the clipboard a minute later. Send takes an
+that was copied is taken out of the clipboard a minute later. On a phone
+an open wallet goes on when the app is not in front: Android keeps the
+app running for a notice that says a wallet is open. Send takes an
 address and an amount, shows the transaction with its fee and total for a
 last look, and then how it went: sent, or, if the connection was lost,
 not known, which the wallet then clears up by itself. Settings has a line
@@ -37,7 +39,8 @@ connection of any kind.
 | `lib/theme` | Colours, typefaces and sizes from the design document, and the theme built from them |
 | `lib/widgets` | What screens are made of: the buttons, the single column, a notice, a field, an address in groups of four, a QR code |
 | `lib/screens` | The screens |
-| `lib/core` | What the screens need from the wallet (`backend.dart`), the real thing over the core (`core_backend.dart`), where the app keeps its files (`paths.dart`), how it is set to behave (`settings.dart`), and the handling of a typed phrase and of pasted text |
+| `lib/core` | What the screens need from the wallet (`backend.dart`), the real thing over the core (`core_backend.dart`), where the app keeps its files (`paths.dart`), how it is set to behave (`settings.dart`), what only the device can do (`device.dart`), and the handling of a typed phrase and of pasted text |
+| `android` | The app's Android side: `MainActivity`, which answers `device.dart`, and `WalletService`, which keeps the app running while a wallet is open |
 | `lib/l10n` | The texts, in `app_en.arb` and `app_ru.arb`. `flutter pub get` writes the Dart files next to them |
 | `fonts` | Cormorant Garamond, Jost and JetBrains Mono, each one variable font file with its licence (SIL Open Font License). Nothing is fetched at runtime |
 | `assets/brand` | The logo |
@@ -148,15 +151,37 @@ app looks for the core and the wallet library in its own folder, next to
   The code is read by ZXing with the screen from
   `zxing-android-embedded`, both under the Apache licence 2.0, whose text
   a build that ships them has to carry. They are the app's only
-  dependency on Android besides Flutter, and the camera its only
-  permission besides the network.
+  dependency on Android besides Flutter. The camera was the app's only
+  permission besides the network until the next point.
+- Background synchronisation on a phone has been tried on one phone, the
+  owner's, and worked there, after Back on the first screen, which
+  sometimes ended the app, was put right. While a wallet is open, `WalletService` holds the app's process
+  up with a notice ("The wallet is open", "… and synchronising"), and
+  the phone awake while the wallet connects, synchronises or sends; it
+  ends when the wallet is locked. For that the app has four more
+  permissions: two for such a service, one to show its notice (asked for
+  once, the first time a wallet is open; refused, the app is kept
+  running all the same), and one to keep the processor running. Back
+  from the first screen puts the app behind the others; the app always
+  takes Back itself for that, because Android, left to deal with it,
+  ends the screen of an app that was not started from the home screen. The app taken
+  off the list of recent apps, or its screen destroyed by Android while
+  a wallet is open, ends the process at once, because the wallet cannot
+  be reached without the Dart side: the wallet is then as it was last
+  saved. Not known until a phone shows it: whether a synchronisation
+  goes on with the screen off for long (Android's documents promise the
+  network in its deep sleep only to apps the user has exempted from
+  battery saving, which Veil does not ask for), and what the phone's
+  maker adds to Android's own restrictions. There is no way to lock the
+  wallet from the notice; touching it opens the app.
 - Home lists the latest twenty payments and has no way to the rest.
 - New bridges take effect the next time the wallet is opened, and the
   programs they need have to be installed on the machine; none comes with
   the app yet. If bridges in the settings stop working, the screen that
   asks for the password offers to open the wallet without them.
 - The auto-lock counts touches, clicks and keys. It does not lock a wallet
-  in the middle of a synchronisation.
+  in the middle of a synchronisation. When the app comes to the front it
+  goes by the clock, so a phone that slept through the time locks then.
 - Removing the wallet leaves Tor's own files and the app's settings.
 - Closing the window or locking the wallet during a synchronisation waits
   for the blocks that are on their way, normally seconds. If the node has

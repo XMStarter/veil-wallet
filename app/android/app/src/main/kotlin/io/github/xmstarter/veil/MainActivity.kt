@@ -1,9 +1,12 @@
 package io.github.xmstarter.veil
 
+import android.Manifest
+import android.app.ActivityManager
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.system.Os
@@ -18,8 +21,9 @@ import io.flutter.plugin.common.MethodChannel
  * The one screen Android starts. Everything the user sees is drawn by
  * Flutter; this class answers what the Dart side cannot do by itself:
  * where the app may keep its files, keeping a screen out of pictures,
- * handing an address to another app, reading a code with the camera, and
- * emptying the clipboard. The Dart side of it is `lib/core/device.dart`.
+ * handing an address to another app, reading a code with the camera,
+ * emptying the clipboard, and keeping the app running while a wallet is
+ * open (`WalletService`). The Dart side of it is `lib/core/device.dart`.
  */
 class MainActivity : FlutterActivity() {
     /** The answer a scan under way is owed. */
@@ -92,9 +96,93 @@ class MainActivity : FlutterActivity() {
                         startActivityForResult(options.createScanIntent(this), SCAN)
                     }
 
+                    // A wallet is open, with what to show about it, or
+                    // none is (no arguments). While one is open the app is
+                    // kept running outside the screen.
+                    "running" -> {
+                        val what = (call.arguments as? Map<*, *>)?.let {
+                            Presence(
+                                kind = it["kind"] as? String ?: "",
+                                title = it["title"] as? String ?: "",
+                                text = it["text"] as? String ?: "",
+                                busy = it["busy"] == true,
+                            )
+                        }
+                        if (what != null) askForNotices()
+                        result.success(WalletService.want(this, what))
+                    }
+
+                    // Whether the user, or the phone's maker in the user's
+                    // name, has set Android to stop this app outside the
+                    // screen. Android before 9 cannot say.
+                    "restricted" -> {
+                        val manager =
+                            getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+                        result.success(
+                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
+                                manager.isBackgroundRestricted,
+                        )
+                    }
+
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    /**
+     * From Android 13 on an app shows notices only if the user lets it.
+     * Asked once, the first time a wallet is open, for the one notice the
+     * app has: that a wallet is open. Refused, the app is kept running
+     * all the same, and Android lists it among the apps that are active.
+     */
+    private fun askForNotices() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val permission = Manifest.permission.POST_NOTIFICATIONS
+        if (checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED) return
+        val kept = getPreferences(Context.MODE_PRIVATE)
+        if (kept.getBoolean(ASKED_FOR_NOTICES, false)) return
+        kept.edit().putBoolean(ASKED_FOR_NOTICES, true).apply()
+        requestPermissions(arrayOf(permission), NOTICES)
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        // A notice put up before the user said yes was not shown.
+        if (requestCode == NOTICES) WalletService.again()
+    }
+
+    /**
+     * Going back from the first screen puts the app behind the others,
+     * as the home button does. Flutter would end the screen here, and the
+     * wallet with it. The Dart side sees to it that Back always comes to
+     * the app (`onNavigationNotification` in `lib/app.dart`), and this
+     * is where it ends up when there is no screen to go back to.
+     */
+    override fun popSystemNavigator(): Boolean {
+        moveTaskToBack(true)
+        return true
+    }
+
+    /**
+     * This screen is never ended from inside the app, whoever asks:
+     * ending it would take an open wallet along. When Android deals with
+     * Back by itself it ends the screen of an app that was not started
+     * from the home screen, and that request arrives here. The app taken
+     * off the list of recent apps does not come this way.
+     */
+    override fun finish() {
+        moveTaskToBack(true)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // With the screen goes the Dart side. A wallet that is open then
+        // has nobody left to talk to it; see `endWithoutScreen`.
+        WalletService.endWithoutScreen(this)
     }
 
     @Deprecated("Deprecated in Java")
@@ -111,5 +199,7 @@ class MainActivity : FlutterActivity() {
 
     private companion object {
         const val SCAN = 0x5ca9
+        const val NOTICES = 0x5caa
+        const val ASKED_FOR_NOTICES = "asked_for_notices"
     }
 }

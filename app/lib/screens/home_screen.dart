@@ -139,6 +139,18 @@ class _HomeScreenState extends State<HomeScreen> {
                     warning: true,
                   ),
                 ],
+                // A phone set to stop the app outside the screen: said,
+                // because a long synchronisation then never finishes by
+                // itself.
+                ValueListenableBuilder<bool>(
+                  valueListenable: widget.backend.device.stoppedInBackground,
+                  builder: (context, stopped, _) => stopped
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 16),
+                          child: Notice(text.homeStoppedInBackground),
+                        )
+                      : const SizedBox.shrink(),
+                ),
                 if (state.rebuiltFromKeys) ...[
                   const SizedBox(height: 16),
                   Notice(text.homeRebuilt, warning: true),

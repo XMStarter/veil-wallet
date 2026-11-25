@@ -69,6 +69,28 @@ class FakeDevice extends ThisDevice {
 
   @override
   Future<void> guardScreen(bool on) async => guards.add(on);
+
+  /// Every time the device was told what to show about an open wallet,
+  /// or that none is open (null).
+  final presences = <Presence?>[];
+
+  /// What the device shows about an open wallet right now.
+  Presence? get presence => presences.isEmpty ? null : presences.last;
+
+  /// Whether the system would stop the app outside the screen.
+  bool restrictedNow = false;
+
+  /// The device's clock, when a test sets it; the real one otherwise.
+  DateTime? time;
+
+  @override
+  DateTime now() => time ?? super.now();
+
+  @override
+  Future<void> keepRunning(Presence? presence) async => presences.add(presence);
+
+  @override
+  Future<bool> restricted() async => restrictedNow;
 }
 
 /// A wallet that only pretends: no core, no files, no Tor.

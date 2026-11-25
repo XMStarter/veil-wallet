@@ -37,6 +37,10 @@ class _VeilAppState extends State<VeilApp> {
   /// settings say.
   Timer? _idle;
 
+  /// When the wallet was last used, by the device's clock. A phone that
+  /// sleeps stops the timer above and not the clock.
+  DateTime? _usedAt;
+
   /// How often an auto-lock that was put off looks again.
   static const _lookAgain = Duration(seconds: 5);
 
@@ -52,7 +56,10 @@ class _VeilAppState extends State<VeilApp> {
     _lifecycle = AppLifecycleListener(
       // A copied address whose minute ran out while the app was in the
       // background is taken out of the clipboard now.
-      onResume: () => widget.backend.device.resumed(),
+      onResume: () {
+        widget.backend.device.resumed();
+        _lockIfOverdue();
+      },
       onExitRequested: () async {
         try {
           await widget.backend.close();
@@ -81,6 +88,8 @@ class _VeilAppState extends State<VeilApp> {
   void _settingsChanged() {
     setState(() {});
     _used();
+    // The language may be another now.
+    _present();
   }
 
   bool _key(KeyEvent event) {
@@ -100,7 +109,50 @@ class _VeilAppState extends State<VeilApp> {
     } else if (!open) {
       _idle?.cancel();
       _idle = null;
+      _usedAt = null;
     }
+    _present();
+  }
+
+  /// Tells the device whether a wallet is open and what it is doing, for
+  /// a phone to keep the app running meanwhile and to say so in its list
+  /// of what is running. Nothing of the wallet's contents is in it.
+  void _present() {
+    final state = widget.backend.state.value;
+    final device = widget.backend.device;
+    if (state == null) {
+      device.walletOpen(null);
+      return;
+    }
+    final text = lookupAppLocalizations(_language());
+    final syncing = state.sync.phase == SyncPhase.running;
+    device.walletOpen(
+      Presence(
+        kind: text.backgroundKind,
+        title: text.appName,
+        text: syncing ? text.backgroundSyncing : text.backgroundOpen,
+        // What a phone that goes to sleep would cut off in the middle.
+        busy:
+            syncing ||
+            state.tor.state == TorState.bootstrapping ||
+            state.send.phase == SendPhase.preparing ||
+            state.send.phase == SendPhase.sending,
+      ),
+    );
+  }
+
+  /// The language the app speaks: the one fixed for a test, the one
+  /// chosen in the settings, or the device's; English if it is none the
+  /// app has.
+  Locale _language() {
+    final chosen = widget.backend.settings.value.language;
+    final wanted =
+        widget.locale ??
+        (chosen == null ? PlatformDispatcher.instance.locale : Locale(chosen));
+    final known = AppLocalizations.supportedLocales.any(
+      (locale) => locale.languageCode == wanted.languageCode,
+    );
+    return known ? Locale(wanted.languageCode) : const Locale('en');
   }
 
   /// The wallet was used just now: the time to the auto-lock starts
@@ -109,10 +161,27 @@ class _VeilAppState extends State<VeilApp> {
     _idle?.cancel();
     _idle = null;
     if (widget.backend.state.value == null) return;
+    _usedAt = widget.backend.device.now();
     _idle = Timer(
       Duration(minutes: widget.backend.settings.value.autoLockMinutes),
       _lockIfIdle,
     );
+  }
+
+  /// The app is in front again. If the time to the auto-lock has passed
+  /// by the clock, the wallet locks now: the timer alone would give a
+  /// phone that slept through it that much longer.
+  void _lockIfOverdue() {
+    final usedAt = _usedAt;
+    if (usedAt == null || widget.backend.state.value == null) return;
+    final limit = Duration(
+      minutes: widget.backend.settings.value.autoLockMinutes,
+    );
+    if (widget.backend.device.now().difference(usedAt) < limit) return;
+    // Cancelled and not forgotten: a wallet with a timer is one whose
+    // time is not started again by a change of its state.
+    _idle?.cancel();
+    unawaited(_lockIfIdle());
   }
 
   /// Locks the wallet, unless it is in the middle of a synchronisation:
@@ -148,6 +217,18 @@ class _VeilAppState extends State<VeilApp> {
       behavior: HitTestBehavior.translucent,
       child: MaterialApp(
         navigatorKey: _navigator,
+        // Android asks an app whether it deals with Back itself. Flutter
+        // answers "no" on the first screen, and Android then decides
+        // alone: an app started from the home screen goes behind the
+        // others, one started any other way (from the screen that
+        // installed it, say) has its screen ended, and with it, here,
+        // an open wallet. So the answer is always "yes": Back comes to
+        // the app, which goes back a screen if there is one and
+        // otherwise asks to be put behind the others (`MainActivity`).
+        onNavigationNotification: (_) {
+          unawaited(SystemNavigator.setFrameworkHandlesBack(true));
+          return true;
+        },
         onGenerateTitle: (context) => AppLocalizations.of(context)!.appName,
         debugShowCheckedModeBanner: false,
         theme: veilTheme(dark: widget.backend.settings.value.dark),

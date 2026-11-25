@@ -108,7 +108,9 @@ that cannot lose the user's funds.
   (`app/android`; the libraries are found there by name, and what only
   the system can do goes through `lib/core/device.dart` to
   `MainActivity`: where the app's files go, no picture of a screen with
-  a phrase, Share, a code read with the camera, the clipboard emptied).
+  a phrase, Share, a code read with the camera, the clipboard emptied,
+  and the app kept running while a wallet is open, which is
+  `WalletService`).
   So
   far the way to an open wallet (create, recovery phrase, restore, unlock),
   Home, Receive, Send, and Settings.
@@ -612,7 +614,71 @@ Google's server answered 404 for the pinned NDK, where the same address
 answers a cloud session with the file. Why is not known; the script now
 names the address it could not download. Nothing depends on it while the
 APKs are built in a cloud session, and the owner's machine has no
-library for Android.
+library for Android. Hosted CI passed on both systems, and step 4.3 was
+merged on the owner's word.
+Step 4.4, background synchronisation, is written and has not been on a
+phone. While a wallet is open the app asks Android to keep it running
+outside the screen: `WalletService`, a service "in the foreground" of
+the kind for synchronising data, with a notice that says a wallet is
+open and whether it is synchronising, no amount, no address, and
+nothing on a locked screen. It holds the phone awake only while the
+wallet connects, synchronises or sends, ten minutes for each time the
+Dart side says so, which it does again every minute. It ends when the
+wallet is locked. The Dart side (`Device.walletOpen`, called from
+`app.dart` on every change of the state) decides all of it. Four
+permissions came with it: two for the service, one to show the notice
+(asked for once, the first time a wallet is open), one to keep the
+processor running. Back from the first screen now puts the app behind
+the others instead of ending its screen. When the screen does end with
+a wallet open, by the app being taken off the list of recent apps or by
+Android destroying it, the process is ended at once: the wallet lives
+in the core, only the Dart side can talk to it, and that side goes with
+the screen, so the wallet could neither be kept nor closed in order,
+and left alone it would go on running unseen and be "open elsewhere"
+at the next start. That last was true before this step, wherever
+Android left the process alive, and nobody had met it. The auto-lock
+now also goes by the clock when the app comes to the front: a phone's
+timers stand still while it sleeps. Home says when Android is set to
+stop the app outside the screen. Tests on the wallet and device that
+only pretend cover the Dart side; the Kotlin side was compiled into an
+APK and nothing more. Not known until a phone shows it: whether a
+synchronisation goes on for long with the screen off (Android's
+documents promise the network in the phone's deep sleep only to apps
+exempted from battery saving, which Veil does not ask for; a service in
+the foreground with the processor held awake is said to keep it, and
+that is from memory of Android's code, not from its documents), what
+Samsung adds to Android's restrictions, and how the six hours a day
+that Android 15 gives such a service show. With the APK built from
+commit `c652005` the owner went through seven things on the phone and
+reported that all but one work. Asked for were: the question about
+notices, the notice and what it says, a long synchronisation that has
+gone on after ten to fifteen minutes with the screen off, the notice
+gone after locking, the auto-lock after more than five minutes behind
+other apps, and the app taken off the list of recent apps starting
+again with the question for the password and no "open elsewhere". The
+one: Back on the first screen sometimes closed the app, took the notice
+away and started the synchronisation over, and sometimes did not. That
+is the screen being ended, and the process with it as written above.
+Why only sometimes was not seen on the phone; the reading that fits is
+that Android dealt with Back by itself. Flutter tells Android that it
+has nothing to go back to on its first screen, and Android then puts an
+app behind the others only if it was started from the home screen, and
+ends the screen of one started any other way, such as from the screen
+that installed it. Whether that is what happened, and which Android the
+phone has, is not known. Two things are done about it, each enough
+alone: the app now always tells Android that it deals with Back itself
+(`onNavigationNotification` in `app.dart`; a test shows it and fails
+without it), so Back reaches `MainActivity.popSystemNavigator`, and
+`MainActivity.finish` puts the app behind the others instead of ending
+its screen, whoever asks. The second is Kotlin and has only been
+compiled. With the APK built from commit `1fd8479` the owner tried Back
+on Home with a wallet open both ways, the app opened from the screen
+that installed it and from the home screen, and reported that both
+work: the app goes behind the others and the wallet stays open. Which
+of the two changes did it cannot be told from that, and whether the
+reading above was the cause was not shown either. No run on the
+owner's desktop was made for this step: neither the core nor the wallet
+library changed in it, and the offline level passed in a cloud session.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

@@ -4,6 +4,16 @@
          other way. Android asks for this permission for any socket at all,
          the ones on this device between the wallet and Tor included. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- While a wallet is open the app is kept running when it is not in
+         front, by a service with a notice the user can see
+         (WalletService). Android asks for these two for such a service,
+         for leave to show the notice, and for leave to keep the
+         processor running with the screen off, which the service does
+         only while the wallet is connecting, synchronising or sending. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <!-- allowBackup, fullBackupContent and dataExtractionRules: the wallet's
          files are copied nowhere by Android, neither to a cloud backup nor
          to another device. Only the recovery phrase brings a wallet back. -->
@@ -44,6 +54,12 @@
             android:screenOrientation="portrait"
             android:exported="false"
             tools:replace="android:screenOrientation"/>
+        <!-- Started by the app itself when a wallet is opened and by
+             nothing else. -->
+        <service
+            android:name=".WalletService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"/>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
