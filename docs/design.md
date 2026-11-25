@@ -122,3 +122,5 @@ language and falls back to English.
 - A simplified mark for the app icon. The full illustration does not read at
   icon size. Until there is one, the icon on Android is the profile under
   its veil cut out of the logo, without the wordmark.
+  The mark next to the notice that a wallet is open, which Android draws
+  in one colour from a shape, is a ring with one half filled until then.

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The mark next to the notice that a wallet is open. Android draws such
+     a mark in one colour from its shape alone: a ring, half of it filled,
+     until there is a mark made for the app. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,3a9,9 0,1 0,0 18a9,9 0,1 0,0 -18zM12,5a7,7 0,0 1,0 14z"/>
+</vector>

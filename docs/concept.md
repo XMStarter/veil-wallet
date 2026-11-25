@@ -59,12 +59,31 @@ if, at build time, Arti cannot run bridges on Android.
   that has seen only part of the chain. If the last synchronisation
   failed, or there was none since the wallet was opened, the wallet
   synchronises first, and if it cannot, the send fails for that reason.
+- **On a phone, an open wallet goes on outside the screen.** Android
+  stops an app it cannot see within minutes, and a first synchronisation
+  takes longer than anybody holds a phone. While a wallet is open the app
+  therefore asks Android to keep it running, which Android does for an
+  app that shows a notice. The notice says that a wallet is open, and
+  whether it is synchronising, and nothing else: no amount and no
+  address, and nothing at all on a locked screen. The phone is kept from
+  sleeping only while the wallet connects, synchronises or sends. It all
+  ends when the wallet is locked, which it does by itself as on a
+  desktop. Going back from the first screen puts the app behind the
+  others. Taking it off the list of recent apps ends it the way Android
+  ends any app, at once; the wallet is then as it was last saved. From
+  Android 15 on, Android gives such an app six hours a day outside the
+  screen; after them the wallet waits until the app is opened. A phone
+  that is set to stop the app outside the screen is not argued with: Home
+  says so, and where in Android's settings that is changed. The app does
+  not ask to be left out of the phone's battery saving.
 - **Separate Tor circuits.** Synchronisation uses one node. A transaction is
   broadcast through a different node on a separate circuit, so that no node
   can link the sync history to the spend.
 - **No third-party requests.** No analytics, no crash reports, no Google
-  services, no push notifications. Fiat rates are off by default; when turned
-  on, they are fetched over Tor.
+  services, no push notifications. The one notice the app shows on a
+  phone, that a wallet is open, is made on the phone and comes from
+  nowhere. Fiat rates are off by default; when turned on, they are
+  fetched over Tor.
 - **Standard transactions.** Fee, ring size, and extra fields come from
   `wallet2` unchanged, so the wallet cannot be recognised by how its
   transactions look.
@@ -185,8 +204,10 @@ if, at build time, Arti cannot run bridges on Android.
   wallet locks itself after five minutes without use; that can be set to
   one, fifteen or sixty minutes, and not switched off. It does not lock in
   the middle of a synchronisation, which a long first scan would otherwise
-  never finish, and locks as soon as that is over. The recovery phrase is
-  shown again only for the password.
+  never finish, and locks as soon as that is over. A phone that slept
+  through that time locks the wallet the moment the app is in front
+  again: the time is the clock's, and a sleeping phone's timers stand
+  still. The recovery phrase is shown again only for the password.
 - **What the wallet remembers besides funds.** The user's own nodes and a
   payment whose outcome is unknown are kept inside the wallet's data
   file, encrypted with it: which node somebody uses and which
@@ -274,8 +295,10 @@ run where is set out in [development.md](development.md).
    3. *What a phone asks for.* No screenshots of the recovery phrase, no
       cloud backup of the wallet, the clipboard cleared after an address
       was copied, Share on Receive, scanning a code on Send.
-   4. *Background synchronisation* through a foreground service, and
-      battery restrictions.
+   4. *Background synchronisation.* While a wallet is open the app is
+      kept running outside the screen by a service with a notice, and the
+      phone awake while the wallet is busy; the auto-lock by the clock;
+      and what Android's battery restrictions do to all of it.
    5. *Biometric unlock* through the hardware-backed key store.
    6. *Bridges on Android:* whether an app can ship and start a transport
       program.
