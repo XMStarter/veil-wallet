@@ -778,8 +778,14 @@ machine has shown before in other forms; that it was the loading and
 not the first call after it was not seen. Nothing of this step is in
 that test's way. The tests that wait with a limit now load the library
 first, outside what they time, and a loading that takes five seconds or
-more says so in the test's output. Whether that is enough, the next run
-as Windows programs shows.
+more says so in the test's output. On commit `d28e3a5`, which has that
+change, the `regtest` level passed as Windows programs, all fifty-six
+tests of `veil_core`. No test stood at the start of the program this
+time, so the slow loading did not come back, and the run does not show
+whether the change would have carried the tests through it: a test that
+passes shows none of its output, so how long the loading took is not in
+the log either. With that, step 4.6 has passed the owner's run on both
+systems and on the phone.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
