@@ -97,7 +97,8 @@ that cannot lose the user's funds.
   - `windows-app.sh`: for the owner's machine, inside WSL. Takes the app
     hosted CI built for Windows (`veil-windows.zip`, downloaded from the
     run's Artifacts), puts the wallet library next to it on a Windows
-    disk, and starts it. It starts Tor, so in a cloud session only its
+    disk, and starts it. It refuses a wallet library built from an older
+    set of patches. It starts Tor, so in a cloud session only its
     refusals and `--no-start` on made-up folders (`VEIL_WINDOWS_HOME`) may
     be tried.
 - `dart/veil_bridge`: the Dart side of the core. It calls the C interface
@@ -541,18 +542,59 @@ Home can be photographed, a copied address gone from the clipboard after
 a minute, Share on Receive, and a code read with the camera into the
 form on Send. Not run with it: the owner's run on the desktop, which
 waits for the change to the wallet library in pull request 16 so that
-the libraries are rebuilt once. The
-wallet library's "shared
-ring database" is not made on Android, where an app has no home folder;
-on a desktop the library makes it in the user's home folder, outside
-Veil's own, which was noticed here and is not dealt with. On
+the libraries are rebuilt once. The wallet library's "shared
+ring database", which the library makes outside Veil's own folder on a
+desktop, was noticed here; the end of this section tells what was done
+about it. On
 commit `39a19a1`, which has the amount put right, the owner's run passed
 at the `offline` and `regtest` levels as Windows programs, the scenario
 with its new end included: a send confirmed with the network gone is
 reported as not sent for Tor's reason, and the wallet holds what it held
 once the network is back. The log of the Linux programs of that run was
 not sent; `accept.sh` runs them first and stops when they fail, so they
-passed, which is a conclusion and not something read in a log.
+passed, which is a conclusion and not something read in a log. After that, the wallet library's "shared
+ring database", by the owner's decision switched off. The library made it
+when a wallet was opened, before the password was checked, and never
+when one was created or restored: `~/.shared-ringdb` on Linux, and on
+Windows, by the library's source, in the folder all users share
+(`C:\ProgramData\.shared-ringdb`). It stayed when the wallet was
+removed, and a database cut short ended the process when any wallet was
+opened; both were seen in a cloud session with a temporary home. The
+wallet API at the pinned commit has no call to move it or leave it out,
+so a patch does it (`monero/0005`), which the Android build applies as
+well, and the owner has to rebuild the library for Linux, for Windows
+and for Android (`./check.sh setup`, `--windows setup`, `--android
+setup`) and allow the new DLL in the antivirus. What is given up: a transaction built twice for the same coin
+gets new decoys the second time, which can show the node which coin is
+spent (`docs/concept.md`, "Known limitations"). The offline test
+`a_wallet_leaves_nothing_outside_its_folder` makes, restores, opens and
+uses wallets in a process whose home, temporary folder and working
+folder are empty folders and finds them empty afterwards; it fails on a
+library without the patch. It passes in a cloud session on Linux. Not run
+anywhere yet: the same test as a Windows program, where the shared
+folder cannot be moved out of the way and is looked at before and after
+instead, the same look around the scenario on a private chain, and
+anything on Android, whose library has not been built with the patch.
+Where
+an older library has left the folder (`~/.shared-ringdb` on the owner's
+machine, and likely the one on Windows), the tests can only see that it
+was not written to; with the folder deleted first they see that it does
+not come back. Seen on the way, and then removed at the owner's word: on
+stagenet and testnet the library writes the wallet's primary address as
+plain text next to a wallet it creates or restores
+(`wallet.address.txt`). `Wallet` now takes that file away whenever a
+wallet is made or opened; the library writes it again only where it
+finds it, so that is for good, and a wallet made earlier loses it the
+first time it is opened. An offline test shows it on all three networks,
+a changed password included, and fails without the removal. This needs
+no patch to the library.
+That work and step 4.3 then met: `main` was merged into the branch of
+step 4.3, with one conflict, in this file. In a cloud session the
+libraries for Linux and for Android were rebuilt with the new patch, the
+offline level passed on the joined code, the test that looks outside the
+wallet's folder included, and an APK was built with the rebuilt library.
+That APK has not been on a phone, and the owner's machine has not yet
+rebuilt its three libraries or run anything on the joined code.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

@@ -242,6 +242,15 @@ fn unmark(path: &Path, mark: std::fs::File) {
     let _ = std::fs::remove_file(in_use_name(path));
 }
 
+/// The file in which the library writes a wallet's primary address as
+/// plain text, next to a wallet it creates or restores on any network but
+/// the main one.
+fn address_file_name(path: &Path) -> PathBuf {
+    let mut name = path.as_os_str().to_owned();
+    name.push(".address.txt");
+    PathBuf::from(name)
+}
+
 /// Whether two texts are the same, taking as long for a near miss as for a
 /// far one.
 fn same_text(a: &[u8], b: &[u8]) -> bool {
@@ -380,6 +389,11 @@ impl Wallet {
     /// another name. [`Wallet::was_rebuilt_from_keys`] then returns true:
     /// the funds are found again by the next synchronisation, which starts
     /// from the wallet's start height.
+    ///
+    /// Opening is where the library, left to itself, makes a "shared ring
+    /// database" outside the wallet's folder. Veil's build of it does not:
+    /// a wallet's files are those next to `path` and no others, however
+    /// the wallet was made or opened. The README says what that gives up.
     pub fn open(
         lib: &WalletLibrary,
         path: &Path,
@@ -605,6 +619,13 @@ impl Wallet {
         // The manager returns an object even when opening failed; the error
         // is on the object. Dropping `wallet` on the error path closes it.
         wallet.check()?;
+        // Next to a wallet it has just made on a test network the library
+        // leaves the wallet's primary address as plain text, an address
+        // Veil never shows. It writes that file again only where it finds
+        // it, so taking it away once is for good; a wallet made before
+        // Veil did this loses it the first time it is opened. A file that
+        // cannot be removed is no reason to keep the wallet closed.
+        let _ = std::fs::remove_file(address_file_name(path));
         // The library has a thread that refreshes the wallet on a timer, and
         // building or sending a transaction switches it on. Veil decides
         // itself when a node is contacted and which one: left on, that

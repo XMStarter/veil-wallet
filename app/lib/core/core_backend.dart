@@ -191,6 +191,10 @@ class CoreBackend implements WalletBackend {
     );
   }
 
+  /// The wallet's folder is all there is to remove: the wallet library
+  /// writes nowhere else. Its build for Veil leaves out the database it
+  /// would otherwise keep outside this folder, for all wallets of the
+  /// machine.
   @override
   Future<void> removeWallet() async {
     await close();

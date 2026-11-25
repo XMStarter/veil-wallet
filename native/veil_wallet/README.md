@@ -65,7 +65,22 @@ Found while testing against the real library. Each has a test.
 | The library's record of the last block scanned is not reset when a refresh starts | Progress is reported only once that record has moved, so a report always means that this refresh has scanned something |
 | The password the library keeps for an open wallet is empty when the wallet was created or restored in this session, and the keys file, which could tell, is locked while the wallet is open and on Windows cannot be read then | `is_password` compares with the password the wallet was opened with, which `Wallet` keeps in memory, wiped when it is dropped. `change_password` does not need the old one from the library: the keys are held decrypted, and a test changes the password of a wallet made in the same session and opens it with the new one |
 | Building or sending a transaction switches on a thread that synchronises the wallet every ten seconds through whichever node is set | Every wallet is opened with that thread switched off (a Veil patch to the library); the regtest scenario in `veil_core` checks that nothing is contacted |
+| When a wallet is opened, before its password is even checked, the library makes a "shared ring database" outside the wallet's folder: `~/.shared-ringdb` on Linux and, on Windows, in a folder that all users of the machine share (`C:\ProgramData\.shared-ringdb`). It stays when the wallet is removed and shows that a Monero wallet was used on the machine. If its file is cut short or damaged, opening any wallet ends the process. A wallet that is created or restored has no such database until it is opened again | No wallet has one: a Veil patch takes it out of the library. `tests/offline.rs` creates, restores, opens and uses wallets in a process whose home is an empty folder, and finds that folder empty afterwards. What is given up is said below |
+| Next to a wallet it creates or restores on any network but the main one, the library writes the wallet's primary address as plain text (`<wallet>.address.txt`): an address Veil never shows, readable without the password. When the password is changed it writes the file again, if it finds one | The file is removed as soon as a wallet is made or opened, so a wallet made before Veil did this loses it the first time it is opened, and the library, finding none, does not write it again. A test makes and restores wallets on all three networks, opens one that still has the file, and changes its password |
 | A node that does not list the protocol upgrades with its version, as old nodes do not, is asked a second question, and when that question fails the library decides from a variable nothing has set (`wallet2::check_hard_fork_version`) | Not guarded against. Every node kept up to date sends the list, and the library then never gets there. The fake node of `veil_core`'s tests did not send it, and one test began to call it incompatible after an unrelated change; it sends the list now. A wallet could meet this with an old node: it would be told, now and then, that the node is incompatible, and go on to the next |
+
+Without the ring database the library does not remember which decoys it
+chose for a coin. When a transaction is built a second time for the same
+coin (a review that was cancelled, a send that failed or whose outcome was
+unknown and is tried again) the node is asked for a new set of decoys, and
+the coin being spent is the one output both requests have in common. The
+node the wallet synchronises with can see that, and if the first
+transaction did go out, so can anyone who received both. What they learn
+is which earlier output the payment spends, not an address and not an
+amount. The library kept that record only for a wallet that had been
+opened, never for one made in the same session. The database's other use,
+a list of outputs known to be spent that are not taken as decoys, is
+filled by a separate Monero tool and was always empty for Veil.
 
 The library also encrypts its connection to a node with TLS whenever the
 node offers it, as `monerod` does by default, on top of what Tor provides.
