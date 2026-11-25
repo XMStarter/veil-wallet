@@ -91,6 +91,67 @@ class FakeDevice extends ThisDevice {
 
   @override
   Future<bool> restricted() async => restrictedNow;
+
+  /// What the device can do with a fingerprint or a face. A desktop:
+  /// nothing.
+  Biometrics biometricsNow = Biometrics.absent;
+
+  /// The password in the phone's keeping, when there is one.
+  String? keptPassword;
+
+  /// How the next question for a fingerprint or a face ends, when not
+  /// with recognition.
+  BiometricOutcome? nextOutcome;
+
+  /// The titles the phone asked under.
+  final asked = <String>[];
+
+  @override
+  Future<Biometrics> biometrics() async => biometricsNow;
+
+  BiometricResult? _notRecognised(String title) {
+    asked.add(title);
+    final outcome = nextOutcome;
+    nextOutcome = null;
+    if (outcome == null) return null;
+    if (outcome == BiometricOutcome.changed) {
+      keptPassword = null;
+      biometricsNow = Biometrics.off;
+    }
+    return BiometricResult(
+      outcome,
+      detail: outcome == BiometricOutcome.failed ? 'the reader is busy' : null,
+    );
+  }
+
+  @override
+  Future<BiometricResult> keepPassword(
+    String password, {
+    required String title,
+    required String cancel,
+  }) async {
+    final not = _notRecognised(title);
+    if (not != null) return not;
+    keptPassword = password;
+    biometricsNow = Biometrics.on;
+    return const BiometricResult(BiometricOutcome.done);
+  }
+
+  @override
+  Future<BiometricResult> recallPassword({
+    required String title,
+    required String cancel,
+  }) async {
+    final not = _notRecognised(title);
+    if (not != null) return not;
+    return BiometricResult(BiometricOutcome.done, password: keptPassword);
+  }
+
+  @override
+  Future<void> forgetPassword() async {
+    keptPassword = null;
+    if (biometricsNow == Biometrics.on) biometricsNow = Biometrics.off;
+  }
 }
 
 /// A wallet that only pretends: no core, no files, no Tor.

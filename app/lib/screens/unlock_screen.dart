@@ -30,6 +30,34 @@ class _UnlockScreenState extends State<UnlockScreen> {
   bool _working = false;
   Problem? _problem;
 
+  /// Whether the phone opens the wallet for a fingerprint or a face.
+  bool _byBiometrics = false;
+
+  /// Said instead of a problem's own words: what became of opening with
+  /// a fingerprint or a face.
+  String? _said;
+
+  /// The password the phone gave back, for opening without bridges after
+  /// it was refused with them. Kept no longer than this screen.
+  String? _recalled;
+
+  @override
+  void initState() {
+    super.initState();
+    _lookForBiometrics();
+  }
+
+  Future<void> _lookForBiometrics() async {
+    Biometrics found;
+    try {
+      found = await widget.backend.device.biometrics();
+    } catch (_) {
+      // A phone that cannot say opens the wallet with the password.
+      found = Biometrics.absent;
+    }
+    if (mounted) setState(() => _byBiometrics = found == Biometrics.on);
+  }
+
   @override
   void dispose() {
     _password.dispose();
@@ -46,17 +74,73 @@ class _UnlockScreenState extends State<UnlockScreen> {
             kind == ProblemKind.torFailed);
   }
 
-  Future<void> _unlock({bool withoutBridges = false}) async {
-    if (_password.text.isEmpty || _working) return;
+  /// The password to open with: the one typed, or else the one the phone
+  /// gave back a moment ago.
+  String get _given =>
+      _password.text.isEmpty ? _recalled ?? '' : _password.text;
+
+  Future<void> _unlock({bool withoutBridges = false}) =>
+      _open(_given, withoutBridges: withoutBridges);
+
+  /// Asks the phone for the password, for a fingerprint or a face, and
+  /// opens the wallet with it.
+  Future<void> _unlockByBiometrics() async {
+    if (_working) return;
+    final text = AppLocalizations.of(context)!;
+    final device = widget.backend.device;
+    setState(() {
+      _problem = null;
+      _said = null;
+    });
+    BiometricResult result;
+    try {
+      result = await device.recallPassword(
+        title: text.biometricsPromptOpen,
+        cancel: text.biometricsPromptCancel,
+      );
+    } catch (error) {
+      result = BiometricResult(BiometricOutcome.failed, detail: '$error');
+    }
+    if (!mounted) return;
+    final password = result.password;
+    switch (result.outcome) {
+      case BiometricOutcome.done when password != null && password.isNotEmpty:
+        _recalled = password;
+        await _open(password, recalled: true);
+      case BiometricOutcome.cancelled:
+        break;
+      case BiometricOutcome.changed:
+        setState(() {
+          _byBiometrics = false;
+          _said = text.biometricsChanged;
+        });
+      case BiometricOutcome.done || BiometricOutcome.failed:
+        setState(
+          () => _said =
+              '${text.biometricsFailed} '
+              '${text.problemDetail(result.detail ?? '')}',
+        );
+    }
+  }
+
+  /// Opens the wallet with [password]. [recalled] says that the phone
+  /// gave it back and nobody typed it.
+  Future<void> _open(
+    String password, {
+    bool withoutBridges = false,
+    bool recalled = false,
+  }) async {
+    if (password.isEmpty || _working) return;
     setState(() {
       _working = true;
       _problem = null;
+      _said = null;
     });
     final backend = widget.backend;
     try {
       await backend.start(
         WalletSource.open,
-        password: _password.text,
+        password: password,
         withoutBridges: withoutBridges,
       );
       // A wallet whose phrase was never checked shows it again first.
@@ -83,10 +167,33 @@ class _UnlockScreenState extends State<UnlockScreen> {
             : PhraseScreen(backend: backend, phrase: phrase),
       );
     } on StartFailure catch (failure) {
+      if (recalled && failure.problem.kind == ProblemKind.wrongPassword) {
+        // What the phone kept is not the wallet's password: it was
+        // changed where the phone did not hear of it. Kept, it would be
+        // refused every time.
+        await _forgetRecalled();
+        return;
+      }
       _refused(failure.problem);
     } catch (error) {
       _refused(unforeseen(error));
     }
+  }
+
+  Future<void> _forgetRecalled() async {
+    _recalled = null;
+    try {
+      await widget.backend.device.forgetPassword();
+    } catch (_) {
+      // Then it is refused again the next time, and forgotten then.
+    }
+    if (!mounted) return;
+    final text = AppLocalizations.of(context)!;
+    setState(() {
+      _working = false;
+      _byBiometrics = false;
+      _said = text.biometricsStale;
+    });
   }
 
   void _refused(Problem problem) {
@@ -109,11 +216,17 @@ class _UnlockScreenState extends State<UnlockScreen> {
           label: _working ? text.unlockWorking : text.unlockAction,
           onPressed: _password.text.isEmpty || _working ? null : _unlock,
         ),
+        if (_byBiometrics)
+          VeilButton(
+            label: text.unlockBiometrics,
+            primary: false,
+            onPressed: _working ? null : _unlockByBiometrics,
+          ),
         if (_bridgesFailed)
           VeilButton(
             label: text.unlockWithoutBridges,
             primary: false,
-            onPressed: _password.text.isEmpty || _working
+            onPressed: _given.isEmpty || _working
                 ? null
                 : () => _unlock(withoutBridges: true),
           ),
@@ -141,6 +254,7 @@ class _UnlockScreenState extends State<UnlockScreen> {
           const LinearProgressIndicator(),
         ],
         if (problem != null) ProblemText(problemWords(text, problem)),
+        if (_said != null) ProblemText(_said!),
         if (_bridgesFailed) ...[
           const SizedBox(height: 16),
           Notice(text.unlockBridgesNotice, warning: true),

@@ -14,6 +14,11 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <!-- To ask for a fingerprint or a face, with Android's own question,
+         when the user has chosen to open the wallet that way (Biometrics).
+         The app never sees either: Android says only whether it
+         recognised one. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     <!-- allowBackup, fullBackupContent and dataExtractionRules: the wallet's
          files are copied nowhere by Android, neither to a cloud backup nor
          to another device. Only the recovery phrase brings a wallet back. -->

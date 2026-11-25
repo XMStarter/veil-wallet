@@ -4,7 +4,8 @@ import 'package:veil_bridge/veil_bridge.dart';
 import 'device.dart';
 import 'settings.dart';
 
-export 'device.dart' show Device, Presence;
+export 'device.dart'
+    show BiometricOutcome, BiometricResult, Biometrics, Device, Presence;
 export 'settings.dart' show AppSettings;
 
 export 'package:veil_bridge/veil_bridge.dart'

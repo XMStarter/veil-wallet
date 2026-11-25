@@ -108,7 +108,13 @@ runtime.
    to where it is changed: Tor status, node, bridges, password, auto-lock,
    show recovery phrase, language, theme, and removing the wallet. A choice
    among a few is a list in which the one in force says so in a word.
-   Removing the wallet and showing the phrase ask for the password.
+   Removing the wallet and showing the phrase ask for the password. On a
+   phone that can, there is a line for opening the wallet with a
+   fingerprint or a face; its screen says what that means before the one
+   button that switches it on, for the password, and the screen that
+   opens the wallet then has a second button under the first. The
+   question for the fingerprint itself is Android's and looks like
+   Android's.
 
 ## Language
 
