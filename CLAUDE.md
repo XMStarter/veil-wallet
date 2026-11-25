@@ -785,7 +785,11 @@ time, so the slow loading did not come back, and the run does not show
 whether the change would have carried the tests through it: a test that
 passes shows none of its output, so how long the loading took is not in
 the log either. With that, step 4.6 has passed the owner's run on both
-systems and on the phone.
+systems and on the phone. The owner said afterwards that obfs4 works on
+the phone, and about lyrebird's licence: it will be decided before a
+release, and the owner is to be reminded of it then. Whoever takes up
+step 6, the release, raises it first: `docs/concept.md`, "Open
+decisions", "The licence of the transport program".
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

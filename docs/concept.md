@@ -371,7 +371,8 @@ run where is set out in [development.md](development.md).
   terms for that part: its licence texts with it, and its source
   offered. To be settled before a release, with advice from somebody
   who knows licences: carry it and meet those terms, as Tor Browser
-  does, or leave bridges on Android to a separate download.
+  does, or leave bridges on Android to a separate download. The owner
+  decides this at the release step and has asked to be reminded then.
 - **The app's name on Android.** Android knows an app by an identifier
   that can never change once people have the app. For now it is
   `io.github.xmstarter.veil`, after the project's place on GitHub. It is
