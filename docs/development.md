@@ -53,6 +53,23 @@ machine. The log of that run is the evidence that the step is done.
 | `tor` | The tests that start the real Tor client, a connection to an onion service, and a new wallet synchronising with a public node. | The owner's machine |
 | `stagenet` | The command-line tool: a new wallet synchronises with a public stagenet node through Tor. | The owner's machine |
 | `bridges` | Tor through obfs4 and Snowflake bridges, a bridge that does not exist, and the tool synchronising through bridges. | The owner's machine |
+| `leaks` | The Rust tests of `offline` once more, with every network call of theirs recorded: none may name an address outside the machine. Needs the wallet library and `strace`; Linux only. | Any Linux machine with the wallet library |
+| `leaks-chain` | The same for the tests of `regtest`. Starts a Monero daemon, whose own calls are left out. | The owner's machine |
+
+The two `leaks` levels check the rule that nothing reaches the network
+except through Tor, from outside the programs. In the tests Tor is a
+stand-in on loopback, so every address any of their network calls names
+has to be the machine's own. `strace` records the calls of the tests and
+of everything they start, the command-line tool included, into
+`native/target/check-logs/`, and `veil-trace-check` (`veil_test_guard`)
+reads the record. It fails on an address that is not loopback, on a name
+looked up (port 53, the system's resolver, or its cache of names asked
+for a host), on a socket bound to every interface, and on anything it
+cannot read. A question to the cache of names about a user or a group is
+no finding: Tor's code asks who owns its files, and the machine's own
+lists answer. What these levels do not see: the real Tor client, whose
+connections leave the machine and are meant to; the app's window and
+Flutter's own code; and anything on Windows or Android.
 
 `./check.sh setup` prepares a Debian or Ubuntu machine once: system
 packages, among them the transport programs for bridges, Rust, the

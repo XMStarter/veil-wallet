@@ -7,7 +7,9 @@
 //! before anything is started if it finds itself on a CI runner anyway.
 //!
 //! The crate also holds [`RegtestDaemon`], the one launcher of a test
-//! daemon in the workspace, so that no test can start one around the check.
+//! daemon in the workspace, so that no test can start one around the check,
+//! and [`trace`], which reads a record of the tests' network calls for
+//! anything that leaves the machine (`veil-trace-check`, `check.sh leaks`).
 //!
 //! The reason is in `docs/development.md`, "Hosted CI and the hosting
 //! account".
@@ -15,6 +17,7 @@
 use std::ffi::OsString;
 
 mod regtest;
+pub mod trace;
 
 pub use regtest::RegtestDaemon;
 

@@ -320,8 +320,19 @@ run where is set out in [development.md](development.md).
       that on.
    6. *Bridges on Android:* the app carries a transport program, built
       from source, and Tor starts it from the app's package.
-5. **Hardening.** Network-level leak checks, fuzzing of address and URI
-   parsing, an external audit.
+5. **Hardening.**
+   1. *Leak check.* The tests that need no network, and those on a
+      private chain, run once more with every network call recorded. In
+      them Tor is a stand-in on the machine, so no call may name an
+      address anywhere else, and no name may be looked up.
+   2. *Fuzzing* of everything that reads text from outside: addresses and
+      payment links, amounts, nodes, bridge lines, recovery phrases, the
+      requests of the C interface, and the first bytes of a connection to
+      Tor's listeners.
+   3. *External audit.* What an auditor needs to begin: what is in scope,
+      what the wallet defends against and what it does not, and how to
+      build it and run its checks. The audit itself is the owner's to
+      commission.
 6. **Release.** Open source, reproducible builds, signed APKs, F-Droid.
 
 ## Known limitations

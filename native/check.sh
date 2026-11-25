@@ -6,6 +6,8 @@
 #   ./check.sh tor         the tests that start the real Tor client
 #   ./check.sh stagenet    the command-line tool on stagenet, through Tor
 #   ./check.sh bridges     Tor through obfs4 and Snowflake bridges
+#   ./check.sh leaks       the offline tests again, with every network call recorded: none may leave the machine
+#   ./check.sh leaks-chain the same for the tests on a private chain (starts a Monero daemon)
 #   ./check.sh daemons     not a check: starts test daemons in pairs to see why one may not come up
 #   ./check.sh flutter     installs the pinned Flutter and nothing else (what hosted CI runs first)
 #   ./check.sh setup       once per machine: packages, Rust, the wallet library
@@ -133,7 +135,7 @@ dart_program() {
 }
 
 usage() {
-  sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 # cargo with the target of this run. An empty array needs this spelling in
@@ -304,6 +306,73 @@ level_regtest() {
   local status=$?
   where_it_ended "$status" -p veil_core --features regtest --locked
   return "$status"
+}
+
+# The rule that nothing reaches the network except through Tor, checked
+# from outside the programs. In the tests Tor is a stand-in on loopback,
+# so every address any network call of theirs names has to be this
+# machine's own. `strace` records the calls of the tests and of everything
+# they start, and `veil-trace-check` (veil_test_guard) reads the record:
+# an address that is not loopback, a name looked up, a socket bound to
+# every interface, or anything it cannot read fails the level. Linux only:
+# the record is the Linux kernel's.
+#
+# What this does not see: the real Tor client, whose own connections do
+# leave the machine and are meant to (the `tor` level's tests are not
+# traced); the app's windows and Flutter's own code; Windows and Android.
+traced_tests() {
+  local name="$1"
+  shift
+  if [ "$windows" = 1 ]; then
+    echo "error: '$name' records the calls of Linux programs; there is no --windows form of it." >&2
+    return 1
+  fi
+  if ! command -v strace >/dev/null; then
+    echo "error: strace is not installed. Install it: sudo apt-get install -y strace" >&2
+    return 1
+  fi
+  # Without the wallet library its tests are skipped, and the library is
+  # most of what is to be looked at.
+  require_wallet_lib || return 1
+  export VEIL_REQUIRE_WALLET_LIB=1
+  local record="$here/target/check-logs/$name-$(date -u '+%Y%m%d-%H%M%S').strace"
+  # Built first and unrecorded: compiling is not what is looked at, and
+  # cargo is told to fetch nothing while it is.
+  step cargo test "$@" --locked --no-run &&
+    step cargo build -p veil_test_guard --bin veil-trace-check --locked || return 1
+  echo
+  echo "--- the same tests, with their network calls recorded in $record"
+  # --seccomp-bpf: the kernel stops a program only at the calls that are
+  # recorded and lets every other call through at full speed. Without it
+  # each call of every program is stopped, which made the wallet's tests
+  # four times slower and the daemon too slow to answer in time.
+  # --no-fail-fast: a test that fails does not keep the rest from being
+  # recorded.
+  # -q and not -qq: how each program ended stays in the record, so that
+  # the record alone says whether the test programs passed.
+  CARGO_NET_OFFLINE=true strace -f --seccomp-bpf -q -o "$record" \
+    -e trace=network,execve,clone,clone3,fork,vfork \
+    cargo test "$@" --locked --no-fail-fast
+  local status=$?
+  if [ "$status" != 0 ]; then
+    echo "the tests failed while recorded (exit $status); the record is read all the same" >&2
+  fi
+  # The daemon of the tests on a private chain is not Veil: left out.
+  step "$here/target/debug/veil-trace-check" --ignore monerod "$record" || return 1
+  return "$status"
+}
+
+level_leaks() {
+  traced_tests leaks --workspace
+}
+
+level_leaks_chain() {
+  if [ ! -x "$monerod" ]; then
+    echo "error: no daemon in $out_dir. Run $setup_hint first." >&2
+    return 1
+  fi
+  export VEIL_MONEROD="$monerod"
+  traced_tests leaks-chain -p veil_wallet -p veil_core --features regtest
 }
 
 # A test that fails makes cargo end with 101, and the log says which test
@@ -522,7 +591,7 @@ level_setup() {
   local packages="git curl ca-certificates build-essential cmake ninja-build pkg-config
     libssl-dev libzmq3-dev libunbound-dev libsodium-dev libboost-all-dev
     libhidapi-dev libusb-1.0-0-dev libudev-dev libreadline-dev libexpat1-dev
-    libpgm-dev libnorm-dev obfs4proxy snowflake-client xz-utils unzip
+    libpgm-dev libnorm-dev obfs4proxy snowflake-client xz-utils unzip strace
     clang libgtk-3-dev liblzma-dev"
   if [ "$windows" = 1 ]; then
     # The cross compiler, and what Monero's dependency build asks for.
@@ -706,7 +775,7 @@ run_levels() {
   for level in "$@"; do
     echo
     echo "=== $level"
-    ("level_$level")
+    ("level_${level//-/_}")
     status=$?
     if [ "$status" = 0 ]; then
       summary+="  PASS  $level"$'\n'
@@ -740,7 +809,7 @@ for level in "$@"; do
     offline) ;;
     flutter) ;;
     ndk) ;;
-    regtest | tor | stagenet | bridges | daemons | setup | app)
+    regtest | tor | stagenet | bridges | daemons | setup | app | leaks | leaks-chain)
       if in_hosted_ci; then
         echo "refused: '$level' does not run in hosted CI. Only 'offline' does." >&2
         echo "See docs/development.md, \"Hosted CI and the hosting account\"." >&2

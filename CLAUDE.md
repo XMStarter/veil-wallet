@@ -84,9 +84,12 @@ that cannot lose the user's funds.
     daemon; fails the test on a CI runner. A new test of that kind calls it
     too. It also starts the daemon for tests, one at a time, and when the
     daemon does not come up it says how it ended and shows the end of its
-    log.
+    log. And it reads a record of network calls for anything that leaves
+    the machine (`trace.rs`, `veil-trace-check`), for the `leaks` levels.
   - `check.sh`: the checks by level (`offline`, `regtest`, `tor`,
-    `stagenet`, `bridges`) with a log; `setup` prepares a machine;
+    `stagenet`, `bridges`, and `leaks` and `leaks-chain`, which run the
+    tests of the first two with every network call recorded) with a log;
+    `setup` prepares a machine;
     `daemons` is a diagnosis of the test daemon, not a check. With
     `--windows` in front, the levels are built for Windows on Linux and run
     as Windows programs through WSL. With `--android` in front there are
@@ -789,7 +792,64 @@ systems and on the phone. The owner said afterwards that obfs4 works on
 the phone, and about lyrebird's licence: it will be decided before a
 release, and the owner is to be reminded of it then. Whoever takes up
 step 6, the release, raises it first: `docs/concept.md`, "Open
-decisions", "The licence of the transport program".
+decisions", "The licence of the transport program". Hosted CI passed on
+both systems, and step 4.6 was merged on the owner's word. That
+completes step 4 of the build plan, Android.
+Next is step 5, hardening, in three parts: a leak check, fuzzing, and
+what an external audit needs. Step 5.1, the leak check, is written.
+`./check.sh leaks` runs the Rust tests of the `offline` level once more
+under `strace`, which records every network call they and the programs
+they start make, and `veil-trace-check` (`veil_test_guard/src/trace.rs`)
+reads the record: an address that is not loopback, a name looked up, a
+socket bound to every interface, or anything it cannot read fails the
+level. `leaks-chain` does the same for the tests on a private chain and
+leaves the daemon's own calls out. In a cloud session `leaks` passes:
+352 sockets and 665 addresses, the core's tests, the wallet's, and
+forty-five runs of the command-line tool among them, and none leaves
+the machine. Its first run did report something: four connections to
+the system's cache of names, from Tor's code. They were its questions
+about who owns its files, a user and a group looked up in the machine's
+own lists (seen in the call stacks: `getpwuid_r` and `getgrnam_r`), and
+the cache was not running, so nothing was even asked. The reader now
+judges that cache by what it is asked: about a host is a finding, about
+a user or a group is not. That it does fail was tried on a small
+program that connects outside, looks a name up and binds to every
+interface: seven findings. What these levels cannot see: the real Tor
+client, whose connections leave the machine and are meant to, the app's
+window and Flutter's own code, and anything on Windows or Android. On
+commit `d4e3d2d` the owner ran both levels and sent the log and the two
+records. `leaks` passed there with the same numbers as in a cloud
+session, 352 sockets and 665 addresses, none leaving the machine.
+`leaks-chain` failed, and not for a leak: its record, 360 sockets and
+607 addresses, holds nothing that leaves the machine, and read again
+without the daemon left out it still holds nothing, so the test daemon
+keeps to loopback too. What failed was one test while it was recorded,
+`a_long_scan_is_saved_on_the_way_gives_way_and_misses_nothing`: the
+daemon did not answer a request for blocks within the five minutes the
+helper gives it. The recording stopped every program at every call it
+made, the daemon included, and the test program took eleven minutes
+where it takes six. Because cargo stops at the first test program that
+fails, the wallet's own tests on a private chain were not recorded at
+all. The recording now uses the kernel's own filter (`strace
+--seccomp-bpf`), which stops a program only at the calls that are
+recorded: the wallet's offline tests take 19 seconds that way where
+they took 107, with the same record, 26 unrecorded. And a test that
+fails no longer keeps the rest from being recorded. The owner ran
+`leaks-chain` again on commit `7e79893` and sent the record, not the
+log. Read in a cloud session, it holds 436 sockets and 692 addresses
+and nothing that leaves the machine, and nothing either with the six
+daemons of that run not left out (442 sockets, 866 addresses). The
+wallet's own tests on a private chain are in it this time. Whether the
+tests passed while recorded the record does not say: it was made
+without the lines for how a program ended, which it has from now on
+(`strace -q` in place of `-qq`). The log of that run came afterwards
+and says it: the level passed. All fifty-six tests of `veil_core`
+passed while recorded, the long scan among them, in 311 seconds where
+the first recording took 665; so did the wallet's tests, the two on a
+private chain included. With that, step 5.1 has passed the owner's run:
+`leaks` on commit `d4e3d2d` and `leaks-chain` on `7e79893`. The last
+change, keeping how each program ended in the record, has run in a
+cloud session only.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
