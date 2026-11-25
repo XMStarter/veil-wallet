@@ -142,15 +142,15 @@ app looks for the core and the wallet library in its own folder, next to
   in `docs/development.md` for how it is built. Its wallet is in the app's private
   storage, which no other app can read and Android copies to no backup;
   the core and the wallet library are inside the package.
-- Bridges on a phone are written and have not been on one. The package
+- Bridges on a phone have been tried on one phone, the owner's, where
+  Tor connected through obfs4 and through Snowflake. The package
   carries the Tor Project's transport program for obfs4, Snowflake and
   WebTunnel (`native/transports`), which Tor starts from the folder
   Android unpacks the package into; Settings then takes bridges as on a
   desktop. For that the package's native parts are unpacked when the app
   is installed, which makes the file to download smaller (29 megabytes)
-  and the installed app larger. Not known until a phone shows it:
-  whether Tor can start the program there, and whether a bridge carries
-  a connection. The program is under the GPL, version 3 or later; see
+  and the installed app larger. Not tried: WebTunnel, and a network
+  that blocks Tor. The program is under the GPL, version 3 or later; see
   the README next to its build script before handing the app on.
 - What a phone asks for has been tried on one phone, the owner's, and
   worked there: no picture of the app while a recovery phrase is shown

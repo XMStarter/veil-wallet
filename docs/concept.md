@@ -358,9 +358,11 @@ run where is set out in [development.md](development.md).
   Bridges work through it on Linux for obfs4 and Snowflake; WebTunnel is
   set up the same way but has not been tried. A transport is a separate
   program that Tor starts. The app for Android carries one, the Tor
-  Project's lyrebird, built from source; whether Arti can start it on a
-  phone is still to be seen there. Arti itself runs on a phone: inside
-  the app it connected and carried a synchronisation and a payment.
+  Project's lyrebird, built from source, and Arti starts it there: on a
+  phone Tor connected through obfs4 and through Snowflake. Arti itself
+  runs on a phone: inside the app it connected and carried a
+  synchronisation and a payment. So the fallback to the reference
+  implementation has not been needed.
 - **The licence of the transport program.** lyrebird is under the GNU
   General Public License, version 3 or later; Veil is under the MIT
   licence. They are separate programs, and Tor starts the one as a

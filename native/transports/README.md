@@ -66,9 +66,15 @@ the source of exactly this build is, which is the commit pinned in
 `build.sh` together with that script. It is listed among the open
 decisions in `docs/concept.md`. Nothing here is legal advice.
 
+## What a phone has shown
+
+On one phone, the owner's, Tor (Arti) started the program from the app's
+package and connected through obfs4 bridges and through a Snowflake
+bridge. Nothing built for Android runs in a cloud session, so that phone
+is all that is known.
+
 ## Not known yet
 
-- Whether Tor (Arti) can start the program on a phone at all, and
-  whether a bridge then carries a connection. Nothing built for Android
-  runs in a cloud session.
-- Snowflake on a phone, which needs more of the network than obfs4.
+- WebTunnel, which nobody has had a bridge to try with.
+- A network that blocks Tor: the phone's does not, so what was seen is
+  that a bridged connection works, not that it gets through a block.

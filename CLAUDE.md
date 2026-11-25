@@ -748,7 +748,23 @@ Public License, version 3 or later, and Veil under MIT; they are
 separate programs, but a package with lyrebird inside has to be handed
 on under lyrebird's terms for that part. That is an open decision in
 the concept, for the owner, before a release; it does not stand in the
-way of trying the app on the owner's own phone.
+way of trying the app on the owner's own phone. With the APK built from
+commit `ecc8c94` the owner put bridges into Settings on the phone, the
+obfs4 bridges built into Tor Browser and then one of its Snowflake
+bridges, the lines the `bridges` level uses, and reported: with obfs4
+Home first said that the wallet could not synchronise because no node
+answered and that it tries again by itself, and then that went away;
+Snowflake works. So Arti starts the program from the app's package on a
+phone and both transports carry Tor there, which answers the question
+the concept's fallback was kept for. What Home said after the message
+went away with obfs4 was not said; a message about nodes, and none
+about Tor, means Tor had connected through the bridge, and nodes that
+do not answer at the first try are what the public stagenet nodes have
+done before, here through a connection several times slower. Whether
+the bridge had a part in it was not looked into. Not tried: WebTunnel,
+and a network that blocks Tor, since the owner's does not. The owner's
+run on the desktop for this step, which changes the core, has not been
+sent yet.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
