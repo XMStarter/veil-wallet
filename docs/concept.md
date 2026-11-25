@@ -294,8 +294,8 @@ run where is set out in [development.md](development.md).
   Bridges work through it on Linux for obfs4 and Snowflake; WebTunnel is
   set up the same way but has not been tried. A transport is a separate
   program that Tor starts, and whether an app can ship and start one on
-  Android is still to be verified. Arti builds for Android as part of the
-  core; it has not been run there.
+  Android is still to be verified. Arti itself runs there: inside the app
+  on a phone it connected and carried a synchronisation and a payment.
 - **The app's name on Android.** Android knows an app by an identifier
   that can never change once people have the app. For now it is
   `io.github.xmstarter.veil`, after the project's place on GitHub. It is

@@ -480,7 +480,17 @@ the fake did not list the protocol upgrades with its version, the
 library then takes a path that can read a variable nothing has set, and
 what it decides there moved with the layout of the program. The fake
 lists them now, like every current node; the library's side is noted in
-`native/veil_wallet/README.md` and not patched. The wallet library's "shared
+`native/veil_wallet/README.md` and not patched. With the APK built from
+commit `a5f5c00` the owner then reported from the phone that everything
+works and that coins are sent. So on a phone the wallet opens, Tor
+connects, the wallet synchronises, and a payment goes out, on stagenet.
+What else was looked at was not said: whether the wallet was made new or
+restored, how the screens sit, and the phone and its Android are not
+known. That APK was built in a cloud session and signed with that
+session's debug key; one built on the owner's machine has another key
+and does not install over it. Not run since the lock was changed: the
+`regtest` level, on either system, and hosted CI, which has the new
+build for Android in it. The wallet library's "shared
 ring database" is not made on Android, where an app has no home folder;
 on a desktop the library makes it in the user's home folder, outside
 Veil's own, which was noticed here and is not dealt with. On

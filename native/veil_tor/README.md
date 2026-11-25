@@ -177,5 +177,7 @@ cargo test -p veil_tor --test bridges -- --ignored --nocapture --test-threads=1
   the reference Tor implementation is about.
 - Bridges through the C interface.
 - On Android the component is built (`../check.sh --android offline`
-  lints it and compiles its tests) and has not been run. On Linux and
-  Windows the tests that start Tor and reach an onion service pass.
+  lints it and compiles its tests) and its tests are not run there. It
+  has run inside the app on one phone, where it connected and a wallet
+  synchronised and sent through it. On Linux and Windows the tests that
+  start Tor and reach an onion service pass.
