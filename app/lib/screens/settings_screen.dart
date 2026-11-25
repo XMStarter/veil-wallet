@@ -32,10 +32,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// What the screen the user has just come back from achieved.
   String? _done;
 
+  /// Whether this device can open the wallet with a fingerprint or a
+  /// face, and does. Absent until the device has said otherwise.
+  Biometrics _biometrics = Biometrics.absent;
+
+  @override
+  void initState() {
+    super.initState();
+    _lookForBiometrics();
+  }
+
+  Future<void> _lookForBiometrics() async {
+    Biometrics found;
+    try {
+      found = await widget.backend.device.biometrics();
+    } catch (_) {
+      found = Biometrics.absent;
+    }
+    if (mounted) setState(() => _biometrics = found);
+  }
+
   Future<void> _go(Widget screen) async {
     setState(() => _done = null);
     final done = await openFor<String>(context, screen);
     if (mounted && done != null) setState(() => _done = done);
+    // Changing the password switches it off, and its own screen
+    // switches it either way.
+    await _lookForBiometrics();
   }
 
   String _languageName(AppLocalizations text, String? language) =>
@@ -91,6 +114,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     value: text.settingsPasswordChange,
                     onTap: () => _go(PasswordScreen(backend: backend)),
                   ),
+                  // Only where the device has it: a desktop shows no
+                  // line for what it cannot do.
+                  if (_biometrics != Biometrics.absent)
+                    _Line(
+                      title: text.settingsBiometrics,
+                      value: switch (_biometrics) {
+                        Biometrics.on => text.biometricsOnValue,
+                        Biometrics.notSetUp => text.biometricsNotSetUpValue,
+                        _ => text.biometricsOffValue,
+                      },
+                      onTap: () => _go(
+                        BiometricsScreen(backend: backend, found: _biometrics),
+                      ),
+                    ),
                   _Line(
                     title: text.settingsAutoLock,
                     value: text.autoLockAfter(settings.autoLockMinutes),
@@ -426,9 +463,24 @@ class _PasswordScreenState extends State<PasswordScreen> {
     } catch (error) {
       refused = unforeseen(error);
     }
+    // The phone, if it kept the password for a fingerprint or a face,
+    // keeps the old one now. It is taken away, and the user told.
+    var switchedOff = false;
+    if (refused == null) {
+      final device = widget.backend.device;
+      try {
+        switchedOff = await device.biometrics() == Biometrics.on;
+        await device.forgetPassword();
+      } catch (_) {
+        // The screen that opens the wallet sees to a password the phone
+        // kept and the wallet no longer takes.
+      }
+    }
     if (!mounted) return;
     if (refused == null) {
-      Navigator.of(context).pop(text.passwordChanged);
+      Navigator.of(context).pop(
+        switchedOff ? text.passwordChangedBiometricsOff : text.passwordChanged,
+      );
     } else {
       setState(() {
         _working = false;
@@ -472,6 +524,168 @@ class _PasswordScreenState extends State<PasswordScreen> {
           enabled: !_working,
           onChanged: (password) => setState(() => _next = password),
         ),
+      ],
+    );
+  }
+}
+
+/// Opening the wallet with a fingerprint or a face: what that means, and
+/// switching it on, for the password, or off.
+class BiometricsScreen extends StatefulWidget {
+  const BiometricsScreen({
+    super.key,
+    required this.backend,
+    required this.found,
+  });
+
+  final WalletBackend backend;
+
+  /// How it stood when the screen was opened.
+  final Biometrics found;
+
+  @override
+  State<BiometricsScreen> createState() => _BiometricsScreenState();
+}
+
+class _BiometricsScreenState extends State<BiometricsScreen> {
+  final _password = TextEditingController();
+  bool _working = false;
+  bool _wrong = false;
+  Problem? _problem;
+
+  @override
+  void dispose() {
+    _password.dispose();
+    super.dispose();
+  }
+
+  Future<void> _switchOn() async {
+    if (_password.text.isEmpty || _working) return;
+    final text = AppLocalizations.of(context)!;
+    setState(() {
+      _working = true;
+      _wrong = false;
+      _problem = null;
+    });
+    final backend = widget.backend;
+    // Only the wallet's own password goes into the phone's keeping:
+    // another would be refused the first time it is used.
+    bool? right;
+    Problem? problem;
+    BiometricResult? kept;
+    try {
+      right = await backend.isPassword(_password.text);
+      if (right == null) problem = _notNow;
+      if (right ?? false) {
+        kept = await backend.device.keepPassword(
+          _password.text,
+          title: text.biometricsPromptKeep,
+          cancel: text.biometricsPromptCancel,
+        );
+      }
+    } catch (error) {
+      problem = unforeseen(error);
+    }
+    if (!mounted) return;
+    if (kept?.outcome == BiometricOutcome.done) {
+      Navigator.of(context).pop(text.biometricsSwitchedOn);
+      return;
+    }
+    if (kept != null && kept.outcome != BiometricOutcome.cancelled) {
+      problem = Problem(ProblemKind.other, kept.detail ?? '');
+    }
+    setState(() {
+      _working = false;
+      _wrong = right == false;
+      _problem = problem;
+    });
+    if (_wrong) markAll(_password);
+  }
+
+  Future<void> _switchOff() async {
+    if (_working) return;
+    final text = AppLocalizations.of(context)!;
+    setState(() {
+      _working = true;
+      _problem = null;
+    });
+    Problem? problem;
+    try {
+      await widget.backend.device.forgetPassword();
+    } catch (error) {
+      problem = unforeseen(error);
+    }
+    if (!mounted) return;
+    if (problem == null) {
+      Navigator.of(context).pop(text.biometricsSwitchedOff);
+    } else {
+      setState(() {
+        _working = false;
+        _problem = problem;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = AppLocalizations.of(context)!;
+    final problem = _problem;
+    final on = widget.found == Biometrics.on;
+    final can = widget.found == Biometrics.off;
+    return VeilScreen(
+      title: text.settingsBiometrics,
+      actions: [
+        if (on)
+          VeilButton(
+            label: _working ? text.biometricsWorking : text.biometricsOffAction,
+            onPressed: _working ? null : _switchOff,
+          ),
+        if (can)
+          VeilButton(
+            label: _working ? text.biometricsWorking : text.biometricsOnAction,
+            onPressed: _password.text.isEmpty || _working ? null : _switchOn,
+          ),
+        VeilQuietButton(
+          label: text.back,
+          onPressed: _working ? null : () => Navigator.of(context).pop(),
+        ),
+      ],
+      children: [
+        if (on)
+          Notice(text.biometricsIsOn)
+        else ...[
+          Notice(text.biometricsNotice, warning: true),
+          if (!can) ...[
+            const SizedBox(height: 16),
+            Notice(text.biometricsNotSetUp),
+          ],
+        ],
+        if (can) ...[
+          const SizedBox(height: 16),
+          VeilField(
+            label: text.passwordLabel,
+            controller: _password,
+            secret: true,
+            enabled: !_working,
+            onChanged: (_) => setState(() {
+              _wrong = false;
+              _problem = null;
+            }),
+            onSubmitted: (_) => _switchOn(),
+          ),
+        ],
+        if (_wrong) ProblemText(text.problemWrongPassword),
+        if (problem != null)
+          ProblemText(
+            problem.kind == ProblemKind.other
+                ? '${text.biometricsFailed} '
+                      '${text.problemDetail(problem.detail)}'
+                : problemWords(text, problem),
+          ),
+        if (_working) ...[
+          const SizedBox(height: 16),
+          const LinearProgressIndicator(),
+        ],
       ],
     );
   }
@@ -693,7 +907,11 @@ class _RemoveWalletScreenState extends State<RemoveWalletScreen> {
       final answer = await backend.isPassword(_password.text);
       if (answer == null) problem = _notNow;
       right = answer ?? false;
-      if (right) await backend.removeWallet();
+      if (right) {
+        await backend.removeWallet();
+        // The phone's keeping of the password goes with the wallet.
+        await backend.device.forgetPassword();
+      }
     } catch (error) {
       problem = unforeseen(error);
     }

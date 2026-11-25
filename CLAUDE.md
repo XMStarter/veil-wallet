@@ -109,8 +109,9 @@ that cannot lose the user's funds.
   the system can do goes through `lib/core/device.dart` to
   `MainActivity`: where the app's files go, no picture of a screen with
   a phrase, Share, a code read with the camera, the clipboard emptied,
-  and the app kept running while a wallet is open, which is
-  `WalletService`).
+  the app kept running while a wallet is open, which is
+  `WalletService`, and the password kept by Android for a fingerprint or
+  a face, which is `Biometrics`).
   So
   far the way to an open wallet (create, recovery phrase, restore, unlock),
   Home, Receive, Send, and Settings.
@@ -679,6 +680,39 @@ of the two changes did it cannot be told from that, and whether the
 reading above was the cause was not shown either. No run on the
 owner's desktop was made for this step: neither the core nor the wallet
 library changed in it, and the offline level passed in a cloud session.
+Hosted CI passed on both systems, and step 4.4 was merged on the owner's
+word.
+Step 4.5, the wallet opened for a fingerprint or a face, is written and
+has not been on a phone. The wallet knows only its password, so the
+phone keeps the password: encrypted with a key Android makes and holds
+in the phone's secure hardware, which works for one use right after a
+fingerprint or a face that Android counts as strong was recognised, and
+which Android destroys when the fingerprints or faces change
+(`Biometrics.kt`: `AndroidKeyStore`, AES in Galois/Counter mode,
+`BiometricPrompt` of the system, no library added). The app writes no
+cryptography for it; it calls Android's. It is offered on Android 11 or
+later and only if the key really is in secure hardware. It is off until
+switched on in Settings, for the password and after a screen that says
+what it costs: whoever the phone recognises can open the wallet and
+send. It only opens the wallet; the phrase, a new password and removing
+the wallet ask for the password. A new password switches it off,
+removing the wallet removes what was kept, and a kept password the
+wallet refuses is forgotten at once. One more permission came with it,
+for Android's question. Fifteen tests on the wallet and device that only
+pretend cover the Dart side; the Kotlin side was compiled into an APK
+and nothing more, so everything about a real reader is still to be
+seen. With the APK built from commit `6dee925` the owner reported from
+the phone that everything works. Asked for were: the line in Settings,
+a wrong password refused and the right one followed by Android's
+question for a fingerprint, the wallet opened with the fingerprint and
+still with the password, Cancel leaving it closed, a new password
+switching it off, switching it off in Settings, and, if wanted, a new
+fingerprint in Android ending it. Which of these were tried one by one
+was not said; the owner did say that the fingerprint opens the wallet
+after a wrong password was typed, which is as meant on the screen that
+opens the wallet. So Android's key store and its question work on that
+phone as called. No run on the owner's desktop was made for this step:
+neither the core nor the wallet library changed in it.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

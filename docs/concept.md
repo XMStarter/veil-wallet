@@ -191,9 +191,24 @@ if, at build time, Arti cannot run bridges on Android.
   library would keep a database of its own outside it, shared by every
   Monero wallet on the machine, and Veil's build of the library does not
   make it.
-- **Encryption.** The wallet file is encrypted with the user's password. On
-  Android, biometric unlock is available through the hardware-backed key
-  store.
+- **Encryption.** The wallet file is encrypted with the user's password.
+- **A fingerprint or a face instead of the password,** on a phone, for
+  whoever switches it on; it is off until then. The wallet itself knows
+  only its password, so the phone keeps the password: encrypted with a
+  key that Android makes and holds in the phone's secure hardware, that
+  never leaves it, and that works for a single use right after the phone
+  has recognised a fingerprint or a face it counts as strong. Veil writes
+  no cryptography for this either; the key, the cipher and the
+  recognition are Android's. A phone without such hardware, or with an
+  Android before 11, does not offer it. What it costs is said before it
+  is switched on: whoever the phone recognises can open the wallet and
+  send from it. It opens the wallet and nothing more: the recovery
+  phrase, a new password and removing the wallet ask for the password,
+  as does switching this on. A new password switches it off, because the
+  phone would keep the old one. When the fingerprints or faces on the
+  phone change, Android destroys the key, and the wallet opens with the
+  password until it is switched on again. Removing the wallet removes
+  what the phone kept.
 - **On-device protection.** A way to lock the wallet at any time and
   auto-lock. An address that was copied is taken out of the clipboard a
   minute later, if it is still what the clipboard holds; a phone lets an
@@ -222,8 +237,9 @@ if, at build time, Arti cannot run bridges on Android.
    recent activity.
 3. **Receive:** QR code and address.
 4. **Send:** address, amount, then a review screen with the fee.
-5. **Settings:** node, Tor bridges, password, auto-lock, show recovery
-   phrase, theme, language.
+5. **Settings:** node, Tor bridges, password, on a phone a fingerprint
+   or a face in its place, auto-lock, show recovery phrase, theme,
+   language.
 
 See [design.md](design.md) for the visual language.
 
@@ -299,7 +315,9 @@ run where is set out in [development.md](development.md).
       kept running outside the screen by a service with a notice, and the
       phone awake while the wallet is busy; the auto-lock by the clock;
       and what Android's battery restrictions do to all of it.
-   5. *Biometric unlock* through the hardware-backed key store.
+   5. *Biometric unlock* through the hardware-backed key store: the
+      wallet opened for a fingerprint or a face, where the user switches
+      that on.
    6. *Bridges on Android:* whether an app can ship and start a transport
       program.
 5. **Hardening.** Network-level leak checks, fuzzing of address and URI

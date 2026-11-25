@@ -22,12 +22,16 @@ import io.flutter.plugin.common.MethodChannel
  * Flutter; this class answers what the Dart side cannot do by itself:
  * where the app may keep its files, keeping a screen out of pictures,
  * handing an address to another app, reading a code with the camera,
- * emptying the clipboard, and keeping the app running while a wallet is
- * open (`WalletService`). The Dart side of it is `lib/core/device.dart`.
+ * emptying the clipboard, keeping the app running while a wallet is open
+ * (`WalletService`), and opening the wallet for a fingerprint or a face
+ * (`Biometrics`). The Dart side of it is `lib/core/device.dart`.
  */
 class MainActivity : FlutterActivity() {
     /** The answer a scan under way is owed. */
     private var scanning: MethodChannel.Result? = null
+
+    /** The wallet opened for a fingerprint or a face; see the class. */
+    private val biometrics by lazy { Biometrics(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Code that is not written for Android looks for a place for
@@ -122,6 +126,28 @@ class MainActivity : FlutterActivity() {
                             Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
                                 manager.isBackgroundRestricted,
                         )
+                    }
+
+                    // Whether the phone can open the wallet for a
+                    // fingerprint or a face, and does.
+                    "biometrics" -> result.success(biometrics.status())
+
+                    // The wallet's password goes into the phone's keeping,
+                    // for a fingerprint or a face, and comes back for one.
+                    "keepPassword" -> biometrics.keep(
+                        call.argument<String>("password") ?: "",
+                        call.argument<String>("title") ?: "",
+                        call.argument<String>("cancel") ?: "",
+                    ) { result.success(it) }
+
+                    "recallPassword" -> biometrics.recall(
+                        call.argument<String>("title") ?: "",
+                        call.argument<String>("cancel") ?: "",
+                    ) { result.success(it) }
+
+                    "forgetPassword" -> {
+                        biometrics.forget()
+                        result.success(null)
                     }
 
                     else -> result.notImplemented()

@@ -42,6 +42,54 @@ class Presence {
   String toString() => 'Presence($text, busy: $busy)';
 }
 
+/// Whether this device can open the wallet with what it knows of its
+/// owner, a fingerprint or a face, instead of the password.
+enum Biometrics {
+  /// Not on this device: a desktop, a phone without a reader, without
+  /// secure hardware for the key, or with an Android before 11.
+  absent,
+
+  /// The phone could, but no fingerprint or face that it counts as strong
+  /// is set up on it.
+  notSetUp,
+
+  /// It could, and is not asked to.
+  off,
+
+  /// The phone keeps the wallet's password for a fingerprint or a face.
+  on,
+}
+
+/// How a try with a fingerprint or a face ended.
+enum BiometricOutcome {
+  /// Recognised, and what was asked for is done.
+  done,
+
+  /// The user gave up, or the phone took the question away.
+  cancelled,
+
+  /// The fingerprints or faces on the phone have changed since the
+  /// password was given into its keeping, or the keeping is gone. The
+  /// phone opens nothing any more; [Device.biometrics] is off again.
+  changed,
+
+  /// The phone could not do it; [BiometricResult.detail] says why.
+  failed,
+}
+
+@immutable
+class BiometricResult {
+  const BiometricResult(this.outcome, {this.password, this.detail});
+
+  final BiometricOutcome outcome;
+
+  /// The wallet's password, when it was asked for and given.
+  final String? password;
+
+  /// What the phone said, for [BiometricOutcome.failed].
+  final String? detail;
+}
+
 /// What the app asks of the device it runs on, besides drawing and files:
 /// to keep a screen out of pictures, to hold an address in the clipboard
 /// for a while and no longer, to keep the app running while a wallet is
@@ -184,6 +232,32 @@ abstract class Device {
   /// Hands [text] to whichever app the user picks.
   Future<void> share(String text);
 
+  /// Whether the wallet can be, and is, opened with a fingerprint or a
+  /// face.
+  Future<Biometrics> biometrics();
+
+  /// Gives [password] into the phone's keeping: encrypted with a key that
+  /// lives in the phone's secure hardware and works only right after the
+  /// phone has recognised a fingerprint or a face, which it asks for now,
+  /// under [title] and with [cancel] as the way out. The app never has
+  /// that key and does no encrypting of its own.
+  Future<BiometricResult> keepPassword(
+    String password, {
+    required String title,
+    required String cancel,
+  });
+
+  /// Asks for a fingerprint or a face and returns the password that was
+  /// given into the phone's keeping.
+  Future<BiometricResult> recallPassword({
+    required String title,
+    required String cancel,
+  });
+
+  /// Takes the password out of the phone's keeping and destroys the key.
+  /// Harmless when nothing is kept.
+  Future<void> forgetPassword();
+
   /// Reads a code with the camera and returns what it says; null if the
   /// user gave up or nothing was read. [prompt] is shown while looking.
   Future<String?> scan(String prompt);
@@ -241,6 +315,65 @@ class ThisDevice extends Device {
   @override
   Future<void> guardScreen(bool on) async {
     if (_android) await _channel.invokeMethod<void>('secure', on);
+  }
+
+  @override
+  Future<Biometrics> biometrics() async {
+    if (!_android) return Biometrics.absent;
+    return switch (await _channel.invokeMethod<String>('biometrics')) {
+      'on' => Biometrics.on,
+      'off' => Biometrics.off,
+      'not_set_up' => Biometrics.notSetUp,
+      _ => Biometrics.absent,
+    };
+  }
+
+  @override
+  Future<BiometricResult> keepPassword(
+    String password, {
+    required String title,
+    required String cancel,
+  }) => _withBiometrics('keepPassword', {
+    'password': password,
+    'title': title,
+    'cancel': cancel,
+  });
+
+  @override
+  Future<BiometricResult> recallPassword({
+    required String title,
+    required String cancel,
+  }) => _withBiometrics('recallPassword', {'title': title, 'cancel': cancel});
+
+  Future<BiometricResult> _withBiometrics(
+    String method,
+    Map<String, String> arguments,
+  ) async {
+    if (!_android) {
+      return const BiometricResult(
+        BiometricOutcome.failed,
+        detail: 'not on this device',
+      );
+    }
+    final answer = await _channel.invokeMapMethod<String, String>(
+      method,
+      arguments,
+    );
+    return BiometricResult(
+      switch (answer?['outcome']) {
+        'done' => BiometricOutcome.done,
+        'cancelled' => BiometricOutcome.cancelled,
+        'changed' => BiometricOutcome.changed,
+        _ => BiometricOutcome.failed,
+      },
+      password: answer?['password'],
+      detail: answer?['detail'],
+    );
+  }
+
+  @override
+  Future<void> forgetPassword() async {
+    if (_android) await _channel.invokeMethod<void>('forgetPassword');
   }
 
   @override

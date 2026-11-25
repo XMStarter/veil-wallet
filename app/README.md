@@ -40,7 +40,7 @@ connection of any kind.
 | `lib/widgets` | What screens are made of: the buttons, the single column, a notice, a field, an address in groups of four, a QR code |
 | `lib/screens` | The screens |
 | `lib/core` | What the screens need from the wallet (`backend.dart`), the real thing over the core (`core_backend.dart`), where the app keeps its files (`paths.dart`), how it is set to behave (`settings.dart`), what only the device can do (`device.dart`), and the handling of a typed phrase and of pasted text |
-| `android` | The app's Android side: `MainActivity`, which answers `device.dart`, and `WalletService`, which keeps the app running while a wallet is open |
+| `android` | The app's Android side: `MainActivity`, which answers `device.dart`, `WalletService`, which keeps the app running while a wallet is open, and `Biometrics`, which has Android keep the password for a fingerprint or a face |
 | `lib/l10n` | The texts, in `app_en.arb` and `app_ru.arb`. `flutter pub get` writes the Dart files next to them |
 | `fonts` | Cormorant Garamond, Jost and JetBrains Mono, each one variable font file with its licence (SIL Open Font License). Nothing is fetched at runtime |
 | `assets/brand` | The logo |
@@ -174,6 +174,17 @@ app looks for the core and the wallet library in its own folder, next to
   battery saving, which Veil does not ask for), and what the phone's
   maker adds to Android's own restrictions. There is no way to lock the
   wallet from the notice; touching it opens the app.
+- Opening the wallet with a fingerprint or a face has been tried on one
+  phone, the owner's, and worked there. Settings has a line for it where the phone can do it
+  (Android 11 or later, a fingerprint or a face Android counts as
+  strong, and secure hardware for the key); switching it on asks for the
+  password and then for the fingerprint, and the screen that opens the
+  wallet then has a second button. The password is kept by Android,
+  encrypted with a key in the phone's secure hardware that works only
+  right after a fingerprint or a face was recognised; the app calls
+  Android for all of it and has one more permission for the question.
+  Not tried: a face, and a phone of another maker. There is no time after which the password is asked for again
+  regardless.
 - Home lists the latest twenty payments and has no way to the rest.
 - New bridges take effect the next time the wallet is opened, and the
   programs they need have to be installed on the machine; none comes with
