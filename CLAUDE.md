@@ -701,7 +701,18 @@ wallet refuses is forgotten at once. One more permission came with it,
 for Android's question. Fifteen tests on the wallet and device that only
 pretend cover the Dart side; the Kotlin side was compiled into an APK
 and nothing more, so everything about a real reader is still to be
-seen.
+seen. With the APK built from commit `6dee925` the owner reported from
+the phone that everything works. Asked for were: the line in Settings,
+a wrong password refused and the right one followed by Android's
+question for a fingerprint, the wallet opened with the fingerprint and
+still with the password, Cancel leaving it closed, a new password
+switching it off, switching it off in Settings, and, if wanted, a new
+fingerprint in Android ending it. Which of these were tried one by one
+was not said; the owner did say that the fingerprint opens the wallet
+after a wrong password was typed, which is as meant on the screen that
+opens the wallet. So Android's key store and its question work on that
+phone as called. No run on the owner's desktop was made for this step:
+neither the core nor the wallet library changed in it.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

@@ -174,8 +174,8 @@ app looks for the core and the wallet library in its own folder, next to
   battery saving, which Veil does not ask for), and what the phone's
   maker adds to Android's own restrictions. There is no way to lock the
   wallet from the notice; touching it opens the app.
-- Opening the wallet with a fingerprint or a face is written and has not
-  been on a phone. Settings has a line for it where the phone can do it
+- Opening the wallet with a fingerprint or a face has been tried on one
+  phone, the owner's, and worked there. Settings has a line for it where the phone can do it
   (Android 11 or later, a fingerprint or a face Android counts as
   strong, and secure hardware for the key); switching it on asks for the
   password and then for the fingerprint, and the screen that opens the
@@ -183,9 +183,7 @@ app looks for the core and the wallet library in its own folder, next to
   encrypted with a key in the phone's secure hardware that works only
   right after a fingerprint or a face was recognised; the app calls
   Android for all of it and has one more permission for the question.
-  Not known until a phone shows it: all of the Kotlin side, which was
-  only compiled, and how Samsung's reader and its question behave.
-  There is no time after which the password is asked for again
+  Not tried: a face, and a phone of another maker. There is no time after which the password is asked for again
   regardless.
 - Home lists the latest twenty payments and has no way to the rest.
 - New bridges take effect the next time the wallet is opened, and the
