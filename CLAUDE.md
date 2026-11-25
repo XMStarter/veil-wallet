@@ -84,9 +84,12 @@ that cannot lose the user's funds.
     daemon; fails the test on a CI runner. A new test of that kind calls it
     too. It also starts the daemon for tests, one at a time, and when the
     daemon does not come up it says how it ended and shows the end of its
-    log.
+    log. And it reads a record of network calls for anything that leaves
+    the machine (`trace.rs`, `veil-trace-check`), for the `leaks` levels.
   - `check.sh`: the checks by level (`offline`, `regtest`, `tor`,
-    `stagenet`, `bridges`) with a log; `setup` prepares a machine;
+    `stagenet`, `bridges`, and `leaks` and `leaks-chain`, which run the
+    tests of the first two with every network call recorded) with a log;
+    `setup` prepares a machine;
     `daemons` is a diagnosis of the test daemon, not a check. With
     `--windows` in front, the levels are built for Windows on Linux and run
     as Windows programs through WSL. With `--android` in front there are
@@ -789,7 +792,32 @@ systems and on the phone. The owner said afterwards that obfs4 works on
 the phone, and about lyrebird's licence: it will be decided before a
 release, and the owner is to be reminded of it then. Whoever takes up
 step 6, the release, raises it first: `docs/concept.md`, "Open
-decisions", "The licence of the transport program".
+decisions", "The licence of the transport program". Hosted CI passed on
+both systems, and step 4.6 was merged on the owner's word. That
+completes step 4 of the build plan, Android.
+Next is step 5, hardening, in three parts: a leak check, fuzzing, and
+what an external audit needs. Step 5.1, the leak check, is written.
+`./check.sh leaks` runs the Rust tests of the `offline` level once more
+under `strace`, which records every network call they and the programs
+they start make, and `veil-trace-check` (`veil_test_guard/src/trace.rs`)
+reads the record: an address that is not loopback, a name looked up, a
+socket bound to every interface, or anything it cannot read fails the
+level. `leaks-chain` does the same for the tests on a private chain and
+leaves the daemon's own calls out. In a cloud session `leaks` passes:
+352 sockets and 665 addresses, the core's tests, the wallet's, and
+forty-five runs of the command-line tool among them, and none leaves
+the machine. Its first run did report something: four connections to
+the system's cache of names, from Tor's code. They were its questions
+about who owns its files, a user and a group looked up in the machine's
+own lists (seen in the call stacks: `getpwuid_r` and `getgrnam_r`), and
+the cache was not running, so nothing was even asked. The reader now
+judges that cache by what it is asked: about a host is a finding, about
+a user or a group is not. That it does fail was tried on a small
+program that connects outside, looks a name up and binds to every
+interface: seven findings. `leaks-chain` has not run anywhere: it
+starts a daemon. What these levels cannot see: the real Tor client,
+whose connections leave the machine and are meant to, the app's window
+and Flutter's own code, and anything on Windows or Android.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
