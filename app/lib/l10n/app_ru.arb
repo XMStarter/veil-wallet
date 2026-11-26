@@ -271,5 +271,72 @@
   "problemTransportMissing": "На этом устройстве не установлена программа, которая нужна этим мостам.",
   "problemLibraryMissing": "Приложение неполное: не найдена его часть.",
   "problemOther": "Что-то пошло не так.",
-  "problemDetail": "Подробности: {detail}"
+  "problemDetail": "Подробности: {detail}",
+  "settingsAbout": "О Veil",
+  "settingsAboutValue": "Версия {version} и лицензии",
+  "@settingsAboutValue": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "aboutTitle": "О Veil",
+  "aboutBuild": "Это Veil версии {version}.",
+  "@aboutBuild": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "aboutBuildFrom": "Это Veil версии {version}, собранный из коммита {commit}.",
+  "@aboutBuildFrom": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      },
+      "commit": {
+        "type": "String"
+      }
+    }
+  },
+  "aboutSource": "Исходный код лежит на {where}, вместе со скриптами, которые собирают библиотеку кошелька и программу-транспорт для мостов из названных в них версий.",
+  "@aboutSource": {
+    "placeholders": {
+      "where": {
+        "type": "String"
+      }
+    }
+  },
+  "aboutLicences": "Собственный код Veil распространяется по лицензии MIT. В этом пакете есть и чужая работа под своими лицензиями, в том числе библиотека кошелька под GNU Lesser General Public License. Их тексты здесь, в том виде, в каком их написали авторы.",
+  "aboutLicencesAndroid": "Собственный код Veil распространяется по лицензии MIT. В этом пакете есть и чужая работа под своими лицензиями, в том числе библиотека кошелька под GNU Lesser General Public License и программа-транспорт для мостов под GNU General Public License. Их тексты здесь, в том виде, в каком их написали авторы.",
+  "aboutPartVeil": "Veil",
+  "aboutPartWallet": "Библиотека кошелька",
+  "aboutPartCore": "Пакеты в ядре",
+  "aboutPartTransport": "Программа-транспорт для мостов",
+  "aboutPartTypefaces": "Шрифты",
+  "aboutPartAndroid": "Библиотеки для Android",
+  "aboutPartFlutter": "Flutter и его пакеты",
+  "aboutTextsCount": "{count, plural, one{{count} текст лицензии} few{{count} текста лицензий} many{{count} текстов лицензий} other{{count} текста лицензий}}",
+  "@aboutTextsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "aboutAndMore": "{name} и ещё {count}",
+  "@aboutAndMore": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "aboutTextsMissing": "Текстов лицензий этой части в пакете нет. Пакет Veil обязан их содержать; этот собран не так, как должен.",
+  "startMainnetNotice": "В этом кошельке настоящие деньги. Никто, кроме авторов, Veil не проверял. Не держите здесь больше, чем готовы потерять."
 }

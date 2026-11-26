@@ -5,6 +5,7 @@ import '../core/backend.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/colors.dart';
 import '../theme/type.dart';
+import '../widgets/network_notice.dart';
 import '../widgets/notice.dart';
 import '../widgets/veil_button.dart';
 import '../widgets/veil_screen.dart';
@@ -173,8 +174,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
                 const SizedBox(height: 24),
                 ..._activity(text, state),
-                const SizedBox(height: 24),
-                Notice(text.startStagenetNotice),
+                if (widget.backend.network == WalletNetwork.stagenet) ...[
+                  const SizedBox(height: 24),
+                  NetworkNotice(widget.backend.network),
+                ],
               ],
             );
           },

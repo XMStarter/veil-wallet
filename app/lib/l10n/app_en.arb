@@ -306,5 +306,72 @@
         "type": "String"
       }
     }
-  }
+  },
+  "settingsAbout": "About Veil",
+  "settingsAboutValue": "Version {version}, and the licences",
+  "@settingsAboutValue": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "aboutTitle": "About Veil",
+  "aboutBuild": "This is Veil {version}.",
+  "@aboutBuild": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "aboutBuildFrom": "This is Veil {version}, built from commit {commit}.",
+  "@aboutBuildFrom": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      },
+      "commit": {
+        "type": "String"
+      }
+    }
+  },
+  "aboutSource": "Its source is at {where}, with the scripts that build the wallet library and the transport program for bridges from the versions they name.",
+  "@aboutSource": {
+    "placeholders": {
+      "where": {
+        "type": "String"
+      }
+    }
+  },
+  "aboutLicences": "Veil's own code is under the MIT licence. This package also holds other people's work under their own licences, among them the wallet library under the GNU Lesser General Public License. Their texts are here, as their authors wrote them.",
+  "aboutLicencesAndroid": "Veil's own code is under the MIT licence. This package also holds other people's work under their own licences, among them the wallet library under the GNU Lesser General Public License and the transport program for bridges under the GNU General Public License. Their texts are here, as their authors wrote them.",
+  "aboutPartVeil": "Veil",
+  "aboutPartWallet": "Wallet library",
+  "aboutPartCore": "Packages in the core",
+  "aboutPartTransport": "Transport program for bridges",
+  "aboutPartTypefaces": "Typefaces",
+  "aboutPartAndroid": "Libraries for Android",
+  "aboutPartFlutter": "Flutter and its packages",
+  "aboutTextsCount": "{count, plural, =1{1 licence text} other{{count} licence texts}}",
+  "@aboutTextsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "aboutAndMore": "{name} and {count} more",
+  "@aboutAndMore": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "aboutTextsMissing": "The licence texts of this part are not in this package. A package of Veil has to carry them; this one is not as it should be.",
+  "startMainnetNotice": "This wallet holds real money. Nobody outside the project has audited Veil. Do not keep more in it than you can afford to lose."
 }

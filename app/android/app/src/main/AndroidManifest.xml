@@ -23,7 +23,7 @@
          files are copied nowhere by Android, neither to a cloud backup nor
          to another device. Only the recovery phrase brings a wallet back. -->
     <application
-        android:label="Veil"
+        android:label="${appName}"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"

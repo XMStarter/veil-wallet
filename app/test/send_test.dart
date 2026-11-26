@@ -92,6 +92,38 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  // Found with real money on a phone: the core named the payment only
+  // while it was under review, and for as long as a node took to answer
+  // the screen stood there with four empty lines. The core names it on
+  // the way too now; this holds the screen to showing it.
+  testWidgets('a payment on its way still shows what is being paid', (
+    tester,
+  ) async {
+    final backend = await openSend(tester, 'en');
+    await type(tester, 'Address to pay to', payee);
+    await type(tester, 'Amount, XMR', '1.5');
+    await press(tester, 'Continue');
+    expect(find.text('CONFIRM'), findsOneWidget);
+
+    backend.sendEndsAs = SendPhase.sending;
+    // Not settled: the bar that shows progress never comes to rest.
+    await pressOnce(tester, 'Send payment');
+    expect(backend.state.value!.send.phase, SendPhase.sending);
+    expect(find.text('Sending…'), findsOneWidget);
+    expect(tester.widget<AddressText>(find.byType(AddressText)).address, payee);
+    expect(find.text('1.50 XMR'), findsOneWidget);
+    expect(find.text('0.00003066 XMR'), findsOneWidget);
+    expect(find.text('1.50003066 XMR'), findsOneWidget);
+    // Nothing of it is left to say that nothing has been sent.
+    expect(find.textContaining('Nothing has been sent yet'), findsNothing);
+    expect(enabled(tester, 'Send payment'), isFalse);
+    expect(enabled(tester, 'Cancel'), isFalse);
+
+    backend.report(send: SendStatus(SendPhase.sent, txids: ['a' * 64]));
+    await tester.pumpAndSettle();
+    expect(find.text('SENT'), findsOneWidget);
+  });
+
   testWidgets('a review that is cancelled sends nothing and keeps the form', (
     tester,
   ) async {

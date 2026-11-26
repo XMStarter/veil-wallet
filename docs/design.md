@@ -93,6 +93,14 @@ runtime.
    of a wallet has the same line. If the settings file could not be read,
    a screen with a warning and two buttons comes before either: set
    bridges, or go on without.
+   Above the buttons the app says which network it is for. Built for
+   stagenet: that this is the test network and that it does not work with
+   real funds, which is also said under the balance on Home and where
+   the wallet is opened. Built for the main network: that the wallet
+   holds real money, that nobody outside the project has audited Veil,
+   and not to keep more in it than one can afford to lose, marked with
+   the crimson line; it is said here, where a wallet begins, and under
+   About Veil, and not under every balance.
 2. **Recovery phrase.** Sixteen numbered words, a warning, and a
    confirmation button. Followed by a check of three words.
 3. **Home.** Balance (tap to hide, which hides every amount on the
@@ -111,7 +119,13 @@ runtime.
    for.
 6. **Settings.** One line for each thing, saying how it stands and leading
    to where it is changed: Tor status, node, bridges, password, auto-lock,
-   show recovery phrase, language, theme, and removing the wallet. A choice
+   show recovery phrase, language, theme, removing the wallet, and, last,
+   what this app is a build of. That last line leads to About Veil: the
+   version and the commit, where the source is, and a line for each part
+   of the package that leads to its licence texts, each text on a line
+   that names what it comes with. A licence is shown as its authors wrote
+   it, in its own language, in the secondary type; it can be selected and
+   copied. A choice
    among a few is a list in which the one in force says so in a word.
    Removing the wallet and showing the phrase ask for the password. On a
    phone that can, there is a line for opening the wallet with a

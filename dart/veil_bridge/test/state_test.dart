@@ -66,6 +66,19 @@ void main() {
     expect(state.send.sourceAddresses, [1, 3]);
   });
 
+  test('a payment on its way still says what is being paid', () {
+    final review = fixture('state-busy.json').send;
+    final state = fixture('state-sending.json');
+    expect(state.send.phase, SendPhase.sending);
+    expect(state.send.to, review.to);
+    expect(state.send.to, hasLength(95));
+    expect(state.send.amount, '1.50');
+    expect(state.send.fee, '0.00003066');
+    expect(state.send.total, '1.50003066');
+    expect(state.send.sourceAddresses, [1, 3]);
+    expect(state.lastProblem, isNull);
+  });
+
   test('a state where things went wrong says what and why', () {
     final state = fixture('state-troubled.json');
     expect(state.phase, Phase.failed);
@@ -114,6 +127,7 @@ void main() {
 
   test('a configuration is written the way the core reads it', () {
     const config = SessionConfig(
+      network: WalletNetwork.stagenet,
       walletLibrary: '/lib/wallet.so',
       walletPath: '/data/wallet',
       torStateDir: '/data/tor/state',
@@ -135,7 +149,19 @@ void main() {
       'restore_height': 1234567,
       'sync_every_seconds': 120,
     });
+    // The network is said as the core reads it, and is what was asked
+    // for: nothing here chooses the main network by itself.
+    const real = SessionConfig(
+      network: WalletNetwork.mainnet,
+      walletLibrary: 'a',
+      walletPath: 'b',
+      torStateDir: 'c',
+      torCacheDir: 'd',
+      source: WalletSource.open,
+    );
+    expect(real.toJson()['network'], 'mainnet');
     const plain = SessionConfig(
+      network: WalletNetwork.stagenet,
       walletLibrary: 'a',
       walletPath: 'b',
       torStateDir: 'c',

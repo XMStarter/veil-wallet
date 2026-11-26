@@ -32,7 +32,7 @@ use veil_wallet::{
 };
 
 pub use node::{Nodes, OnionNode};
-pub use public_nodes::stagenet_candidates;
+pub use public_nodes::{candidates, public_nodes, stagenet_candidates};
 pub use session::{
     Phase, Problem, ProblemKind, SendState, Session, SessionConfig, SessionState, SyncState,
     WalletSource,

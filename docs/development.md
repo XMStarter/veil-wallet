@@ -12,6 +12,12 @@ How Veil is written, reviewed, tested, and released.
 - **No secrets in the repository.** Signing keys, passwords, and real wallet
   files never get committed.
 - **No real funds in tests.** Tests use a local chain or the Monero stagenet.
+  The one test that goes to the main network makes a new, empty wallet
+  there and sends nothing.
+- **An app holds real money only when it was built to.** The network is
+  said when the app is built (`VEIL_NETWORK=mainnet` in front of
+  `check.sh`); a build that is told nothing is for stagenet, and so are
+  the tests.
 - **No way around Tor in an app.** Tests have two: a wallet that goes
   straight to a daemon on the machine (the `regtest` feature) and
   listeners that lead to local ports instead of into Tor (`stand-in`).
@@ -61,7 +67,7 @@ machine. The log of that run is the evidence that the step is done.
 |---|---|---|
 | `offline` | Format, lint, and every test that needs no network, the reliability tests against stand-ins among them. Uses the wallet library when it has been built. With Flutter installed it also runs the tests of the Dart side and of the app, and builds the app. | Anywhere, hosted CI included |
 | `regtest` | The wallet on a private chain, alone and behind a stand-in for Tor, with and without lost connections. Starts a Monero daemon. | The owner's machine |
-| `tor` | The tests that start the real Tor client, a connection to an onion service, and a new wallet synchronising with a public node. | The owner's machine |
+| `tor` | The tests that start the real Tor client, a connection to an onion service, and, on the main network with an empty wallet and no funds: a new wallet synchronising with one of the public nodes an app is built with, where such a wallet begins to scan, and every one of those nodes asked where it is and whether it agrees with the others. | The owner's machine |
 | `stagenet` | The command-line tool: a new wallet synchronises with a public stagenet node through Tor. | The owner's machine |
 | `bridges` | Tor through obfs4 and Snowflake bridges, through obfs4 again on the same files after Snowflake, a bridge that does not exist, and the tool synchronising through bridges. | The owner's machine |
 | `leaks` | The Rust tests of `offline` once more, with every network call of theirs recorded: none may name an address outside the machine. Needs the wallet library and `strace`; Linux only. | Any Linux machine with the wallet library |
@@ -254,6 +260,20 @@ processor and Android 7 or later, and open it there; Android asks once
 whether apps may be installed from where the file was opened. The app is
 a real wallet on stagenet and connects to Tor.
 
+`VEIL_NETWORK=mainnet ./check.sh --android app` builds it for the main
+network instead, where the coins are real money. Either way it is a
+build for trying, and Android is told so: the app for stagenet is
+`io.github.xmstarter.veil.stagenet`, "Veil stagenet", and the one for
+the main network `io.github.xmstarter.veil.preview`, "Veil preview". The
+plain identifier and the plain name belong to the app the release step
+builds and signs. So a build for trying sits on a phone beside the
+released app and beside the other one, each with its own files, and
+cannot be installed over either: removing an app removes its wallet, and
+nobody should have to remove the app with their money in it to try a
+new build. The same variable in front of `./check.sh offline` decides
+which network the app for Linux at the end of that level is for; its
+wallets lie in a folder for each network.
+
 The file is signed with a key Android's tools make on the machine that
 builds it. That is enough to install it on one's own phone; a second
 machine has another key, and Android refuses an update signed with a
@@ -436,7 +456,44 @@ on pull requests and by hand. Its limits are in
 Veil's own code is MIT. The Monero wallet library it loads is LGPL-3.0
 (monero_c) and BSD-3-Clause (Monero). It must be shipped as a separate
 shared library with its licence texts and source. Details are in
-[`native/wallet_lib/README.md`](../native/wallet_lib/README.md).
+[`native/wallet_lib/README.md`](../native/wallet_lib/README.md). The
+transport program in the app for Android, lyrebird, is under the GPL,
+version 3 or later, and is a program of its own that Tor starts
+([`native/transports/README.md`](../native/transports/README.md)).
+
+### Licence texts
+
+A package of the app is built from other people's work, and nearly all
+of it asks that its licence text goes along. The texts are kept in the
+repository, in `app/assets/licences`, so that every build of the app
+has them and a change to them is a change somebody reads:
+
+| File | Whose texts | Where they are read from |
+|---|---|---|
+| `veil.txt` | Veil's own licence | `LICENSE` |
+| `core.txt` | The Rust packages in the core, about 380 | Each package's own folder, by what `cargo metadata` says is in the core on each system (`native/veil_notices`) |
+| `wallet-library.txt` | monero_c, Monero and what the library is built from | The source the library was built from (`native/wallet_lib/notices.sh`) |
+| `transport.txt` | lyrebird, Go, and the Go packages in the program | The source the program was built from (`native/transports/notices.sh`) |
+| `typefaces.txt` | The three typefaces | `app/fonts` |
+| `android.txt` | The libraries an app for Android is built with, all under the Apache License | A list written by hand in `native/notices.sh` |
+
+Flutter's own texts and those of the Dart packages are put into the app
+by Flutter when it is built. The app shows all of them under Settings,
+About Veil, with the version and the commit the build was made from.
+
+`native/notices.sh` writes the files and `native/notices.sh --check`
+says whether they are still right; the `offline` level runs the check as
+Linux programs. After a change to `Cargo.lock`, to a pinned version of
+the wallet library or of lyrebird, to a typeface or to the Android
+libraries, run it without `--check` and commit what changed. Two of the
+files can only be checked on a machine that has the source they are
+read from, which is there once the wallet library was built for Windows
+or Android and the transport program was built; elsewhere the script
+says that it left them as they are. In hosted CI that is always so.
+
+The tool reads no licence and judges none: it does not lose the texts.
+Whether what a package does with them is enough is a question for
+somebody who knows licences, and has not been put to anybody.
 
 The app built for Windows by hosted CI carries three libraries of
 Microsoft's C++ runtime (`msvcp140.dll`, `vcruntime140.dll`,
@@ -449,7 +506,12 @@ asking for Microsoft's own installer, is decided at the release step.
 
 - Builds are reproducible: anyone can rebuild a release and get the same
   binary.
-- Release artifacts are signed. The signing keys stay with the maintainer and
-  are provided to CI as secrets.
+- Release artifacts are signed. The signing keys stay on the maintainer's
+  machine and are used there. Hosted CI is never given one: it compiles
+  and runs offline tests, and what it builds is for trying, not for
+  handing on.
+- A package carries the licence texts of everything it is built from
+  (`app/assets/licences`, see "Licence texts" below) and says which
+  commit it was built from.
 - Android builds contain no Google services and target F-Droid as well as
   direct APK downloads.

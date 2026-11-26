@@ -78,7 +78,10 @@ that cannot lose the user's funds.
     those tests run only where the wallet library is built, so not in
     hosted CI.
   - `veil_cli`: `veil`, the command-line wallet on stagenet. Stagenet
-    only; do not add another network to it.
+    only; do not add another network to it. The app is built for
+    stagenet too unless `VEIL_NETWORK=mainnet` stands in front of
+    `check.sh`; no test, script or default may make it the main
+    network's.
   - `wallet_lib`: pinned build script for the wallet library, Veil's
     patches to it, and the bindings generator. After changing a patch, run
     `build.sh` again and regenerate the bindings. `--android` builds it
@@ -88,6 +91,12 @@ that cannot lose the user's funds.
     for Android brings along for bridges (the Tor Project's lyrebird,
     for obfs4, Snowflake and WebTunnel), and why it is built the way it
     is. It is under the GPL; the README says what that means.
+  - `veil_notices`, `notices.sh`: the licence texts a package of the app
+    carries for everything it is built from (`app/assets/licences`).
+    `./notices.sh` writes them and `--check` says whether they are still
+    right; after a change to `Cargo.lock` or to a pinned version of the
+    wallet library or of lyrebird, write them again and commit them.
+    `docs/development.md`, "Licence texts".
   - `veil_test_guard`: called first by every test that starts Tor or a
     daemon; fails the test on a CI runner. A new test of that kind calls it
     too. It also starts the daemon for tests, one at a time, and when the
@@ -135,7 +144,8 @@ that cannot lose the user's funds.
   a face, which is `Biometrics`).
   So
   far the way to an open wallet (create, recovery phrase, restore, unlock),
-  Home, Receive, Send, and Settings.
+  Home, Receive, Send, and Settings, whose last line leads to About
+  Veil: the version, the commit, and the licence texts.
   Screens talk to `WalletBackend` (`app/lib/core`), never to the core
   directly; tests use a backend that only pretends, and no test opens a
   real wallet, because that starts Tor. Read
@@ -1161,8 +1171,160 @@ to be replaced when the level fails for it (`VEIL_TEST_OBFS4_BRIDGES`
 names other lines meanwhile). With that, the bridges before a wallet,
 the words for a lost Tor with bridges, and the folder of its own have
 passed the owner's run on both systems and work on the phone. Which of
-the new screens the owner used there was not said. They and step 5.3
-are on one branch and in no pull request yet.
+the new screens the owner used there was not said. Hosted CI passed on
+both systems, the three tests of the folder as Windows programs there
+too, and its Windows job ran the step that has a build with a test-only
+feature refused for the first time: all three were. Step 5.3 and the
+three changes about bridges were merged on the owner's word. That
+completes step 5 of the build plan, hardening.
+Next is step 6, the release, in the six parts now listed in the build
+plan: what a package owes others, the same build twice, signed
+packages, the main network, F-Droid, and the release itself. The owner
+was reminded of the licence of the transport program first, as asked,
+and of the other things that are the owner's to decide before anything
+is published: when Veil may hold real money, the name and the
+identifier Android knows the app by, and who holds the key for
+releases. The README's status, which still said that there was no app,
+says what there is. The owner answered all four at once: the transport
+program stays in the package for Android and is handed on under its own
+terms; the first release is for the main network, without an audit
+before it; the name Veil and the identifier `io.github.xmstarter.veil`
+stay; and the key for releases never leaves the owner's machine, where
+a script signs with it. They are in `docs/concept.md` under "Decided
+for the release", and `docs/development.md` no longer says that hosted
+CI is given signing keys. Until the part of this step that brings the
+main network, the app and the tool know stagenet only, and the rules
+above about real funds in tests and about `veil_cli` stand.
+Step 6.1, what a package owes others, is written. Every package of the
+app carries the licence texts of what it is built from, in
+`app/assets/licences`, and the app shows them under Settings, About
+Veil, with its version and the commit it was built from, which
+`check.sh` now tells the build. Six files: Veil's own licence; the
+texts of the 382 Rust packages in the core, read from each package by a
+new crate, `veil_notices`, which asks `cargo metadata` what is in the
+core on each of the four systems an app is built for and leaves out
+what only builds or tests; those of the wallet library and its sixteen
+parts, with the GNU General Public License that the Lesser one of
+monero_c and polyseed builds on; those of lyrebird, Go and the sixty Go
+packages the program says are in it; the three typefaces; and the
+Android libraries, a list by hand. `native/notices.sh` writes them and
+with `--check` says whether they are still right, which the `offline`
+level asks as Linux programs. The wallet library's and the transport
+program's can be checked only where their source is, which in hosted CI
+is nowhere. Found while reading for it: the library for Linux is linked
+with whatever the machine has of Boost, OpenSSL and the like, as shared
+libraries that are in no package, so a package for Linux is not
+complete in itself yet; that is for the part about the same build
+twice. And on Android the library is not linked with readline, which is
+under the GPL and which Monero's dependency build makes: the script
+that collects the texts reads the line the library is linked with and
+stops at a part it does not know. Nobody who knows licences has looked
+at any of this. Tests: eight of the crate, twelve of the app, on a
+package that only pretends and on the files as they are.
+On commit `fd944d6` the owner's run passed at the `offline` level as
+Linux and as Windows programs, the app built there with its commit told
+to it. The check of the licence texts ran and held the four files it
+could; the wallet library's it left alone, wrongly: it said that the
+source archives were not on the machine, where the library had been
+built for Windows. The script looked for them with one `ls` over both
+source trees, the one for Linux and Windows and the one for Android,
+and `ls` fails when one of the two is not there, which on that machine
+the Android one is not. In a cloud session both are, so it had passed.
+Each tree is looked at by itself now, in the script that asks and in
+the one that reads the archives, where the same mistake would have
+ended the script without a word. Tried in a cloud session on folders
+with one tree only: with the tree for Linux and Windows the file is
+checked, with the one for Android alone it is left and said to be,
+since only the build for Windows downloads every archive the file is
+written from. The owner then ran the check alone on commit `1c9c092`:
+the wallet library's file was held against the source there and its
+sixteen parts are as kept; the transport program's is left alone on
+that machine, where the program was never built. And the owner reported
+that on the phone everything works, the APK being the one built from
+`fd944d6`; which lines of About were opened was not said. With that,
+step 6.1 has passed the owner's run on both systems and on the phone.
+Step 6.4, the main network, was taken up next by the owner's word,
+before the two parts between. The wallet code never knew one network
+from another, and the tests on a private chain have always made wallets
+of the main network's kind; what knew stagenet only was the request a
+session is started with, the list of public nodes, the app's folder for
+its wallet, and its words. Now a start request names the network,
+`mainnet` or `stagenet`, with no default, and the core has a list of
+public nodes for each (`veil_core::public_nodes`, `candidates`). The app
+is built for one network: `--dart-define=VEIL_NETWORK=mainnet`, which
+`check.sh` passes when `VEIL_NETWORK=mainnet` stands in front of it, and
+stagenet where nothing is said, tests included
+(`app/lib/core/network.dart`). Each network's wallet has a folder of its
+own (`<data>/mainnet`, `<data>/stagenet`). An app for the main network
+says on its first screen and under About that the money is real and
+that nobody outside has audited Veil; one for stagenet says what it
+always said. On Android a build for trying is an app of its own,
+`io.github.xmstarter.veil.stagenet` or `.preview` with a name to match,
+so that it stands beside the released app and can never be installed
+over it; the plain identifier is for the build the release step signs.
+Both were built in a cloud session and their identifiers read back. The
+app the owner has on the phone from earlier steps carries the plain
+identifier and stagenet coins; it stays as it is until it is removed.
+`veil_cli` stays on stagenet. The public nodes for the main network are
+the six the `tor` level has used since step 1.2, from monero.fail, each
+of another operator; nobody vetted them, monero.fail could not be read
+from a cloud session to see whether they are still listed, and which of
+them a release carries is the owner's to say (`docs/concept.md`, "Open
+decisions"). The `tor` level now goes by the app's own list and has two
+new things, both with an empty wallet and no funds: where a wallet made
+today begins to scan, which has to lie behind the end of the chain and
+not more than a hundred days behind, and every node of the list asked
+where it is, failing when fewer than two answer or one is more than ten
+blocks behind the furthest. Neither has run. Nothing here has ever
+received or sent a payment on the main network.
+On commit `312903b` the owner's run passed at the `offline`, `regtest`
+and `tor` levels as Linux and as Windows programs. What the `tor` level
+showed on the main network, with an empty wallet: a wallet made that day
+begins to scan 21,481 blocks before the end of the chain, a little under
+thirty days, and the same to within three blocks half an hour later as
+a Windows program; it synchronised its last ten blocks in 14 seconds as
+a Linux program and in 243 as a Windows one. Of the six public nodes,
+three answered in the first run and five in the second, all at the same
+height each time. plowsof, HashVault and SupportXMR answered both
+times. Rucknium and the node beginning `xmrnodei` did not answer within
+twenty seconds the first time and answered within six the second. The
+node beginning `moneronk` was said to be unreachable both times, within
+four seconds, which is how a service that is not there shows. So a
+wallet can count on three of the six and often on five, and one of the
+six may be gone; the list is left as it is until the owner says which
+nodes a release carries. The owner said it: the node beginning
+`moneronk` is taken off and the other five stay. That is in
+`docs/concept.md` under "Decided for the release" now.
+With the app for the main network built from that commit, `1a3b22a`,
+the owner reported from the phone that everything works with real
+money, and one fault, with a picture: after Send payment was pressed,
+the screen that confirms a payment stood there with "Sending…" and
+nothing in its four lines, no address, no amount, no fee, no total.
+So a payment has been made through Veil on the main network; how much,
+whether one was received as well, and how long the first
+synchronisation took was not said. The fault was the core's: its state
+named a payment only while it was under review, and from the
+confirmation until a node had answered it said "sending" and nothing
+else, while the screen draws what the state says. On stagenet and on a
+private chain that moment is too short to see; the app's own test of it
+handed the screen a state with everything in it, which the core never
+gave. Now `SendState::Sending` carries what `Review` carried
+(`SendState::confirmed`), through the C interface too
+(`tests/fixtures/state-sending.json`). Offline tests hold the change of
+the state, the fixture on both sides, and the screen on a wallet that
+pretends the way the core now behaves; the scenario on a private chain
+checks the state whenever it catches a payment on its way and fails if
+it never does in four payments.
+On that commit, `fb781ac`, the owner's run passed at the `offline` and
+`regtest` levels as Linux and as Windows programs, the scenario with
+its new check both ways; so a payment was caught on its way there at
+least once on each system and named what was being paid. How often of
+the four the log does not say. The owner installed the two apps built
+from that commit, the one for the main network and the one for
+stagenet, and reported that on the phone everything works; whether the
+lines were looked at while a payment was on its way was not said in so
+many words. With that, step 6.4 has passed the owner's run on both
+systems and on the phone, with real money.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

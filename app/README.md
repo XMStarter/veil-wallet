@@ -23,8 +23,17 @@ last look, and then how it went: sent, or, if the connection was lost,
 not known, which the wallet then clears up by itself. Settings has a line
 for each thing that can be set: the user's own node, Tor bridges, the
 password, the auto-lock, the recovery phrase shown again, language, the
-light or dark theme, and the wallet taken off the device. The network is
-stagenet.
+light or dark theme, and the wallet taken off the device; its last line
+leads to About Veil, which says what version and commit this is a build
+of and shows the licence texts of everything in the package
+(`assets/licences`, written by `native/notices.sh`; `lib/core/notices.dart`
+reads them). The network is said when the app is built
+(`--dart-define=VEIL_NETWORK=mainnet`, which `native/check.sh` passes
+for `VEIL_NETWORK=mainnet`) and is stagenet where nothing is said
+(`lib/core/network.dart`). An app for stagenet says so on the screens
+with a balance; one for the main network says, where a wallet is made
+or restored and under About Veil, that the money is real and that
+nobody outside has audited Veil.
 
 The app reaches the wallet only through the core
 ([`native/veil_core`](../native/veil_core)), which it loads as a shared
@@ -116,7 +125,7 @@ listen.
 
 | What | Linux | Windows |
 |---|---|---|
-| The wallet | `~/.local/share/veil/stagenet/` | `%APPDATA%\Veil\stagenet\` |
+| The wallet, in a folder for its network | `~/.local/share/veil/stagenet/` or `mainnet/` | `%APPDATA%\Veil\stagenet\` or `mainnet\` |
 | Language, theme, auto-lock, bridges | `~/.local/share/veil/settings.json` | `%APPDATA%\Veil\settings.json` |
 | Tor's files | `~/.local/share/veil/tor/` | `%APPDATA%\Veil\tor\` |
 
@@ -134,7 +143,9 @@ build/linux/x64/release/bundle/veil
 ```
 
 This is a real wallet on stagenet: it connects to Tor and to public
-stagenet nodes.
+stagenet nodes. With `VEIL_NETWORK=mainnet` in front of `./check.sh
+offline` the app that level builds is for the main network, where the
+coins are real money, with a wallet folder of its own.
 
 On Windows the app is the one hosted CI builds. `native/windows-app.sh`,
 run inside WSL, takes the downloaded `veil-windows.zip`, puts the wallet

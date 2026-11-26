@@ -200,5 +200,31 @@ void main() {
       await press(tester, label.receive);
       await capture(tester, '16-receive-dark-$language');
     });
+
+    testWidgets('about and a licence text, drawn ($language)', (tester) async {
+      final backend = FakeBackend(hasWallet: true, confirmed: true);
+      await pumpApp(tester, language, backend: backend);
+      await type(tester, label.password, testPassword);
+      await press(tester, label.open);
+      await press(tester, label.settings);
+      final about = language == 'ru' ? 'О Veil' : 'About Veil';
+      await tester.ensureVisible(find.text(about));
+      await tester.tap(find.text(about));
+      await tester.pumpAndSettle();
+      await capture(tester, '17-about-$language');
+
+      // The app's own licence, from the file the app is built with.
+      await tester.ensureVisible(find.text('Veil').last);
+      await tester.tap(find.text('Veil').last);
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+      );
+      await tester.pumpAndSettle();
+      await capture(tester, '18-licence-texts-$language');
+      await tester.tap(find.text('Veil').last);
+      await tester.pumpAndSettle();
+      await capture(tester, '19-licence-text-$language');
+      expect(tester.takeException(), isNull);
+    });
   }
 }

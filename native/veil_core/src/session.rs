@@ -239,8 +239,16 @@ pub enum SendState {
         /// together, which can show that they belong to one wallet.
         source_addresses: Vec<u32>,
     },
-    /// Being handed to the node.
-    Sending,
+    /// Confirmed, and being handed to the node. It says what `Review`
+    /// said, because that is what is on the screen while the user waits,
+    /// and a node asked over Tor can take a while.
+    Sending {
+        to: String,
+        amount: Amount,
+        fee: Amount,
+        total: Amount,
+        source_addresses: Vec<u32>,
+    },
     /// Sent.
     Sent { txids: Vec<String> },
     /// The connection was lost while sending, and the transaction may have
@@ -257,6 +265,29 @@ pub enum SendState {
     OutcomeUnknown { txids: Vec<String>, settled: bool },
     /// Not sent.
     Failed(Problem),
+}
+
+impl SendState {
+    /// What a transaction under review becomes when the user confirms it:
+    /// the same transaction, on its way. Anything else stays what it is.
+    pub(crate) fn confirmed(self) -> SendState {
+        match self {
+            SendState::Review {
+                to,
+                amount,
+                fee,
+                total,
+                source_addresses,
+            } => SendState::Sending {
+                to,
+                amount,
+                fee,
+                total,
+                source_addresses,
+            },
+            other => other,
+        }
+    }
 }
 
 /// What an interface draws. A copy; reading it never waits for a node.
@@ -1448,7 +1479,7 @@ fn hold_for_review(
         }
         match command {
             Ok(Command::ConfirmSend) => {
-                shared.update(|state| state.send = SendState::Sending);
+                shared.update(|state| state.send = state.send.clone().confirmed());
                 // Kept for the case that the answer is lost: by these the
                 // transaction is recognised if it went out after all.
                 let ids = pending.txids().to_vec();

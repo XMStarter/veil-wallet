@@ -59,12 +59,19 @@ program). Veil is under the MIT licence. The two are separate programs:
 Tor starts lyrebird as a process of its own and talks to it over a
 socket, and nothing of lyrebird is compiled into Veil's code.
 
-What follows from that for whoever hands the app on with lyrebird inside
-is theirs to settle before a release: at the least the licence texts
-have to travel with the package, and the recipient has to be told where
-the source of exactly this build is, which is the commit pinned in
-`build.sh` together with that script. It is listed among the open
-decisions in `docs/concept.md`. Nothing here is legal advice.
+The owner has decided that lyrebird stays in the package for Android
+and is handed on under its own terms (`docs/concept.md`, "Decided for
+the release"). So its licence texts travel with the package, and the
+package says where the source of exactly this build is: the commit of
+this repository it was built from, whose `build.sh` pins lyrebird's
+commit and builds it. `notices.sh` collects the texts into
+`app/assets/licences/transport.txt`: lyrebird's two, Go's own, and those
+of the Go packages the program says are in it (`go version -m`), read
+from the source Go fetched for the build. The app for Android shows
+them (Settings, About Veil). `../notices.sh --check` says whether the
+file is still what the source says, on a machine where the program was
+built. Nobody who knows licences has looked at this; nothing here is
+legal advice.
 
 ## What a phone has shown
 

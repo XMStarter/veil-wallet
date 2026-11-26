@@ -87,17 +87,26 @@ pub(crate) fn parse_start(
     phrase: Option<&str>,
 ) -> Result<(SessionConfig, WalletSource), Problem> {
     let config = object(config)?;
-    // Until the release steps the app works on stagenet only.
-    if text(&config, "network")? != "stagenet" {
-        return Err(bad_request("the only network is `stagenet`"));
-    }
+    // The network is always named, and by one of two names: a request
+    // that leaves it out, or misspells it, opens no wallet at all. What
+    // decides whether an app holds real money is what the app was built
+    // to say here.
+    let network = match text(&config, "network")? {
+        "mainnet" => Network::Mainnet,
+        "stagenet" => Network::Stagenet,
+        other => {
+            return Err(bad_request(format!(
+                "`{other}` is not a network; it is `mainnet` or `stagenet`"
+            )))
+        }
+    };
     let tor = config
         .get("tor")
         .and_then(Value::as_object)
         .ok_or_else(|| bad_request("`tor` is missing or is not an object"))?;
     // Nodes named here, in their order. Without any, the public ones.
     let nodes = nodes_in(&config)?;
-    let nodes = crate::stagenet_candidates(nodes);
+    let nodes = crate::candidates(network, nodes);
     let sync_every = match config.get("sync_every_seconds") {
         None | Some(Value::Null) => None,
         Some(seconds) => Some(Duration::from_secs(
@@ -129,7 +138,7 @@ pub(crate) fn parse_start(
     let config = SessionConfig {
         wallet_library: PathBuf::from(text(&config, "wallet_library")?),
         wallet_path: PathBuf::from(text(&config, "wallet_path")?),
-        network: Network::Stagenet,
+        network,
         tor: TorConfig {
             state_dir: PathBuf::from(text(tor, "state_dir")?),
             cache_dir: PathBuf::from(text(tor, "cache_dir")?),
@@ -311,7 +320,20 @@ pub(crate) fn state_json(state: &SessionState) -> Value {
             "total": total.to_string(),
             "source_addresses": source_addresses,
         }),
-        SendState::Sending => json!({ "name": "sending" }),
+        SendState::Sending {
+            to,
+            amount,
+            fee,
+            total,
+            source_addresses,
+        } => json!({
+            "name": "sending",
+            "to": to,
+            "amount": amount.to_string(),
+            "fee": fee.to_string(),
+            "total": total.to_string(),
+            "source_addresses": source_addresses,
+        }),
         SendState::Sent { txids } => json!({ "name": "sent", "txids": txids }),
         SendState::OutcomeUnknown { txids, settled } => json!({
             "name": "outcome_unknown",
@@ -467,9 +489,11 @@ pub(crate) fn start_with(
 ///  "nodes": ["host.onion:38089"], "sync_every_seconds": 120}
 /// ```
 ///
-/// `nodes` are the user's own, tried in the order given. Left out or
-/// empty, the public stagenet nodes are used, in an order nobody can
-/// predict. `sync_every_seconds` may be left out too.
+/// `network` is `mainnet`, where the coins are real money, or `stagenet`,
+/// where they are worth nothing; there is no default. `nodes` are the
+/// user's own, tried in the order given. Left out or empty, the public
+/// nodes of that network are used, in an order nobody can predict.
+/// `sync_every_seconds` may be left out too.
 ///
 /// `source` is `create`, `open`, or `restore`; a restore takes the recovery
 /// phrase in `phrase` and may give `restore_height`. `phrase` is null

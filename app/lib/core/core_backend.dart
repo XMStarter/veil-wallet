@@ -75,6 +75,7 @@ class CoreBackend implements WalletBackend {
     try {
       session = core.start(
         SessionConfig(
+          network: _paths.network,
           walletLibrary: _paths.walletLibrary,
           walletPath: _paths.walletFile,
           torStateDir: _paths.torStateDir,
@@ -136,6 +137,9 @@ class CoreBackend implements WalletBackend {
       _state.value = session.state();
     }
   }
+
+  @override
+  WalletNetwork get network => _paths.network;
 
   @override
   bool get viaBridges => _viaBridges;

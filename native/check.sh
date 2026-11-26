@@ -30,6 +30,12 @@
 #   ./check.sh --android app       the app as one file to install on a phone (an APK)
 # The other levels are tests, and tests run on a desktop.
 #
+# Where a level builds the app, it is an app for stagenet, whose coins are
+# worth nothing. VEIL_NETWORK=mainnet in front builds it for the main
+# network instead: VEIL_NETWORK=mainnet ./check.sh --android app. On
+# Android such a build is an app of its own beside the one for stagenet
+# (app/android/app/build.gradle.kts says how they are told apart).
+#
 # `offline` runs anywhere, hosted CI included. Every other level refuses to
 # start in hosted CI: see docs/development.md, "Hosted CI and the hosting
 # account". They are for the owner's machine.
@@ -54,6 +60,19 @@ case "${1:-}" in
   --android)
     android=1
     shift
+    ;;
+esac
+
+# The network the app is built for, where a level builds the app: stagenet,
+# whose coins are worth nothing, unless VEIL_NETWORK says mainnet. The
+# tests are the same either way; this only decides what the app that comes
+# out of a run is.
+app_network="${VEIL_NETWORK:-stagenet}"
+case "$app_network" in
+  mainnet | stagenet) ;;
+  *)
+    echo "error: VEIL_NETWORK is '$app_network'; the app is built for mainnet or for stagenet." >&2
+    exit 2
     ;;
 esac
 
@@ -260,8 +279,34 @@ level_offline() {
   step cargo fmt --check &&
     step cargo_for_target clippy --workspace --all-targets --all-features --locked -- -D warnings &&
     step cargo_for_target test --workspace --locked --no-fail-fast &&
+    notices_side &&
     dart_side &&
     app_side
+}
+
+# What tells an app which commit it is built from, so that it can say
+# where its source is (Settings, About Veil): the commit's hash, with
+# "+changes" where files differ from it, and nothing where this is no
+# checkout at all.
+built_from() {
+  local commit=""
+  if commit="$(git -C "$here" rev-parse --short=12 HEAD 2>/dev/null)"; then
+    if [ -n "$(git -C "$here" status --porcelain 2>/dev/null)" ]; then
+      commit="$commit+changes"
+    fi
+  fi
+  echo "--dart-define=VEIL_COMMIT=$commit"
+}
+
+# The licence texts the app carries (app/assets/licences): whether they
+# are still those of what the packages are built from. See notices.sh.
+# Once, as Linux programs: the texts are the same for every system, and
+# the script hands the program paths that a Windows program cannot read.
+notices_side() {
+  if [ "$windows" = 1 ] || on_windows; then
+    return 0
+  fi
+  step "$here/notices.sh" --check
 }
 
 # The Dart side of the core: its own tests, which also load the core as a
@@ -437,10 +482,13 @@ where_it_ended() {
 level_tor() {
   require_wallet_lib || return 1
   # Lifecycle and fail-closed behaviour, a real bootstrap with a connection
-  # to an onion service, then a wallet synchronising with a public node.
+  # to an onion service, then a new, empty wallet on the main network
+  # synchronising with one of the public nodes an app is built with, and
+  # every one of those nodes asked where it is. One test at a time: each
+  # starts a Tor of its own.
   step cargo_for_target test -p veil_tor --locked --lib -- --include-ignored &&
     step cargo_for_target test -p veil_tor --locked --test network -- --include-ignored --nocapture &&
-    step cargo_for_target test -p veil_core --locked --test network -- --include-ignored --nocapture
+    step cargo_for_target test -p veil_core --locked --test network -- --include-ignored --nocapture --test-threads=1
 }
 
 level_stagenet() {
@@ -518,7 +566,8 @@ level_app() {
     cd "$here/../app" &&
       export ANDROID_HOME="$android_sdk" ANDROID_SDK_ROOT="$android_sdk" &&
       step "$flutter" --no-version-check pub get --enforce-lockfile "${offline[@]}" &&
-      step "$flutter" --no-version-check build apk --release --no-pub --target-platform android-arm64
+      step "$flutter" --no-version-check build apk --release --no-pub --target-platform android-arm64 \
+        "$(built_from)" "--dart-define=VEIL_NETWORK=$app_network"
   ) || return 1
   echo
   echo "the app for Android: $apk"
@@ -707,7 +756,8 @@ app_side() {
       step "$dart" format --output=none --set-exit-if-changed lib test &&
       step "$flutter" --no-version-check analyze --no-pub --fatal-infos &&
       step "$flutter" --no-version-check test --no-pub &&
-      step "$flutter" --no-version-check build "$system" --release --no-pub
+      step "$flutter" --no-version-check build "$system" --release --no-pub "$(built_from)" \
+        "--dart-define=VEIL_NETWORK=$app_network"
   ) || return 1
   bundle_native_parts
 }
@@ -836,6 +886,9 @@ run_levels() {
     echo "target:  Android (aarch64-linux-android, API $android_api), built and not run"
   fi
   echo "rustc:   $(rustc --version 2>/dev/null || echo 'not installed')"
+  if [ "$app_network" = mainnet ]; then
+    echo "app:     built for the main network (VEIL_NETWORK=mainnet): real money"
+  fi
   for level in "$@"; do
     echo
     echo "=== $level"

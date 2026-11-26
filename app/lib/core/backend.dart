@@ -23,6 +23,7 @@ export 'package:veil_bridge/veil_bridge.dart'
         TorState,
         TorStatus,
         Transfer,
+        WalletNetwork,
         WalletSource;
 
 /// The wallet could not be created, restored or opened, and why.
@@ -44,6 +45,11 @@ abstract class WalletBackend {
   /// The device the app runs on, for the few things the screens ask of
   /// it directly.
   Device get device;
+
+  /// The network the wallet is on: the main one, with real money, or
+  /// stagenet. It is the app's, decided when it was built, and does not
+  /// change while it runs.
+  WalletNetwork get network;
 
   /// Whether this device already has a wallet.
   Future<bool> walletExists();

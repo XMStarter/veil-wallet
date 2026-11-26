@@ -156,7 +156,14 @@ class FakeDevice extends ThisDevice {
 
 /// A wallet that only pretends: no core, no files, no Tor.
 class FakeBackend implements WalletBackend {
-  FakeBackend({this.hasWallet = false, this.confirmed = false});
+  FakeBackend({
+    this.hasWallet = false,
+    this.confirmed = false,
+    this.network = WalletNetwork.stagenet,
+  });
+
+  @override
+  final WalletNetwork network;
 
   @override
   final FakeDevice device = FakeDevice();
@@ -384,7 +391,9 @@ class FakeBackend implements WalletBackend {
     }
   }
 
-  /// What the next send that is confirmed ends as.
+  /// What the next send that is confirmed ends as. [SendPhase.sending]
+  /// leaves it on its way, as the core does until a node has answered:
+  /// the transaction that was under review, named as it was there.
   SendPhase sendEndsAs = SendPhase.sent;
 
   /// What the wallet charges for a transaction.
@@ -453,8 +462,17 @@ class FakeBackend implements WalletBackend {
   @override
   void confirmSend() {
     calls.add('confirm send');
+    final reviewed = state.value?.send;
     report(
       send: switch (sendEndsAs) {
+        SendPhase.sending => SendStatus(
+          SendPhase.sending,
+          to: reviewed?.to,
+          amount: reviewed?.amount,
+          fee: reviewed?.fee,
+          total: reviewed?.total,
+          sourceAddresses: reviewed?.sourceAddresses,
+        ),
         SendPhase.sent => SendStatus(SendPhase.sent, txids: ['a' * 64]),
         SendPhase.outcomeUnknown => SendStatus(
           SendPhase.outcomeUnknown,
