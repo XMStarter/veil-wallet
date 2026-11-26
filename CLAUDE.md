@@ -1292,7 +1292,9 @@ node beginning `moneronk` was said to be unreachable both times, within
 four seconds, which is how a service that is not there shows. So a
 wallet can count on three of the six and often on five, and one of the
 six may be gone; the list is left as it is until the owner says which
-nodes a release carries.
+nodes a release carries. The owner said it: the node beginning
+`moneronk` is taken off and the other five stay. That is in
+`docs/concept.md` under "Decided for the release" now.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

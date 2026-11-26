@@ -43,9 +43,9 @@ if, at build time, Arti cannot run bridges on Android.
 - **Onion nodes only.** The app ships with a list of public `.onion`
   Monero nodes, each run by somebody else, and picks one at random on
   each start. Nobody of this project has looked at how they are run; the
-  list for the main network is the owner's to settle (see "Open
-  decisions"), and the owner's run asks every node on it whether it is
-  there and whether it agrees with the others about where the chain
+  owner chose the five for the main network (see "Decided for the
+  release"), and the owner's run asks every node on the list whether it
+  is there and whether it agrees with the others about where the chain
   ends. If that node stops answering
   in the middle of a synchronisation, another one from the list continues
   it, and is the one asked first from then on: a node that is down is not
@@ -449,6 +449,19 @@ The owner decided these when the release step began.
   and `io.github.xmstarter.veil`. The identifier can never change once
   people have the app. That "Veil" is also the name of an existing
   cryptocurrency stays a risk the owner has taken.
+- **The public nodes of the main network are five.** A wallet without a
+  node of the user's own goes to public ones that are onion services,
+  each run by somebody else: plowsof, Rucknium, HashVault, SupportXMR,
+  and one whose operator we do not know. They are from the public list
+  at monero.fail, and the owner chose them after a run in which every
+  one of them had answered through Tor and named the same height; a
+  sixth that was not there was taken off. A node cannot take funds. It
+  can hold a transaction back, show a wallet a chain that is not the
+  real one, and see when a wallet behind Tor is in use; the node a
+  payment is handed to sees that payment. Nobody of this project knows
+  the people who run these or has looked at how they do.
+  `./check.sh tor` asks each whether it is there and whether it agrees
+  with the rest; a node of the user's own replaces them all.
 - **The key for releases never leaves the owner's machine.** Android
   takes an update only from the key the app was first signed with, so
   that key is the app for as long as it exists, and whoever has it can
@@ -456,18 +469,6 @@ The owner decided these when the release step began.
   machine by a script; hosted CI is never given the key.
 
 ## Open decisions
-
-- **Which public nodes a release goes out with.** A wallet without a
-  node of the user's own goes to public ones. For the main network the
-  app has six from the public list at monero.fail, each run by somebody
-  else: plowsof, Rucknium, HashVault, SupportXMR, and two whose
-  operators we do not know. A node cannot take funds. It can hold a
-  transaction back, show a wallet a chain that is not the real one, and
-  see when a wallet behind Tor is in use; the node a payment is handed
-  to sees that payment. Nobody of this project knows the people who run
-  these or has looked at how they do. The owner decides which of them a
-  release carries, and whether any others. `./check.sh tor` asks each
-  whether it is there and whether it agrees with the rest.
 
 - **Recovery phrase format.** Polyseed (16 words) is planned for new wallets.
   The alternative is the classic 25-word phrase, which every Monero wallet

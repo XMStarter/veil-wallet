@@ -330,9 +330,10 @@ Each of these is known to the project and not put right.
 - Money on the main network. A new, empty wallet has synchronised with
   public nodes there in the owner's runs, and that is all: no payment
   was ever received or sent on it by anything here. The public nodes an
-  app for the main network goes to are a list from monero.fail that
-  nobody of this project has vetted (`veil_core/src/public_nodes.rs`,
-  `docs/concept.md`, "Open decisions").
+  app for the main network goes to are five from the list at
+  monero.fail that the owner chose and nobody of this project has
+  vetted (`veil_core/src/public_nodes.rs`, `docs/concept.md`, "Decided
+  for the release").
 - A network that really blocks Tor. Bridges were seen to carry Tor from
   a network that does not block it. WebTunnel was not tried at all.
 - The Kotlin side beyond the owner's hand on one phone, a Samsung Galaxy

@@ -23,22 +23,23 @@ const PUBLIC_STAGENET_NODES: &[&str] = &[
 
 /// Public nodes of the main network that are onion services, each run by
 /// somebody else, by the names they give themselves: plowsof, Rucknium,
-/// HashVault, SupportXMR, and two whose operators are not known to us.
+/// HashVault, SupportXMR, and one whose operator is not known to us.
 /// They come from the public list at monero.fail. A wallet for real money
 /// synchronises with one of them and hands its transactions to another.
 ///
 /// What a node can and cannot do is in `docs/concept.md`: it cannot take
 /// funds, it can hold back a transaction, give a wallet a wrong picture
 /// of the chain, and learn when a wallet behind Tor is in use. Nobody of
-/// this project has looked at how these are run. Which nodes a release
-/// goes out with is the owner's to say; `../check.sh tor` asks every one
-/// of them whether it is there. A user's own node replaces them all.
+/// this project has looked at how these are run. The owner chose these
+/// five after a run in which each of them had answered and agreed with
+/// the others; a sixth, which was not there in that run, was taken off.
+/// `../check.sh tor` asks every one of them whether it is there. A user's
+/// own node replaces them all.
 const PUBLIC_MAINNET_NODES: &[&str] = &[
     "plowsof3t5hogddwabaeiyrno25efmzfxyro2vligremt7sxpsclfaid.onion:18089",
     "rucknium757bokwv3ss35ftgc3gzb7hgbvvglbg3hisp7tsj2fkd2nyd.onion:18081",
     "hashvaultsvg2rinvxz7kos77hdfm6zrd5yco3tx2yh2linsmusfwyad.onion:18081",
     "supportxmrcnzyyl4gtmtvql446f4pdqfcrykwaltwsg3trj3ekn3fad.onion:18089",
-    "moneronkvv2hu2anvcc5b4qd5y7strnc2ob6khqsrtikmhocyvjpdjyd.onion:18089",
     "xmrnodei64luhuwm4qfi7jga2k3tdpy7l2ovbledihfjgt2xvvw3paad.onion:18089",
 ];
 
