@@ -1216,8 +1216,25 @@ twice. And on Android the library is not linked with readline, which is
 under the GPL and which Monero's dependency build makes: the script
 that collects the texts reads the line the library is linked with and
 stops at a part it does not know. Nobody who knows licences has looked
-at any of this. Tests: seven of the crate, twelve of the app, on a
+at any of this. Tests: eight of the crate, twelve of the app, on a
 package that only pretends and on the files as they are.
+On commit `fd944d6` the owner's run passed at the `offline` level as
+Linux and as Windows programs, the app built there with its commit told
+to it. The check of the licence texts ran and held the four files it
+could; the wallet library's it left alone, wrongly: it said that the
+source archives were not on the machine, where the library had been
+built for Windows. The script looked for them with one `ls` over both
+source trees, the one for Linux and Windows and the one for Android,
+and `ls` fails when one of the two is not there, which on that machine
+the Android one is not. In a cloud session both are, so it had passed.
+Each tree is looked at by itself now, in the script that asks and in
+the one that reads the archives, where the same mistake would have
+ended the script without a word. Tried in a cloud session on folders
+with one tree only: with the tree for Linux and Windows the file is
+checked, with the one for Android alone it is left and said to be,
+since only the build for Windows downloads every archive the file is
+written from. Not seen yet: that check on the owner's machine, and the
+About screen on the phone.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

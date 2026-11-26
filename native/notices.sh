@@ -14,9 +14,11 @@
 #                       the Go packages in it
 #
 # The last two are read from the source those two are built from, which
-# is on a machine only once they were built there (wallet_lib/build.sh,
-# transports/build.sh). Where it is not, they are left as they are and
-# that is said: this script then shows nothing about them.
+# is on a machine only once they were built there: the wallet library
+# for Windows (wallet_lib/build.sh --windows, whose dependency build
+# downloads every archive the file is written from), the transport
+# program by transports/build.sh. Where it is not, they are left as they
+# are and that is said: this script then shows nothing about them.
 #
 # android.txt is a list written by hand, below. All of those libraries
 # are under the Apache License, version 2.0; the list is what
@@ -67,14 +69,23 @@ done > "$tmp/android"
 notices --parts "$tmp/android" "$kept/android.txt"
 
 wallet="${VEIL_WALLET_LIB_DIR:-$HOME/veil-wallet-lib}"
+# Whether the dependency build for Windows has left its source archives.
+# It downloads all of those the file is written from; the one for Android
+# has no hidapi, which only the library for Windows is built with. Each
+# of the two source trees is looked at by itself: `ls` of both at once
+# fails when one of them is not there.
+archives=""
+for sources in "$wallet/monero_c/monero/contrib/depends/sources" \
+  "$wallet/android/monero_c/monero/contrib/depends/sources"; do
+  if compgen -G "$sources/hidapi-*" >/dev/null; then archives=yes; fi
+done
 if [ -f "$wallet/monero_c/monero/LICENSE" ] || [ -f "$wallet/android/monero_c/monero/LICENSE" ]; then
-  if ls "$wallet"/monero_c/monero/contrib/depends/sources/boost_* \
-    "$wallet"/android/monero_c/monero/contrib/depends/sources/boost_* >/dev/null 2>&1; then
+  if [ -n "$archives" ]; then
     "$here/wallet_lib/notices.sh" $check "$wallet" || status=1
   else
     echo "wallet-library.txt: left as it is. The source archives of the wallet"
-    echo "library's parts are on a machine once it was built there for Windows or"
-    echo "for Android, and it was not in $wallet."
+    echo "library's parts are on a machine once it was built there for Windows,"
+    echo "and it was not in $wallet."
   fi
 else
   echo "wallet-library.txt: left as it is; there is no wallet library source in $wallet."

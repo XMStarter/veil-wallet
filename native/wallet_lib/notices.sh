@@ -7,9 +7,10 @@
 #
 # <work-dir> is the folder build.sh built the library in. The texts are
 # read from the source there: from monero_c and what it brings along, and
-# from the archives Monero's dependency build downloaded, which are there
-# once the library was built for Windows or for Android. Nothing is
-# downloaded and nothing is built.
+# from the archives Monero's dependency build downloaded. All of them are
+# there once the library was built for Windows; the build for Android
+# downloads all but hidapi's, which only the library for Windows is built
+# with. Nothing is downloaded and nothing is built.
 #
 # Which parts there are is written down below by hand, from the line the
 # library is linked with. Where a build for Windows or for Android is in
@@ -71,12 +72,18 @@ part() {
 # archive PREFIX: the one source archive whose name begins with PREFIX,
 # from whichever dependency build downloaded it.
 archive() {
-  local found
-  found="$(ls "$work"/monero_c/monero/contrib/depends/sources/"$1"* \
-    "$work"/android/monero_c/monero/contrib/depends/sources/"$1"* 2>/dev/null | head -1)"
+  local found="" sources candidate
+  # Each tree by itself: one of the two is often not there, and `ls` of
+  # both at once would fail for that.
+  for sources in "$work/monero_c/monero/contrib/depends/sources" \
+    "$work/android/monero_c/monero/contrib/depends/sources"; do
+    for candidate in "$sources/$1"*; do
+      if [ -z "$found" ] && [ -f "$candidate" ]; then found="$candidate"; fi
+    done
+  done
   if [ -z "$found" ]; then
-    echo "error: no source archive $1* in $work. It is there once the library" >&2
-    echo "was built for Windows or for Android (build.sh --windows, --android)." >&2
+    echo "error: no source archive $1* in $work. All of them are there once" >&2
+    echo "the library was built for Windows (build.sh --windows)." >&2
     exit 1
   fi
   echo "$found"
