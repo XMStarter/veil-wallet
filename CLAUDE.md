@@ -1052,6 +1052,22 @@ there at step 4.6 and does not now is not known. The app shows only
 that the way to the first relay failed, not why; the owner was given an
 APK built from a change that is not in the repository, which puts the
 whole of Arti's error on Home, to read the reason from.
+What it showed on the phone, with bridges set: Arti could not download
+the onion service's descriptor because it could build no circuit, and
+the reason for every attempt was the same, within three thousandths of
+a second: `AllGuardsDown`. Of five bridges four were counted as not
+running, which is what Arti calls a guard that failed a moment ago, and
+the fifth was running but "not suitable", which for a circuit of
+several hops means that Arti has no descriptor of that bridge. Arti
+gives that the kind that `veil_tor` reads as a lost network, so the
+state on Home is as written; the words about the device's connection
+were what was wrong. What it did not show is why the four failed: Arti
+keeps that for its log, and `veil_tor` sets up no logger. So a transport
+program that does not start is neither shown nor ruled out. The phone's
+clock was right to within seconds, by the time in the error and the
+time of the owner's message. A second such APK, again from a change
+that is not in the repository, keeps what Arti logs about transports,
+channels, guards and circuits and shows it with the error.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
