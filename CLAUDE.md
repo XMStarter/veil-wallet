@@ -1035,6 +1035,23 @@ known, and nothing in a cloud session can tell: the `bridges` level on
 the owner's machine can, with the same lines and the same code. The
 list in `native/veil_tor/tests/bridges.rs` is left as it is until that
 run has been seen, so that it tries what the phone tried.
+The owner ran the `bridges` level on commit `c54d0de` and it passed:
+Tor was ready through the four obfs4 lines in 22 seconds and through
+Snowflake in 28, an onion service answered through each, and the tool
+synchronised a new wallet through the obfs4 bridges in 951 seconds. So
+the bridges answer from the owner's network, the one that is no longer
+served among them or not, and the code carries Tor through them on
+Linux. On the phone, by the owner's word and a second picture: without
+bridges everything works, and with obfs4 and with Snowflake alike Home
+says that Tor has lost its connection, with the older APK too. Both
+transports failing on the phone and neither on the desktop points at
+what only the phone has: the transport program the package brings,
+which the desktop does not use (it has the system's `obfs4proxy` and
+`snowflake-client`), and how Android lets it be started. Why it worked
+there at step 4.6 and does not now is not known. The app shows only
+that the way to the first relay failed, not why; the owner was given an
+APK built from a change that is not in the repository, which puts the
+whole of Arti's error on Home, to read the reason from.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
