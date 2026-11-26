@@ -563,7 +563,7 @@ together on four cores. The folders are made in `~/veil-twice`
 | The core, for Linux and for Android | The path of every source file that can report an error, 528 of them, most under cargo's folder in the home of whoever builds. Two builds differed in 19.6 of 24.3 million bytes, and in size. | Every optimised build of the core names those folders `/cargo`, `/veil/native` and `/veil/target` to the compiler (`release_build` in `check.sh`). | The same |
 | The transport program for Android | Nothing: it is built without paths and without the build's own mark (`transports/build.sh`). | | The same, and the same as the file in the packages built before this step |
 | The wallet library, for Android | The paths of some 770 source files, and the folder Monero's dependency build installs into. Then, with the paths the same, eight bytes: the name of the commit monero_c makes of its patches, which had the time of the build in it. | It is built at one path on every machine, and those commits have one date (`wallet_lib/README.md`, "Where it is built"). | The same |
-| The wallet library, for Windows | The same two things, and then six bytes: the time of linking, which a program for Windows has a place for in its first bytes, and a sum over the file that follows from it. | The same, and the linker is told to leave the time out. | The same, after both were linked again without the time; they were not built from nothing a second time |
+| The wallet library, for Windows | The same two things, and then six bytes: the time of linking, which a program for Windows has a place for in its first bytes, and a sum over the file that follows from it. And one that only a second machine could show: the name of Monero's commit, which differed with the builder's settings for git. | The same; the linker is told to leave the time out; and the build reads none of the machine's settings for git. | The same, after both were linked again without the time; and the same as the file a second machine built from nothing |
 | The wallet library, for Linux | The same two things, and one more that was no difference but a fault: it looked for Polyseed in the folder it was built in. And one that only a second machine could show: it was compiled for the processor of the machine that built it. | The same; Polyseed lies beside the library and is looked for there; and the build is told to compile for no processor in particular, as the other two are. | The same, both files |
 | The app for Android | Nothing in the 80 files of the package, given the same core, wallet library and transport program. The package as a whole differs in its signature, which has chance in it. | `twice.sh` finds where the signature lies in a package and holds everything else to being the same. | The same but for the signature |
 | The app for Linux | One file of the bundle, the program itself, in 483 bytes: it was linked with the folder it was built in as the place to look for its libraries, and the final place was written over that afterwards, in the room the folder's name had taken. | It is linked with the final place from the start (`app/linux/CMakeLists.txt`). | The same, all 25 files of the bundle |
@@ -586,7 +586,16 @@ builder's. The build now names no processor (`ARCH=default` in
 always had from Monero's dependency build; the library built that way has
 none of those instructions, and the second machine has not built it yet.
 The wallet library for Windows came out of the same size on both machines
-and with another sum. Where the two files differ is not known yet.
+and with another sum. The two files, laid side by side, differed in
+sixteen bytes of thirty-two million: the name of Monero's commit, which
+the library carries in two places, and the sum over the file. The cloud
+session's machine is set to sign the commits it makes, the build makes
+commits of monero_c's patches, and a signature is part of what a commit's
+name comes from. The build now reads none of the machine's settings for
+git but those it needs for the network. Built again from nothing in a
+cloud session, the library for Windows is the owner's file byte for byte
+(`c8e9b13b1fdd76e2…`): with Polyseed, the first parts of a package seen
+to be the same on two machines.
 
 What it does not show, and what is known to stand in the way of the same
 files on another machine:

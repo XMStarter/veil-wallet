@@ -1426,32 +1426,67 @@ same (`db59d3709be0fed0`). The script also fixes the language and the
 time zone of a build and switches off the compiler cache Monero's
 dependency build brings, none of which was seen to matter: of 1,678
 compilations of the two Android builds two had come from that cache.
-`built-how.txt` says the new way, so the owner has to run both setups
-once more; that is not asked for until the difference for Windows is
-found, so that it is one rebuild and not two. For Windows the cause is
-not known. Nothing in the cloud session's DLL names the machine, its
-kernel or a time, and the dependency build does not compile through the
-cache there. The owner was asked for the file; it has its symbols, so
-where the two differ will name the part. The other thing: the `offline`
-level as Windows programs failed, the test program of `veil_core` ended
-with status 116 after its first eleven tests, for the second time in
-the project (the first was at step 4.2, at the `regtest` level). The
-same tests with the `regtest` feature passed minutes later in the same
-run, all sixty-four. Both times it was the first minute of a freshly
-built test program of `veil_core`; this time the DLL was new as well and
-slow to load the first time (the tests of `veil_cli`, the first to load
-it, took 87 seconds). The diagnosis written after the first time did not
-run: it was called at the `regtest` level only, and at the `offline`
-level cargo goes on after a program that fails and ends with 101
-whatever happened. Now that level reads what cargo prints for such an
-ending (`tests_of_the_workspace`, `odd_endings` in `check.sh`), and the
-diagnosis first asks Windows what it recorded about programs that ended
-badly (`what_windows_recorded`: the Application log, which names the
-part of the program the fault was in and its code), then runs the tests
-again one at a time. Tried on the owner's own log with stand-ins for
-cargo and for PowerShell; the question to Windows has never been put to
-a real one. The owner was asked to put it by hand for that day's
-ending.
+For Windows the owner sent the file, and the two differed in sixteen
+bytes of thirty-two million: the nine characters of the name of
+Monero's commit, in two places, and the sum over the file. The cloud
+session's machine is set to sign its commits, so the commits the build
+makes of monero_c's patches were signed there and had another name. The
+build now reads none of the machine's settings for git but those for
+the network (`GIT_CONFIG_GLOBAL`), makes the owner's commit
+(`1429b158a`), and the library for Windows built from nothing in a cloud
+session is the owner's file byte for byte, `c8e9b13b1fdd76e2`. That is
+the first part of a package seen to be the same on two machines, with
+Polyseed.
+The other thing: the `offline` level as Windows programs failed, the
+test program of `veil_core` ended with status 116 after its first
+eleven tests, for the second time (the first was at step 4.2, at the
+`regtest` level). The same tests with the `regtest` feature passed
+minutes later in the same run, all sixty-four. The diagnosis written
+after the first time did not run: it was called at the `regtest` level
+only, and at the `offline` level cargo goes on after a program that
+fails and ends with 101 whatever happened. Now that level reads what
+cargo prints for such an ending (`tests_of_the_workspace`,
+`odd_endings` in `check.sh`), and the diagnosis first asks Windows what
+it recorded about programs that ended badly (`what_windows_recorded`),
+then runs the tests again one at a time; tried on the owner's own log
+with stand-ins for cargo and for PowerShell only. The owner put that
+question to Windows by hand, and its record names both endings: a
+damaged heap (`0xC0000374`, whose last byte is 116), reported from
+`ntdll.dll`, in the test program's first second, on 25 and on 26
+November. So it was never the file share. The cause was then read in
+the code and has not been seen at work: Veil's own patch for paths on
+Windows (`monero/0004`) put its setting, a new locale for the program
+and for Boost's reading of paths, where the library sets itself up on
+its first call, behind the library's check for "already done", which
+has no lock. Threads that make their first call together each pass the
+check, each puts a new locale in place of the one before, and Boost
+1.69 keeps that locale without a lock, so one is destroyed while other
+threads read paths with it. A test program makes its first calls from
+as many threads as the machine has processors; the app has one thread
+that calls the library, so this is not a fault the app can meet as it
+is built. The patch now makes the setting up happen once, whoever asks
+(a local static, which the compiler guards), and
+`the_first_calls_into_the_library_may_come_at_once` in `veil_wallet`
+makes the first call from sixteen threads at once in eight processes.
+On Linux it passes with either library, since nothing of this is
+compiled there. What would show the cause: that test as a Windows
+program failing on the library built before the change and passing on
+the one built after it. The owner still has the first and was asked to
+run it before building again. The six endings of `veil.exe` in the same
+record, "in a library that was unloaded", are of programs built on 23
+November, before the library was kept loaded for good, and Windows
+writes such a record again whenever it looks at it again. With all of
+that the libraries built in a cloud session, for the owner's to be held
+against, are: for Linux `2815398e3e401946` with Polyseed
+`93c8dd53fb487964`, for Windows `3a33f0d609df79d4`, for Android
+`ffdf870ca1abd41e`. The one for Android was built from nothing; the
+other two were built from nothing with the patch as it was and then had
+the changed patch applied and what it touches compiled again. The
+`offline` level, the lint for Windows and `./check.sh --android offline`
+pass with them. `built-how.txt` names the new way, so the owner has to
+run both setups once more and allow the new DLL and `monerod.exe` in
+the antivirus. The library for Linux is expected to differ there as
+long as the distribution's packages do; nobody has compared those.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
@@ -1467,11 +1502,13 @@ See the build plan in `docs/concept.md`.
   aborted) in one test and worked in every other; if it comes back, the
   first thing to try is loading it from a Windows disk, not over the WSL
   file share. Twice, a test program of `veil_core` run as a Windows
-  program ended with status 116 within its first minute, freshly built
-  both times, and passed when run again; `check.sh` now asks Windows
-  what it recorded about the ending and runs such a program's tests again
-  one at a time to name the test, at the `offline` level too, and what
-  that prints is the first thing to read if it comes back. Once, the tests of `veil_core` that open a wallet all
+  program ended with status 116 within its first second and passed when
+  run again. Windows recorded a damaged heap both times (`0xC0000374`);
+  the end of "Status" says what it is put down to and what would show
+  it. `check.sh` asks Windows what it recorded about such an ending and
+  runs the program's tests again one at a time, at the `offline` level
+  too, and what that prints is the first thing to read if it comes
+  back. Once, the tests of `veil_core` that open a wallet all
   stood for over a minute at the start of a freshly built test program
   and then went on; the one with a limit failed. The tests now load the
   wallet library before they time anything and say when that took long.

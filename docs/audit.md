@@ -282,13 +282,13 @@ byte for byte. On one machine the core, the transport program, the wallet
 library and the app come out the same that way, a package for Android but
 for its signature; `docs/development.md`, "The same build twice", has
 each part, what had to be done for it, and what that does not show.
-On a second machine only the wallet library has been built, and it was
-not the same there: for Linux because it was compiled for the processor
-of whichever machine built it, which is put right and not built there
-again yet, for Windows in a way that is not found yet. The wallet
-library for Linux is in any case the same only where the distribution's
-libraries are, and the app for Windows is not compared at all. Nothing is
-signed with a key that means anything.
+On a second machine only the wallet library has been built. For Windows
+it is the same file there, byte for byte, once the build stopped reading
+the builder's settings for git. For Linux it was compiled for the
+processor of whichever machine built it, which is put right and not
+built there again yet; it is in any case the same only where the
+distribution's libraries are. The app for Windows is not compared at
+all. Nothing is signed with a key that means anything.
 
 ## Known to be weak
 
@@ -324,6 +324,17 @@ Each of these is known to the project and not put right.
   another (`veil_tor/src/state.rs`, with offline tests of the folder; the
   way of the fault itself is walked only at the `bridges` level, on the
   real network).
+- **The wallet library used from several threads at once.** The app has
+  one thread that calls it; the tests have many. One fault of that kind
+  was Veil's own: the patch that makes the library read paths as UTF-8
+  on Windows put its setting where the library sets itself up on its
+  first call, behind a check that several threads can pass together, and
+  made twice the setting destroys a locale other threads are reading
+  paths with. Windows recorded a damaged heap (`0xC0000374`) for a test
+  program twice. The patch now makes that work happen once
+  (`monero/0004`), and a test makes the first call from sixteen threads
+  at once. Whether there are other faults of the kind is not known:
+  nothing runs the library under a tool that would see them.
 - **The listeners take any program on the machine**, as said above.
 - **Dart and Kotlin strings cannot be wiped**, so a password and a phrase
   stay in the app's memory until it is freed and reused.

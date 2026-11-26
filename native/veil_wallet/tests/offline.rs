@@ -596,6 +596,102 @@ fn a_note_is_kept_with_the_wallet_and_can_be_cleared() {
     assert_eq!(reopened.note("veil.test").unwrap(), "");
 }
 
+/// Tells a run of this test program that it is one of the processes
+/// `the_first_calls_into_the_library_may_come_at_once` starts, and in which
+/// folder to look for wallets.
+const FIRST_AT_ONCE: &str = "VEIL_TEST_FIRST_AT_ONCE";
+/// How many threads of such a process ask the library at the same moment.
+const FIRST_AT_ONCE_THREADS: usize = 16;
+/// How many such processes are started, one after the other. A process
+/// has one first moment, so this is how often the moment is tried.
+/// `VEIL_FIRST_CALL_ROUNDS` asks for another number, for a longer look.
+const FIRST_AT_ONCE_PROCESSES: usize = 8;
+
+/// The body of one process that
+/// `the_first_calls_into_the_library_may_come_at_once` starts: threads
+/// that have each loaded the library wait for one another and then ask it
+/// for its first piece of work at the same moment, and go on asking. The
+/// work is opening a wallet that is not there, in a folder whose name is
+/// not ASCII: that is refused, and on the way the library sets itself up
+/// and reads the path. Run on its own it does nothing and passes.
+#[test]
+fn many_threads_ask_the_library_first_in_a_process_of_their_own() {
+    let Some(folder) = std::env::var_os(FIRST_AT_ONCE) else {
+        return;
+    };
+    let folder = std::path::PathBuf::from(folder);
+    let library = std::env::var_os("VEIL_WALLET_LIB").expect("the process is given the library");
+    let together = std::sync::Arc::new(std::sync::Barrier::new(FIRST_AT_ONCE_THREADS));
+    let threads: Vec<_> = (0..FIRST_AT_ONCE_THREADS)
+        .map(|number| {
+            let lib = WalletLibrary::load(&library).expect("wallet library loads");
+            let together = std::sync::Arc::clone(&together);
+            let folder = folder.join(format!("Мой кошелёk 钱包 é {number}"));
+            std::thread::spawn(move || {
+                together.wait();
+                for round in 0..40 {
+                    let path = folder.join(format!("wallet-{round}"));
+                    if let Ok(wallet) = Wallet::open(&lib, &path, PASSWORD, Network::Mainnet) {
+                        panic!("a wallet that is not there opened: {:?}", wallet.path());
+                    }
+                }
+            })
+        })
+        .collect();
+    for thread in threads {
+        thread.join().expect("a thread that asked the library");
+    }
+}
+
+/// A program's first call into the library may come from several threads
+/// at once: here every test is such a thread, and an app that opens two
+/// wallets would be another. The library sets itself up on that first
+/// call, and its own check for "already done" let every thread that came
+/// before the first had finished do it again. On Windows the setting up
+/// includes the locale that paths are read with, which Veil's build adds
+/// so that a folder with any name works; done twice, the locale put there
+/// the first time is destroyed while other threads read paths with it.
+/// A test program of `veil_core` ended that way twice as a Windows
+/// program, in its first second, with Windows' code for a damaged heap.
+/// Veil's build of the library now sets itself up once.
+///
+/// One process has one first moment, so the moment is tried in several
+/// processes, with more threads than a test program has. On Linux this
+/// passes with either library: the locale is not touched there.
+#[test]
+fn the_first_calls_into_the_library_may_come_at_once() {
+    let Some(_lib) = wallet_library() else { return };
+    let library = std::env::var_os("VEIL_WALLET_LIB").expect("checked by wallet_library");
+    let library = std::path::absolute(library).expect("the library's path");
+    let processes = std::env::var("VEIL_FIRST_CALL_ROUNDS")
+        .ok()
+        .and_then(|rounds| rounds.trim().parse().ok())
+        .unwrap_or(FIRST_AT_ONCE_PROCESSES);
+    for process in 1..=processes {
+        let dir = TempDir::new("first");
+        let asked = Command::new(std::env::current_exe().expect("the test program has a path"))
+            .args([
+                "--exact",
+                "many_threads_ask_the_library_first_in_a_process_of_their_own",
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env(FIRST_AT_ONCE, &dir.0)
+            .env("VEIL_WALLET_LIB", &library)
+            .stdin(Stdio::null())
+            .output()
+            .expect("the process that asks the library starts");
+        assert!(
+            asked.status.success(),
+            "process {process} of {processes}, in which {FIRST_AT_ONCE_THREADS} \
+             threads asked the library first at once, ended badly: {}\n{}\n{}",
+            asked.status,
+            String::from_utf8_lossy(&asked.stdout),
+            String::from_utf8_lossy(&asked.stderr)
+        );
+    }
+}
+
 /// Tells a run of this test program that it is the process whose wallets
 /// `a_wallet_leaves_nothing_outside_its_folder` looks at afterwards, and
 /// in which folder to keep them.

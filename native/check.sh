@@ -96,7 +96,7 @@ elif [ "$windows" = 1 ]; then
   setup_hint="./check.sh --windows setup"
   # WSL hands a Windows program only the variables named here; /p turns a
   # Linux path into the Windows one.
-  export WSLENV="${WSLENV:+$WSLENV:}VEIL_WALLET_LIB/p:VEIL_MONEROD/p:VEIL_REQUIRE_WALLET_LIB:VEIL_DAEMON_ROUNDS:VEIL_TEST_NODES:VEIL_TEST_ONION:VEIL_FUZZ_SEED:VEIL_FUZZ_SECONDS:VEIL_FUZZ_CASES:CI:GITHUB_ACTIONS"
+  export WSLENV="${WSLENV:+$WSLENV:}VEIL_WALLET_LIB/p:VEIL_MONEROD/p:VEIL_REQUIRE_WALLET_LIB:VEIL_DAEMON_ROUNDS:VEIL_FIRST_CALL_ROUNDS:VEIL_TEST_NODES:VEIL_TEST_ONION:VEIL_FUZZ_SEED:VEIL_FUZZ_SECONDS:VEIL_FUZZ_CASES:CI:GITHUB_ACTIONS"
 else
   out_dir="$lib_dir/out"
   wallet_lib="$out_dir/libmonero_wallet2_api_c.so"

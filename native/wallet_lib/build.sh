@@ -178,6 +178,30 @@ export GIT_AUTHOR_DATE="2000-01-01T00:00:00+00:00" GIT_COMMITTER_DATE="2000-01-0
 # to change what is built; they are closed because they are cheap to close.
 export LC_ALL=C TZ=UTC CCACHE_DISABLE=1
 
+# And git's own settings on this machine, which decide what a commit made
+# here is. A machine set to sign its commits made signed ones of
+# monero_c's patches, a signature is part of what a commit's name comes
+# from, and so the nine characters in the library were another machine's
+# nine characters: that was the whole of the difference between the
+# library for Windows built in a cloud session and the same one built on
+# the owner's machine, sixteen bytes. Settings for line endings, hooks or
+# messages could do the same. So git is told to read none of the
+# machine's settings but those it needs to reach the network, which are
+# copied into a file of this build's own. Settings handed over in the
+# environment (GIT_CONFIG_COUNT) are left alone: a build machine uses
+# them for its way to the network, and a person does not set them.
+git_settings="$work/.git-settings"
+: > "$git_settings"
+for scope in --system --global; do
+  while IFS= read -r -d '' entry; do
+    case "$entry" in
+      *$'\n'*) git config --file "$git_settings" --add "${entry%%$'\n'*}" "${entry#*$'\n'}" ;;
+      *) git config --file "$git_settings" --add "$entry" true ;;
+    esac
+  done < <(git config "$scope" -z --get-regexp '^(http|https|url|credential|safe)\.' 2>/dev/null)
+done
+export GIT_CONFIG_GLOBAL="$git_settings" GIT_CONFIG_SYSTEM=/dev/null
+
 if [ ! -d "$src/.git" ]; then
   git init -q "$src"
   git -C "$src" remote add origin "$MONERO_C_REPO"
