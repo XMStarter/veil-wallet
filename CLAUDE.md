@@ -1110,6 +1110,14 @@ empty when the lines are others, in whatever order. Three offline tests
 hold that; `bridges_that_are_set_again_carry_tor_again` walks the phone's
 way, obfs4, Snowflake, obfs4 on the same files, at the `bridges` level
 and has not run.
+The offline level passed with it in a cloud session, and the code was
+linted for Windows and for Android. With the APK built from commit
+`05b8dd9`, installed over the one before, the owner reported that bridges
+work again on the phone, obfs4 and Snowflake. Asked for were obfs4, then
+Snowflake, then obfs4 again, each after the wallet was closed and opened;
+whether obfs4 was set a second time was not said. Not run on the owner's
+machine with it: anything. The three tests of the folder have not run as
+Windows programs, and the test on the real network has not run at all.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
