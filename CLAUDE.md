@@ -973,7 +973,12 @@ and the document has no address to send findings to. Tried in a cloud
 session: the `offline` level, with the new step in it, and `./check.sh
 --android offline`. The new step runs where a core for an app is built:
 on the owner's machine and in hosted CI's Windows job, where it has not
-run yet.
+run yet. On commit `c54d0de` the owner's run passed at the `offline`
+level as Linux and as Windows programs. As Linux programs the new step
+ran after the core for the app was built, and all three builds with a
+test-only feature were refused. As Windows programs that step does not
+run: no app is built there. With that, step 5.3 has passed the owner's
+run; `docs/audit.md` itself is for the owner to read, which no run does.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
