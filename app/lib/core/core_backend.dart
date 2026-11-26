@@ -104,6 +104,7 @@ class CoreBackend implements WalletBackend {
       rethrow;
     }
     _session = session;
+    _viaBridges = !withoutBridges && _settings.value.bridges.isNotEmpty;
     _seen = state.revision;
     _state.value = state;
     _watch = Timer.periodic(_watchEvery, (_) => _look());
@@ -135,6 +136,10 @@ class CoreBackend implements WalletBackend {
       _state.value = session.state();
     }
   }
+
+  @override
+  bool get viaBridges => _viaBridges;
+  bool _viaBridges = false;
 
   @override
   ValueListenable<AppSettings> get settings => _settings;
@@ -261,6 +266,7 @@ class CoreBackend implements WalletBackend {
     _watch = null;
     final session = _session;
     _session = null;
+    _viaBridges = false;
     _state.value = null;
     if (session == null) return null;
     // Closing releases the session. A call still under way on another

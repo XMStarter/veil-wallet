@@ -109,6 +109,66 @@ void main() {
     expect(starts(backend), isEmpty);
   });
 
+  testWidgets('a lost connection is put down to the bridges where the '
+      'wallet goes through them, and only there', (tester) async {
+    const lost = Problem(
+      ProblemKind.torLost,
+      'Tor cannot reach its network: error connecting to Tor',
+    );
+    void lose(FakeBackend backend) => backend.report(
+      tor: const TorStatus(TorState.lost, 100, 'error connecting to Tor'),
+      sync: const SyncStatus(SyncPhase.failed, problem: lost),
+    );
+
+    final backend = FakeBackend(hasWallet: true, confirmed: true)
+      ..settingsAre(const AppSettings(bridges: [bridge]));
+    await pumpApp(tester, 'en', backend: backend);
+    await type(tester, 'Password', testPassword);
+    await press(tester, 'Open wallet');
+    expect(backend.viaBridges, isTrue);
+    lose(backend);
+    await tester.pumpAndSettle();
+    expect(find.text('Tor has lost its connection'), findsOneWidget);
+    expect(
+      find.text(
+        'Could not synchronise. Tor cannot reach its network through the '
+        'bridges that are set. A bridge may not be answering. If this '
+        'stays, check the bridges and the internet connection of this '
+        'device. The wallet tries again by itself.',
+      ),
+      findsOneWidget,
+    );
+
+    // Locked, the wallet goes through nothing.
+    await press(tester, 'Lock wallet');
+    expect(backend.viaBridges, isFalse);
+  });
+
+  testWidgets('without bridges a lost connection is the device\'s own', (
+    tester,
+  ) async {
+    const lost = Problem(
+      ProblemKind.torLost,
+      'Tor cannot reach its network: error connecting to Tor',
+    );
+    void lose(FakeBackend backend) => backend.report(
+      tor: const TorStatus(TorState.lost, 100, 'error connecting to Tor'),
+      sync: const SyncStatus(SyncPhase.failed, problem: lost),
+    );
+    final direct = FakeBackend(hasWallet: true, confirmed: true);
+    await pumpApp(tester, 'en', backend: direct);
+    await type(tester, 'Password', testPassword);
+    await press(tester, 'Open wallet');
+    expect(direct.viaBridges, isFalse);
+    lose(direct);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('through the bridges'), findsNothing);
+    expect(
+      find.textContaining('Check the internet connection of this device'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('a device without a wallet is asked the same, and goes on to '
       'its first screen', (tester) async {
     final backend = FakeBackend()..settingsAre(const AppSettings(lost: true));
@@ -131,9 +191,12 @@ void main() {
     expect(find.text('ОТКРЫТЬ КОШЕЛЁК'), findsOneWidget);
     expect(find.text('МОСТЫ TOR: 1 МОСТ'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
 
-    final fresh = FakeBackend();
-    await pumpApp(tester, 'ru', backend: fresh);
+  testWidgets('the first screen fits the window in Russian with its line '
+      'for the bridges', (tester) async {
+    await pumpApp(tester, 'ru', backend: FakeBackend());
+    expect(find.text('СОЗДАТЬ КОШЕЛЁК'), findsOneWidget);
     expect(find.text('МОСТЫ TOR: НЕТ'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

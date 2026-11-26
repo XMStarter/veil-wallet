@@ -299,6 +299,9 @@ Each of these is known to the project and not put right.
   `native/veil_wallet/README.md` has the row.
 - **A loss of the network that shows only as timeouts** is read as nodes
   that do not answer, not as Tor's.
+- **With bridges, a bridge that does not answer** is read as the network
+  being lost, although another bridge may carry the next connection. The
+  app's words allow for it; the state itself cannot tell the two apart.
 - **The listeners take any program on the machine**, as said above.
 - **Dart and Kotlin strings cannot be wiped**, so a password and a phrase
   stay in the app's memory until it is freed and reused.

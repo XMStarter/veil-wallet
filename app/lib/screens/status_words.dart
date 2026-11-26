@@ -11,7 +11,11 @@ String torWords(AppLocalizations text, TorStatus tor) => switch (tor.state) {
 };
 
 /// How the wallet stands against the chain, in words.
-String syncWords(AppLocalizations text, SessionState state) {
+String syncWords(
+  AppLocalizations text,
+  SessionState state, {
+  bool viaBridges = false,
+}) {
   final sync = state.sync;
   switch (sync.phase) {
     case SyncPhase.notYet:
@@ -28,7 +32,9 @@ String syncWords(AppLocalizations text, SessionState state) {
     case SyncPhase.failed:
       final problem = sync.problem;
       return text.syncFailed(
-        problem == null ? text.problemOther : problemWords(text, problem),
+        problem == null
+            ? text.problemOther
+            : problemWords(text, problem, viaBridges: viaBridges),
       );
   }
 }

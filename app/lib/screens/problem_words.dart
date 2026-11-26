@@ -8,7 +8,14 @@ Problem unforeseen(Object error) => Problem(ProblemKind.other, '$error');
 
 /// A problem in the user's language. Kinds without words of their own are
 /// shown with the core's detail, which is in English.
-String problemWords(AppLocalizations text, Problem problem) {
+///
+/// [viaBridges] says that the open wallet reaches Tor through bridges: a
+/// Tor that cannot reach its network is then put down to them first.
+String problemWords(
+  AppLocalizations text,
+  Problem problem, {
+  bool viaBridges = false,
+}) {
   return switch (problem.kind) {
     ProblemKind.wrongPassword => text.problemWrongPassword,
     ProblemKind.walletExists => text.problemWalletExists,
@@ -22,7 +29,8 @@ String problemWords(AppLocalizations text, Problem problem) {
           : '${text.problemInvalidPhrase} ${text.problemDetail(problem.detail)}',
     ProblemKind.torFailed => text.problemTorFailed,
     ProblemKind.torNotReady => text.problemTorNotReady,
-    ProblemKind.torLost => text.problemTorLost,
+    ProblemKind.torLost =>
+      viaBridges ? text.problemTorLostBridges : text.problemTorLost,
     ProblemKind.noNode => text.problemNoNode,
     ProblemKind.tooManyUnusedAddresses => text.problemTooManyAddresses,
     ProblemKind.invalidAddress => text.problemInvalidAddress,

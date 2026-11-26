@@ -68,6 +68,13 @@ timeouts is not reported as one; it looks like nodes that do not answer.
 While `Lost`, the listeners take requests as before. There is still no
 other way out than through Tor.
 
+With bridges the first relay is a bridge, so a bridge that does not
+answer reads as `Lost` although the device's own connection is in order
+and another bridge may carry the next connection. From here the two look
+alike. The app says "through the bridges that are set" when its wallet
+was opened through bridges, and does not send the user to check a
+connection that works.
+
 ## Bridges
 
 On a network that blocks Tor, the way in is a bridge: a relay that is not

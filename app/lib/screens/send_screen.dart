@@ -235,8 +235,13 @@ class _SendScreenState extends State<SendScreen> {
         if (problem != null && !aboutAddress && !aboutAmount)
           ProblemText(
             send.phase == SendPhase.failed && _refused == null
-                ? '${problemWords(text, problem)} ${text.sendNothingSent}'
-                : problemWords(text, problem),
+                ? '${problemWords(text, problem, viaBridges: widget.backend.viaBridges)} '
+                      '${text.sendNothingSent}'
+                : problemWords(
+                    text,
+                    problem,
+                    viaBridges: widget.backend.viaBridges,
+                  ),
           ),
         if (preparing) ...[
           const SizedBox(height: 16),

@@ -1000,7 +1000,23 @@ core nor the wallet library. Six tests on the wallet that only pretends
 walk both ways, and the test of the settings file on made-up input now
 also holds that bridges are the ones written or are said to be lost,
 never quietly none. The `offline` level passes in a cloud session with
-them. Not seen on a phone or in a real window yet.
+them. With the APK built from commit `d7d74f2` the owner sent one
+picture from the phone and three answers: Home said "Tor has lost its
+connection" and that the device's internet connection should be checked,
+with Wi-Fi shown as connected; bridges were set; it was right after the
+wallet was opened; whether it went away was not looked at. Which bridges
+and where they were set was not said, so the picture does not show that
+the new line on the first screens was used. The reading: Tor reads the
+loss of its network from a connection that fails on the way to the first
+relay, with bridges the first relay is a bridge, and some of the obfs4
+bridges built into Tor Browser do not answer. That a bridge was the
+cause was not seen. The state is left as it is, since the two cannot be
+told apart from where it is read; the words are changed. A wallet opened
+through bridges (`WalletBackend.viaBridges`) now says that Tor cannot
+reach its network through the bridges that are set and that one may not
+be answering, on Home and on Send; without bridges the words are as
+before. Not known: whether the message goes away by itself there within
+a minute or two, as it should when the next connection gets through.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

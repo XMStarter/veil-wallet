@@ -286,6 +286,7 @@
   "problemTorFailed": "Tor could not start.",
   "problemTorNotReady": "Tor is not connected.",
   "problemTorLost": "Tor cannot reach its network. Check the internet connection of this device.",
+  "problemTorLostBridges": "Tor cannot reach its network through the bridges that are set. A bridge may not be answering. If this stays, check the bridges and the internet connection of this device.",
   "problemNoNode": "No node answered.",
   "problemTooManyAddresses": "Several addresses in a row have not been paid yet. Use one of them first: with more of them unused, a payment could be missed when the wallet is restored from its phrase.",
   "problemInvalidAddress": "This is not a Monero address of this network.",

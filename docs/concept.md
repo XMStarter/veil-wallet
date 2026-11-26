@@ -231,6 +231,13 @@ if, at build time, Arti cannot run bridges on Android.
   bridges have to be known before a wallet is open. The file is replaced
   whole when it is saved, so the app being ended in the middle leaves the
   old one.
+- **A lost connection is put down to the bridges where there are
+  bridges.** Tor finds out that it cannot reach its network when it
+  cannot reach the first relay, and with bridges that is a bridge. One
+  that does not answer looks the same as a device without a network. So
+  a wallet opened through bridges says that Tor cannot get through the
+  bridges that are set, and that one may not be answering, before it
+  names the device's own connection.
 - **Bridges are within reach before Tor starts.** Making a wallet,
   restoring one and opening one all start Tor, so the screens they begin
   on lead to the bridges: on a network that blocks Tor there would
