@@ -1138,6 +1138,31 @@ the same bridges is not known. The test now asks again every five
 seconds for three minutes, as a wallet would, and prints at which try it
 was answered, which will say how long that state lasts. Because the run
 stopped there, nothing ran as Windows programs.
+On commit `215f5cb` the same run passed: the `offline` level as Linux
+and as Windows programs, the three tests of the folder both ways, and
+the `bridges` level. In the new test Tor was ready through obfs4 in 15
+seconds and answered at the first try; through Snowflake on the same
+files it was ready in 4 seconds, refused the first try's two connections
+and carried the second try's, 18 seconds after it was ready; through
+obfs4 again it was ready in 3 seconds and answered at the first try. So
+the way that failed on the phone works on Linux with the folder of its
+own, and the state in which Tor is ready and of no use lasted under 18
+seconds there, once, with bridges it had not used. In the app that
+would be the words about bridges on Home until the next
+synchronisation, a minute later; the owner has not seen them on the
+phone, where everything works by the owner's word. Nothing is changed
+for it; `native/veil_tor/README.md` has it. In the same run the older
+test through obfs4 took 64 seconds to be ready, with Arti saying once
+that it could not make progress, where it took 19 an hour before; the
+tool synchronised a new wallet through obfs4 in 543 seconds. The list
+of obfs4 bridges in the two tests still has `212.83.43.95:443`, which
+the Tor Project no longer serves: the level passes with it, and it is
+to be replaced when the level fails for it (`VEIL_TEST_OBFS4_BRIDGES`
+names other lines meanwhile). With that, the bridges before a wallet,
+the words for a lost Tor with bridges, and the folder of its own have
+passed the owner's run on both systems and work on the phone. Which of
+the new screens the owner used there was not said. They and step 5.3
+are on one branch and in no pull request yet.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

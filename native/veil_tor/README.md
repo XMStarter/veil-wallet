@@ -139,6 +139,16 @@ longer needed. Nothing in a build or a check applies the patch.
 `bridges_that_are_set_again_carry_tor_again` walks the phone's way on the
 real network, at the `bridges` level.
 
+That test also showed a Tor that is ready before it is of use. With
+bridges it has not used before and a directory it has kept from an
+earlier start, Arti calls itself ready within seconds and then refuses
+what it is asked for, with the failure that reads as `Lost`, until it
+has a bridge to build with. Seen with Snowflake after obfs4: ready after
+4 seconds, two connections refused at once, the next one, some seconds
+later, carried; all of it within 18 seconds. With obfs4 after Snowflake
+the first connection was carried. Nothing is done about it here: whoever
+asks goes on asking, as `veil_core` does.
+
 ## For the rest of Veil
 
 `Transport` is what other crates hold: the two ports and the status. It
