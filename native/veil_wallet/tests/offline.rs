@@ -825,3 +825,134 @@ fn the_wallets_address_is_not_left_as_text_next_to_it() {
         assert!(!address_file.exists(), "{network:?}");
     }
 }
+
+/// Whatever is put where an address goes, the library is asked about it
+/// and says no, unless it is one of the addresses, whole.
+#[test]
+fn made_up_addresses_are_judged_and_only_whole_ones_pass() {
+    let Some(lib) = wallet_library() else { return };
+    let dir = TempDir::new("made-up-addresses");
+    let (mut stagenet, _) =
+        Wallet::create(&lib, &dir.file("stage"), PASSWORD, Network::Stagenet).unwrap();
+    let (mut mainnet, _) =
+        Wallet::create(&lib, &dir.file("main"), PASSWORD, Network::Mainnet).unwrap();
+    let first = stagenet.receive_address().unwrap().address;
+    let second = stagenet.new_receive_address().unwrap().address;
+    let elsewhere = mainnet.receive_address().unwrap().address;
+    let untidy = format!("  {first}\n");
+    let link = format!("monero:{first}?tx_amount=0.25");
+    let samples = [
+        first.as_str(),
+        second.as_str(),
+        elsewhere.as_str(),
+        untidy.as_str(),
+        link.as_str(),
+        "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
+    ];
+    let one = SendAmount::Exact("1".parse::<Amount>().unwrap());
+    veil_test_guard::fuzz::texts("address", &samples, |text| {
+        let whole = text.trim();
+        if stagenet.is_valid_address(text) {
+            // A changed address that still passed would be a payment to
+            // somebody else. Four bytes of checksum stand against it.
+            assert!(whole == first || whole == second, "{whole:?} passed");
+        } else {
+            assert!(whole != first && whole != second);
+        }
+        assert_eq!(mainnet.is_valid_address(text), whole == elsewhere);
+    });
+    // And nothing is built for what is no address.
+    for text in ["", "\0", elsewhere.as_str(), link.as_str()] {
+        assert!(matches!(
+            stagenet.prepare_send(text, one).err(),
+            Some(Error::InvalidAddress)
+        ));
+    }
+}
+
+/// Phrases with the right number of words and something wrong in them go
+/// to the library, which refuses them and leaves nothing, or reads them
+/// as a wallet. It never falls over.
+#[test]
+fn made_up_phrases_are_refused_by_the_library_or_are_a_wallet() {
+    use std::cell::Cell;
+
+    let Some(lib) = wallet_library() else { return };
+    let dir = TempDir::new("made-up-phrases");
+    let (mut original, sixteen) =
+        Wallet::create(&lib, &dir.file("original"), PASSWORD, Network::Stagenet).unwrap();
+    let twenty_five = original.legacy_seed_phrase().unwrap();
+    let address = original.receive_address().unwrap().address;
+    original.close().unwrap();
+
+    let good = [sixteen.as_str().to_owned(), twenty_five.as_str().to_owned()];
+    let samples = [
+        "abandon",
+        "ability zoo",
+        "ABANDON",
+        "abandonx",
+        "aban",
+        "zzzz",
+        "1.",
+        "слово",
+    ];
+    let case = Cell::new(0usize);
+    let (refused, read) = (Cell::new(0u32), Cell::new(0u32));
+    veil_test_guard::fuzz::some_texts("library phrase", &samples, 600, |text| {
+        let number = case.replace(case.get() + 1);
+        // A good phrase with some of its words given up for made-up ones;
+        // now and then left as it is, to see that one read as well.
+        let mut words: Vec<String> = good[number % 2].split(' ').map(str::to_owned).collect();
+        let made_up: Vec<&str> = text.split_whitespace().collect();
+        if number % 25 == 24 {
+            words[0] = words[0].to_uppercase();
+        } else if made_up.is_empty() {
+            let at = number % words.len();
+            let other = (at + 1 + number / 7) % words.len();
+            words.swap(at, other);
+        } else {
+            for (offset, word) in made_up.iter().take(3).enumerate() {
+                let at = (number / 2 + offset * 5) % words.len();
+                words[at] = (*word).to_owned();
+            }
+        }
+        let phrase = SeedPhrase::parse(&words.join(" ")).unwrap();
+
+        let path = dir.file(&format!("restored-{number}"));
+        match Wallet::restore(&lib, &path, PASSWORD, Network::Stagenet, &phrase, 0) {
+            Ok(mut wallet) => {
+                read.set(read.get() + 1);
+                // A wallet like any other; the same one if nothing that
+                // counts was changed.
+                let restored = wallet.receive_address().unwrap().address;
+                assert!(wallet.is_valid_address(&restored));
+                if phrase.as_str() == good[number % 2] {
+                    assert_eq!(restored, address);
+                }
+                wallet.close().unwrap();
+            }
+            Err(Error::Wallet(_)) => {
+                refused.set(refused.get() + 1);
+                let left: Vec<String> = names_under(&dir.0)
+                    .into_iter()
+                    .filter(|name| {
+                        let own = format!("restored-{number}");
+                        *name == own || name.starts_with(&format!("{own}."))
+                    })
+                    .collect();
+                assert_eq!(left, Vec::<String>::new(), "a refused phrase left files");
+            }
+            // A zero byte cannot be handed to the library at all. Nothing
+            // an app sends has one: its text ends at the first.
+            Err(Error::InvalidArgument { .. }) => assert!(phrase.as_str().contains('\0')),
+            Err(other) => panic!("an unexpected refusal: {other}"),
+        }
+    });
+    // Both ways were taken, or this showed less than it says.
+    assert!(refused.get() > 0 && read.get() > 0);
+    eprintln!(
+        "{} phrases refused, {} read as a wallet",
+        refused.get(),
+        read.get()
+    );
+}

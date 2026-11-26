@@ -87,6 +87,14 @@ running the app.
 without opening a wallet. It needs `cargo build -p veil_core` in `native/`
 and is skipped without it.
 
+`test/made_up_test.dart` hands what the app itself reads from outside
+thousands of made-up inputs: a code read with the camera or a paste, a
+phrase, the lines of bridges and nodes, and the settings file. What they
+are made of and how a failure is brought back is in
+`docs/development.md`, "Made-up input". The settings file is written to a
+file next to it first, which then takes its place, so that the app ended
+in the middle leaves the old settings and not half a file.
+
 Two things the tests of step 3.7 missed, and what they do about it now.
 The wallet that only pretends answered at once, so no screen was ever
 drawn while it worked: it can be told to take its time

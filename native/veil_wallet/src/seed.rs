@@ -117,4 +117,40 @@ mod tests {
         assert!(!shown.contains("word0"), "{shown}");
         assert!(shown.contains("hidden"));
     }
+
+    #[test]
+    fn made_up_phrases_are_counted_and_never_shown() {
+        let (sixteen, twenty_five) = (phrase(16), phrase(25));
+        let untidy = format!("  {}\t\n", phrase(16).to_uppercase().replace(' ', "  "));
+        let samples = [sixteen.as_str(), twenty_five.as_str(), untidy.as_str()];
+        veil_test_guard::fuzz::texts("phrase", &samples, |text| {
+            let count = text.split_whitespace().count();
+            match SeedPhrase::parse(text) {
+                Ok(phrase) => {
+                    let kind = match count {
+                        16 => SeedKind::Polyseed,
+                        25 => SeedKind::Legacy,
+                        other => panic!("{other} words were taken for a phrase"),
+                    };
+                    assert_eq!(phrase.kind(), kind);
+                    // The same words, in order, in small letters, with
+                    // one space between them and none around them.
+                    let words: Vec<String> =
+                        text.split_whitespace().map(str::to_lowercase).collect();
+                    assert_eq!(phrase.as_str(), words.join(" "));
+                    assert!(phrase.words().eq(words.iter().map(String::as_str)));
+                    // Nothing of it in what a log would get.
+                    assert_eq!(
+                        format!("{phrase:?}"),
+                        format!("SeedPhrase({kind:?}, <hidden>)")
+                    );
+                }
+                Err(Error::SeedWordCount { words }) => {
+                    assert_eq!(words, count);
+                    assert!(count != 16 && count != 25);
+                }
+                Err(other) => panic!("an unexpected refusal: {other}"),
+            }
+        });
+    }
 }

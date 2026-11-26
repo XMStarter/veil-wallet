@@ -37,6 +37,11 @@ impl FromStr for OnionNode {
 
     fn from_str(text: &str) -> Result<OnionNode, CoreError> {
         let (host, port) = text.trim().rsplit_once(':').ok_or(CoreError::InvalidNode)?;
+        // Digits and nothing else: the standard library would take a
+        // plus sign in front as well.
+        if !port.bytes().all(|b| b.is_ascii_digit()) {
+            return Err(CoreError::InvalidNode);
+        }
         let port = port.parse().map_err(|_| CoreError::InvalidNode)?;
         OnionNode::new(host, port)
     }
@@ -143,5 +148,53 @@ mod tests {
 
         let own = Nodes::single(a.clone());
         assert_eq!(own.sync(), own.broadcast());
+    }
+
+    /// A node as it is typed into Settings, or as anything else: read as
+    /// an onion service and a port, or refused.
+    #[test]
+    fn made_up_nodes_are_onion_services_with_a_port_or_refused() {
+        let plain = format!("{A}:18081");
+        let untidy = format!("  {}:38089\n", B.to_ascii_uppercase());
+        let under = format!("node.{A}:1");
+        let samples = [
+            plain.as_str(),
+            untidy.as_str(),
+            under.as_str(),
+            "example.com:18081",
+            "127.0.0.1:18081",
+            "[::1]:18081",
+            "http://node.onion:18081",
+            "user@node.onion:18081",
+            "node.onion:18081/path",
+            "node.onion:+18081",
+            "node.onion:0",
+            "node.onion:65535",
+            "node.onion:65536",
+            "node.onion",
+        ];
+        veil_test_guard::fuzz::texts("node", &samples, |text| {
+            let Ok(node) = text.parse::<OnionNode>() else {
+                return;
+            };
+            // Nothing in the name but what a name is made of, so that it
+            // can be put into an address as it stands.
+            let host = node.host();
+            assert!(host.ends_with(".onion") && host.len() > ".onion".len());
+            assert!(host
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-' || b == b'.'));
+            assert!(host.split('.').all(|label| !label.is_empty()));
+            assert!(host.parse::<std::net::IpAddr>().is_err());
+            assert_ne!(node.port(), 0);
+            // It is what was written: the name before the last colon, the
+            // port after it in digits.
+            let (name, port) = text.trim().rsplit_once(':').unwrap();
+            assert_eq!(host, name.trim().to_ascii_lowercase());
+            assert!(!port.is_empty() && port.bytes().all(|b| b.is_ascii_digit()));
+            assert_eq!(port.trim_start_matches('0'), node.port().to_string());
+            // And written out, it is read as the same node again.
+            assert_eq!(node.to_string().parse::<OnionNode>().unwrap(), node);
+        });
     }
 }

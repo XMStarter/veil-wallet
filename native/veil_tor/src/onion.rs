@@ -5,16 +5,25 @@
 
 use tor_socksproto::SocksAddr;
 
-/// Returns the hostname if `addr` is an onion service hostname.
+/// Returns the hostname if `addr` is an onion service hostname: in small
+/// letters and without the dot a fully written name may end with.
 ///
 /// The check is deliberately loose about the address itself: Arti validates
 /// the onion address when it connects. This function only guarantees that
 /// nothing other than a `.onion` name gets that far.
+///
+/// What is returned always ends in `.onion`, which is the one thing Arti
+/// goes by when it decides between an onion service and a host to reach
+/// through an exit relay. A name handed on with its last dot would not end
+/// that way. The Arti in use refuses such a name outright, so it went
+/// nowhere; that is Arti's rule to change, and this guarantee should not
+/// hang on it.
 pub(crate) fn onion_hostname(addr: &SocksAddr) -> Option<String> {
     match addr {
         SocksAddr::Hostname(name) => {
             let name: &str = name.as_ref();
-            is_onion_hostname(name).then(|| name.to_ascii_lowercase())
+            is_onion_hostname(name)
+                .then(|| name.strip_suffix('.').unwrap_or(name).to_ascii_lowercase())
         }
         SocksAddr::Ip(_) => None,
     }
@@ -78,6 +87,65 @@ mod tests {
         let v6 = SocksAddr::Ip("2001:db8::1".parse().unwrap());
         assert_eq!(onion_hostname(&v4), None);
         assert_eq!(onion_hostname(&v6), None);
+    }
+
+    #[test]
+    fn the_last_dot_of_a_full_name_is_not_handed_on() {
+        let addr = SocksAddr::Hostname(format!("{V3}.onion.").try_into().unwrap());
+        assert_eq!(onion_hostname(&addr), Some(format!("{V3}.onion")));
+    }
+
+    /// Whatever is let through, Arti itself takes for an onion service or
+    /// refuses: never for a host to reach through an exit relay, and never
+    /// for an address.
+    #[test]
+    fn made_up_names_reach_arti_as_onion_services_or_not_at_all() {
+        let plain = format!("{V3}.onion");
+        let shouted = format!("{}.ONION", V3.to_uppercase());
+        let under = format!("www.{V3}.onion");
+        let full = format!("{V3}.onion.");
+        let samples = [
+            plain.as_str(),
+            shouted.as_str(),
+            under.as_str(),
+            full.as_str(),
+            "example.com",
+            "node.example.onion.com",
+            "onion.example.com",
+            "127.0.0.1",
+            "::1",
+            "[2001:db8::1]",
+            "localhost",
+            "a.onion",
+            "-.onion",
+            "1.2.3.4.onion",
+        ];
+        veil_test_guard::fuzz::texts("onion name", &samples, |text| {
+            // What cannot be a name in a SOCKS request never gets here.
+            let Ok(name) = text.to_owned().try_into() else {
+                return;
+            };
+            let Some(host) = onion_hostname(&SocksAddr::Hostname(name)) else {
+                return;
+            };
+            assert!(host.ends_with(".onion"), "{host:?}");
+            assert!(
+                host.bytes().all(|b| b.is_ascii_lowercase()
+                    || b.is_ascii_digit()
+                    || b == b'-'
+                    || b == b'.'),
+                "{host:?}"
+            );
+            assert!(host.split('.').all(|label| !label.is_empty()), "{host:?}");
+            assert!(host.parse::<std::net::IpAddr>().is_err(), "{host:?}");
+            // Arti's own reading of it. Its `Debug` output is not a promise
+            // of Arti's; if it changes, this has to be asked another way.
+            if let Ok(address) = arti_client::TorAddr::from((host.as_str(), 18081)) {
+                let seen = format!("{address:?}");
+                assert!(seen.contains("Onion("), "{seen}");
+                assert!(!address.is_ip_address(), "{seen}");
+            }
+        });
     }
 
     #[test]

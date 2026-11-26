@@ -710,3 +710,263 @@ fn bridges_are_checked_before_anything_is_started() {
     let refused = parse_start(&config.to_string(), None).map(|_| ());
     assert_eq!(refused.unwrap_err().kind, ProblemKind::BadRequest);
 }
+
+/// One made-up text put where a request has a value, a different place
+/// each time, both as text and, if it happens to be JSON, as what it says.
+fn with_one_value_made_up(request: &Value, slots: &[&[&str]], case: usize, text: &str) -> String {
+    let mut request = request.clone();
+    let slot = slots[case % slots.len()];
+    let value = match (case / slots.len()) % 2 {
+        0 => Value::String(text.to_owned()),
+        _ => serde_json::from_str(text).unwrap_or_else(|_| Value::String(text.to_owned())),
+    };
+    let mut place = &mut request;
+    for key in &slot[..slot.len() - 1] {
+        place = &mut place[*key];
+    }
+    match slot[slot.len() - 1] {
+        // The first of a list.
+        "0" => place[0] = value,
+        key => place[key] = value,
+    }
+    request.to_string()
+}
+
+fn is_an_onion_node(node: &OnionNode) -> bool {
+    node.host().ends_with(".onion")
+        && node.port() != 0
+        && node.to_string().parse::<OnionNode>().ok().as_ref() == Some(node)
+}
+
+/// Whatever the app's side sends to start a session with: read as what it
+/// says or refused with a reason, and a refusal never repeats the phrase.
+#[test]
+fn made_up_start_requests_are_read_or_refused() {
+    use std::cell::Cell;
+
+    let dir = TempDir::new("ffi-made-up-start");
+    let mut request: Value = serde_json::from_str(&config_json(&dir, "restore")).unwrap();
+    request["bridges"] =
+        serde_json::json!(["192.0.2.83:80 0BAC39417268B96B9F514EF763FA6FBA1A788956"]);
+    request["sync_every_seconds"] = 60.into();
+    request["restore_height"] = 1_234.into();
+    request["transport_dir"] = Value::Null;
+    let slots: [&[&str]; 13] = [
+        &["network"],
+        &["source"],
+        &["wallet_library"],
+        &["wallet_path"],
+        &["tor"],
+        &["tor", "state_dir"],
+        &["tor", "cache_dir"],
+        &["nodes"],
+        &["nodes", "0"],
+        &["bridges"],
+        &["sync_every_seconds"],
+        &["restore_height"],
+        &["transport_dir"],
+    ];
+    // Words no message of the core's has in it.
+    let phrase = (0..16)
+        .map(|i| format!("zq7w{i}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let samples = [
+        "stagenet",
+        "restore",
+        "create",
+        "open",
+        "mainnet",
+        "0",
+        "1",
+        "-1",
+        "1.5",
+        "18446744073709551616",
+        "null",
+        "true",
+        "[]",
+        "{}",
+        r#"["2gzyxa5ihm7nsggfxnu52rck2vv4rvmdlkiu3zzui5du4xyclen53wid.onion:38089"]"#,
+        r#"["obfs4 192.0.2.55:38114 316E643333645F6D79216558614D3931657A5F5F cert=YXJl iat-mode=0"]"#,
+        r#"{"state_dir": "a", "cache_dir": "b"}"#,
+        "/tmp/veil",
+        phrase.as_str(),
+    ];
+    let case = Cell::new(0usize);
+    veil_test_guard::fuzz::texts("start request", &samples, |text| {
+        let number = case.replace(case.get() + 1);
+        // Every third time the made-up text is the phrase, or the whole
+        // request, instead of one value in it.
+        let (config, given) = match number % 3 {
+            0 => (request.to_string(), text.to_owned()),
+            1 if number % 2 == 1 => (text.to_owned(), phrase.clone()),
+            _ => (
+                with_one_value_made_up(&request, &slots, number / 3, text),
+                phrase.clone(),
+            ),
+        };
+        match parse_start(&config, Some(&given)) {
+            Ok((config, source)) => {
+                assert!(config.nodes.iter().all(is_an_onion_node));
+                assert!(!config.nodes.is_empty(), "a session with no node to ask");
+                assert_ne!(config.sync_every, Some(Duration::ZERO));
+                // Bridges that were asked for are there, with what they
+                // need, or the request was refused.
+                assert!(config.tor.bridges.transports_needed().is_ok());
+                if let WalletSource::Restore { phrase, .. } = source {
+                    assert!(matches!(phrase.words().count(), 16 | 25));
+                }
+            }
+            Err(problem) => {
+                assert!(
+                    matches!(
+                        problem.kind,
+                        ProblemKind::BadRequest
+                            | ProblemKind::InvalidNode
+                            | ProblemKind::InvalidBridge
+                            | ProblemKind::TransportMissing
+                            | ProblemKind::InvalidPhrase
+                    ),
+                    "{problem:?}"
+                );
+                assert!(!problem.detail.is_empty());
+                if number.is_multiple_of(3) {
+                    assert!(!problem.detail.contains("zq7"), "{problem:?}");
+                }
+            }
+        }
+    });
+}
+
+/// Whatever arrives as a command: one of the commands, with what it was
+/// given, or refused with a reason.
+#[test]
+fn made_up_commands_are_read_or_refused() {
+    use std::cell::Cell;
+
+    let send = serde_json::json!({"command": "prepare_send", "to": ADDRESS, "amount": "0.25"});
+    let nodes =
+        serde_json::json!({"command": "set_nodes", "nodes": [format!("{SYNC_HOST}:38089")]});
+    let slots: [&[&str]; 3] = [&["command"], &["to"], &["amount"]];
+    let node_slots: [&[&str]; 3] = [&["command"], &["nodes"], &["nodes", "0"]];
+    let whole_send = send.to_string();
+    let whole_nodes = nodes.to_string();
+    let samples = [
+        "sync",
+        "new_address",
+        "prepare_send",
+        "confirm_send",
+        "cancel_send",
+        "clear_send",
+        "set_nodes",
+        "all",
+        " all ",
+        "0.25",
+        "1,250",
+        "-1",
+        "null",
+        "[]",
+        ADDRESS,
+        whole_send.as_str(),
+        whole_nodes.as_str(),
+        r#"{"command": "sync"}"#,
+    ];
+    let case = Cell::new(0usize);
+    veil_test_guard::fuzz::texts("command", &samples, |text| {
+        let number = case.replace(case.get() + 1);
+        let command = match number % 3 {
+            0 => text.to_owned(),
+            1 => with_one_value_made_up(&send, &slots, number / 3, text),
+            _ => with_one_value_made_up(&nodes, &node_slots, number / 3, text),
+        };
+        let sent: Option<Value> = serde_json::from_str(&command).ok();
+        match parse_command(&command) {
+            Ok(Request::PrepareSend { to, amount }) => {
+                let sent = sent.unwrap();
+                // The address goes to the wallet library as it came; the
+                // amount is the one written.
+                assert_eq!(sent["to"], to.as_str());
+                let written = sent["amount"].as_str().unwrap().trim();
+                match amount {
+                    SendAmount::Everything => assert_eq!(written, "all"),
+                    SendAmount::Exact(amount) => assert_eq!(written.parse(), Ok(amount)),
+                }
+            }
+            Ok(Request::SetNodes(nodes)) => assert!(nodes.iter().all(is_an_onion_node)),
+            Ok(other) => {
+                let name = sent.unwrap()["command"].as_str().unwrap().to_owned();
+                let expected = match other {
+                    Request::Sync => "sync",
+                    Request::NewAddress => "new_address",
+                    Request::ConfirmSend => "confirm_send",
+                    Request::CancelSend => "cancel_send",
+                    Request::ClearSend => "clear_send",
+                    Request::PrepareSend { .. } | Request::SetNodes(_) => unreachable!(),
+                };
+                assert_eq!(name, expected);
+            }
+            Err(problem) => {
+                assert!(
+                    matches!(
+                        problem.kind,
+                        ProblemKind::BadRequest
+                            | ProblemKind::InvalidAmount
+                            | ProblemKind::InvalidNode
+                    ),
+                    "{problem:?}"
+                );
+                assert!(!problem.detail.is_empty());
+            }
+        }
+    });
+}
+
+/// The same through the interface itself, with bytes that need not even
+/// be text: an answer every time, in JSON, and nothing started.
+#[test]
+fn made_up_bytes_through_the_interface_get_an_answer() {
+    let command =
+        serde_json::json!({"command": "prepare_send", "to": ADDRESS, "amount": "0.25"}).to_string();
+    let bridges = serde_json::json!({
+        "bridges": ["192.0.2.83:80 0BAC39417268B96B9F514EF763FA6FBA1A788956", "# a note"],
+        "transport_dir": "/nowhere",
+    })
+    .to_string();
+    let samples: [&[u8]; 5] = [
+        command.as_bytes(),
+        bridges.as_bytes(),
+        br#"{"command": "sync"}"#,
+        br#"{"bridges": ["obfs4 192.0.2.55:38114 316E643333645F6D79216558614D3931657A5F5F cert=YXJl iat-mode=0"]}"#,
+        b"{}",
+    ];
+    let kinds = [
+        "bad_request",
+        "not_now",
+        "invalid_amount",
+        "invalid_node",
+        "invalid_bridge",
+        "transport_missing",
+    ];
+    veil_test_guard::fuzz::bytes("interface", &samples, 3_000, |bytes| {
+        // A C string ends at its first zero byte.
+        let end = bytes.iter().position(|b| *b == 0).unwrap_or(bytes.len());
+        let text = CString::new(&bytes[..end]).unwrap();
+        let null: *const VeilSession = ptr::null();
+        // SAFETY: a null handle and a valid C string.
+        let refused = take_json(unsafe { veil_session_command(null, text.as_ptr()) })
+            .expect("no session, so no command is taken");
+        assert!(
+            kinds.contains(&refused["kind"].as_str().unwrap()),
+            "{refused}"
+        );
+        assert!(refused["detail"].is_string());
+        // SAFETY: a valid C string.
+        if let Some(refused) = take_json(unsafe { veil_check_bridges(text.as_ptr()) }) {
+            assert!(
+                kinds.contains(&refused["kind"].as_str().unwrap()),
+                "{refused}"
+            );
+            assert!(refused["detail"].is_string());
+        }
+    });
+}

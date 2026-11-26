@@ -100,19 +100,21 @@ impl FromStr for Amount {
         if parts.next().is_some() {
             return Err(ParseAmountError::InvalidCharacter);
         }
-        if text.contains(',')
-            && fraction.len() == 3
-            && (1..=3).contains(&whole.len())
-            && !whole.starts_with('0')
-        {
-            return Err(ParseAmountError::Ambiguous);
-        }
         if whole.is_empty() && fraction.is_empty() {
             return Err(ParseAmountError::InvalidCharacter);
         }
         let all_digits = |part: &str| part.bytes().all(|b| b.is_ascii_digit());
         if !all_digits(whole) || !all_digits(fraction) {
             return Err(ParseAmountError::InvalidCharacter);
+        }
+        // Asked only of what is digits throughout: the advice to write a
+        // point is no help with `x,125`.
+        if text.contains(',')
+            && fraction.len() == 3
+            && (1..=3).contains(&whole.len())
+            && !whole.starts_with('0')
+        {
+            return Err(ParseAmountError::Ambiguous);
         }
         if fraction.len() > DECIMALS {
             return Err(ParseAmountError::TooManyDecimals);
@@ -266,5 +268,72 @@ mod tests {
         assert_eq!(max.checked_add(one), None);
         assert_eq!(Amount::ZERO.checked_sub(one), None);
         assert_eq!(one.checked_add(one), Some(Amount::from_atomic(2)));
+    }
+
+    /// What an amount is, written a second time and another way: with
+    /// numbers wide enough that nothing can overflow. `None` is a text
+    /// that is no amount.
+    fn by_the_book(text: &str) -> Option<u128> {
+        let text = text.trim();
+        let digits = |part: &str| part.bytes().all(|b| b.is_ascii_digit());
+        let (whole, fraction) = match text.find(['.', ',']) {
+            Some(at) => (&text[..at], &text[at + 1..]),
+            None => (text, ""),
+        };
+        if !digits(whole) || !digits(fraction) || whole.len() + fraction.len() == 0 {
+            return None;
+        }
+        if fraction.len() > 12 {
+            return None;
+        }
+        let whole = whole.trim_start_matches('0');
+        if whole.len() > 20 {
+            return None;
+        }
+        let whole: u128 = if whole.is_empty() {
+            0
+        } else {
+            whole.parse().unwrap()
+        };
+        let fraction: u128 = format!("{fraction:0<12}").parse().unwrap();
+        Some(whole * 1_000_000_000_000 + fraction).filter(|units| *units <= u128::from(u64::MAX))
+    }
+
+    #[test]
+    fn made_up_amounts_are_read_exactly_or_refused() {
+        let samples = [
+            "1",
+            "0.25",
+            "0,25",
+            ".5",
+            "5.",
+            " 2.5 ",
+            "0.000000000001",
+            "007.10",
+            "1.250",
+            "0,125",
+            "18446744.073709551615",
+            "18446744.073709551616",
+            "1,250",
+            "12345,678",
+        ];
+        veil_test_guard::fuzz::texts("amount", &samples, |text| {
+            let read = text.parse::<Amount>();
+            let expected = by_the_book(text);
+            match read {
+                Ok(amount) => {
+                    // Never an amount other than the one written.
+                    assert_eq!(Some(u128::from(amount.as_atomic())), expected);
+                    // And it is written back as what is read again.
+                    assert_eq!(amount.to_string().parse(), Ok(amount));
+                }
+                // The one thing refused that could be read.
+                Err(ParseAmountError::Ambiguous) => {
+                    assert!(text.contains(','));
+                    assert!(by_the_book(&text.replace(',', ".")).is_some());
+                }
+                Err(_) => assert_eq!(expected, None),
+            }
+        });
     }
 }
