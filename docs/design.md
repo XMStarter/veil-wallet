@@ -88,6 +88,11 @@ runtime.
 
 1. **Start.** Logo, Create wallet, Restore from recovery phrase. Restore
    opens a form for the phrase and, for 25-word phrases, the creation date.
+   Under the two buttons a line of words says how the Tor bridges stand
+   and leads to where they are set; the screen that asks for the password
+   of a wallet has the same line. If the settings file could not be read,
+   a screen with a warning and two buttons comes before either: set
+   bridges, or go on without.
 2. **Recovery phrase.** Sixteen numbered words, a warning, and a
    confirmation button. Followed by a check of three words.
 3. **Home.** Balance (tap to hide, which hides every amount on the

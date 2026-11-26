@@ -106,6 +106,13 @@ void main() {
       await capture(tester, '6-unlock-$language');
     });
 
+    testWidgets('settings that were lost, drawn ($language)', (tester) async {
+      final backend = FakeBackend(hasWallet: true, confirmed: true)
+        ..settingsAre(const AppSettings(lost: true));
+      await pumpApp(tester, language, backend: backend);
+      await capture(tester, '6-settings-lost-$language');
+    });
+
     testWidgets('home and receive, drawn ($language)', (tester) async {
       final backend = FakeBackend(hasWallet: true, confirmed: true);
       await pumpApp(tester, language, backend: backend);

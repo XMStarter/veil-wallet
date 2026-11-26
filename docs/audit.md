@@ -80,6 +80,7 @@ keeps one and the test that would fail if it did not. "Private chain" and
 | The listeners are on loopback. | `socks.rs`, `bind_loopback`: `127.0.0.1`, a port the system chooses; a peer that is not loopback is dropped. | `listener_is_on_loopback`; the `leaks` levels fail on a socket bound to every interface. |
 | No direct connection when Tor is not there. | `TorConnector::connect` refuses until Tor is ready. Apart from Arti's own connections into the Tor network, nothing in the process opens a socket to anywhere but loopback. | `nothing_is_asked_of_a_node_while_tor_is_not_ready`; with Tor: `refuses_onion_connect_before_tor_is_ready`. |
 | Bridges, when set, are the only way into Tor. | `veil_tor/src/bridges.rs`, `apply`: bridges switched on explicitly; every line and every transport program checked before Tor starts. | `made_up_bridge_lines_are_bridges_or_refused`; with Tor: `a_bridge_that_cannot_be_reached_is_not_gone_around`. |
+| Bridges that cannot be read are not taken for no bridges. | `app/lib/core/settings.dart`: a settings file that is there and cannot be read, or whose bridges cannot, gives settings marked `lost`; `app/lib/app.dart` then shows `SettingsLostScreen` in place of every screen that starts Tor. | `a made-up settings file costs settings and nothing else`; `app/test/bridges_before_test.dart`. |
 | A node is an onion service. | `veil_core/src/node.rs`, `OnionNode`; `veil_wallet::is_onion_host`. | `made_up_nodes_are_onion_services_with_a_port_or_refused`, `only_onion_nodes_are_accepted`. |
 | Synchronising and sending use different circuits, and different nodes where another answers. | Two listeners (`Purpose::Sync`, `Purpose::Broadcast`), the second with a circuit of its own for every connection (`service.rs`, `TorConnector::new`). | Private chain: `synchronises_through_one_listener_and_sends_through_the_other`. That the circuits differ inside Tor is Arti's `isolated_client` and is not tested. |
 | A test-only way around Tor cannot be in an app. | The `regtest` feature of `veil_wallet` and the `stand-in` feature of `veil_tor` do not compile in an optimised build (`compile_error!` in each `lib.rs`). | `check.sh`, `no_test_features_in_a_release`, after every build of the core for an app. |
@@ -286,9 +287,6 @@ Each of these is known to the project and not put right.
 - **A transaction built twice for the same coin gets new decoys the
   second time**, which shows the node which coin is spent
   (`docs/concept.md`, "Known limitations").
-- **A settings file that cannot be read takes the bridges with it**, and
-  the app then connects to Tor directly without saying so. Bridges can be
-  set only behind an open wallet, after Tor has started.
 - **A password change that fails after the keys file was rewritten** is
   reported as failed although the new password is in force.
 - **`VEIL_CORE_LIB` and `VEIL_WALLET_LIB`** name the two libraries to

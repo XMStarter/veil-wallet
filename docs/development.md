@@ -106,7 +106,7 @@ can be said:
 | What a node answers (`veil_core/src/tests.rs`) | The synchronisation ends, no block counts as scanned, the balance is nothing, and the program is still there. This one reaches the wallet library's own reading of a node. |
 | An address, and a phrase of the right length, in the wallet library (`veil_wallet/tests/offline.rs`) | Only a whole address passes; a phrase is refused and leaves no file, or is a wallet. |
 | A record of network calls (`veil_test_guard/src/trace.rs`) | It is read, and a connection outside is found after whatever stands before it. |
-| A code or a paste, a phrase, lines of bridges and nodes, the settings file (`app/test/made_up_test.dart`) | Nothing is added to an address or an amount; words are letters; a settings file of any content costs settings and nothing else. |
+| A code or a paste, a phrase, lines of bridges and nodes, the settings file (`app/test/made_up_test.dart`) | Nothing is added to an address or an amount; words are letters; a settings file of any content costs settings and nothing else, and its bridges are the ones written in it or are said to be lost, never quietly none. |
 
 The input comes from `veil_test_guard::fuzz` for Rust and
 `app/test/made_up.dart` for Dart, and from a seed. In the `offline` level

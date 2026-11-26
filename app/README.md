@@ -95,6 +95,12 @@ are made of and how a failure is brought back is in
 file next to it first, which then takes its place, so that the app ended
 in the middle leaves the old settings and not half a file.
 
+`test/bridges_before_test.dart` walks the two ways to the bridges that
+need no open wallet: the line under the buttons of the first screens, and
+the screen that comes before them when the settings file could not be
+read (`AppSettings.lost`, `SettingsLostScreen`). Nothing that starts Tor
+is within reach from that screen.
+
 Two things the tests of step 3.7 missed, and what they do about it now.
 The wallet that only pretends answered at once, so no screen was ever
 drawn while it worked: it can be told to take its time

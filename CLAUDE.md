@@ -979,6 +979,28 @@ ran after the core for the app was built, and all three builds with a
 test-only feature were refused. As Windows programs that step does not
 run: no app is built there. With that, step 5.3 has passed the owner's
 run; `docs/audit.md` itself is for the owner to read, which no run does.
+After that, by the owner's word, bridges before a wallet is open. Two
+things were wrong, and the second was found while looking at the first.
+A settings file that could not be read gave the app its defaults, which
+is no bridges, and Tor was then connected to directly without a word.
+And bridges could be set only in Settings, behind an open wallet, while
+making, restoring and opening a wallet all start Tor: on a network that
+blocks Tor there was no way to a wallet at all. Now the first screen and
+the screen that asks for a wallet's password each have a line of words
+that says how the bridges stand and leads to the screen where they are
+set, the same one Settings leads to; it needs no open wallet. And
+settings read from a file that is there and cannot be read, or whose
+bridges cannot, are marked as lost (`AppSettings.lost`): the app then
+shows a screen of its own in place of every screen that starts Tor
+(`SettingsLostScreen`, chosen in `app.dart`), with a warning and two
+buttons, set bridges or go on without. Either writes the settings again
+and the app goes on to its first screen. No file at all, which is how
+every installation begins, is no loss. Only the app changed: neither the
+core nor the wallet library. Six tests on the wallet that only pretends
+walk both ways, and the test of the settings file on made-up input now
+also holds that bridges are the ones written or are said to be lost,
+never quietly none. The `offline` level passes in a cloud session with
+them. Not seen on a phone or in a real window yet.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

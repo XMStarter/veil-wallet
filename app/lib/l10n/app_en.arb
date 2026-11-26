@@ -49,6 +49,18 @@
   "unlockWorking": "Opening the wallet…",
   "unlockWithoutBridges": "Open without bridges",
   "unlockBridgesNotice": "Tor could not be started through the bridges in the settings. Without them Tor is connected to directly, which a network that watches for Tor can see.",
+  "bridgesBefore": "Tor bridges: {state}",
+  "@bridgesBefore": {
+    "placeholders": {
+      "state": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsLostTitle": "Settings lost",
+  "settingsLostNotice": "The file with this app's settings could not be read in full. What could not be read is as it is at the start. If Tor was reached through bridges, they are gone, and without them Tor is connected to directly, which a network that watches for Tor can see. Nothing is connected to until you choose.",
+  "settingsLostSetBridges": "Set bridges",
+  "settingsLostGoOn": "Go on without bridges",
   "homeTitle": "Wallet",
   "homeBalanceHide": "Hide the balance",
   "homeBalanceShow": "Show the balance",

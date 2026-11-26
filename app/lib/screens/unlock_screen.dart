@@ -10,6 +10,8 @@ import 'home_screen.dart';
 import 'navigation.dart';
 import 'phrase_screen.dart';
 import 'problem_words.dart';
+import 'settings_lost_screen.dart';
+import 'settings_screen.dart';
 
 /// The first screen on a device that has a wallet: its password.
 class UnlockScreen extends StatefulWidget {
@@ -230,6 +232,17 @@ class _UnlockScreenState extends State<UnlockScreen> {
                 ? null
                 : () => _unlock(withoutBridges: true),
           ),
+        // Opening the wallet starts Tor, so this is where the bridges
+        // have to be within reach, not behind the open wallet only.
+        ValueListenableBuilder(
+          valueListenable: widget.backend.settings,
+          builder: (context, settings, _) => VeilQuietButton(
+            label: bridgesBefore(text, settings),
+            onPressed: _working
+                ? null
+                : () => open(context, BridgesScreen(backend: widget.backend)),
+          ),
+        ),
       ],
       children: [
         if (widget.notSaved != null) ...[

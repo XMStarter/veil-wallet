@@ -278,6 +278,9 @@ class FakeBackend implements WalletBackend {
   @override
   Future<void> loadSettings() async {}
 
+  /// What the settings are when the app starts, as if read from a file.
+  void settingsAre(AppSettings settings) => _settings.value = settings;
+
   @override
   Future<void> saveSettings(AppSettings settings) async {
     calls.add('save settings');

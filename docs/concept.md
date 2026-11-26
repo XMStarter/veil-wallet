@@ -228,11 +228,25 @@ if, at build time, Arti cannot run bridges on Android.
   file, encrypted with it: which node somebody uses and which
   transaction is theirs is nobody else's business. Language, theme,
   auto-lock and bridges are kept in a plain file: they are no secret, and
-  bridges have to be known before a wallet is open.
+  bridges have to be known before a wallet is open. The file is replaced
+  whole when it is saved, so the app being ended in the middle leaves the
+  old one.
+- **Bridges are within reach before Tor starts.** Making a wallet,
+  restoring one and opening one all start Tor, so the screens they begin
+  on lead to the bridges: on a network that blocks Tor there would
+  otherwise be no way to a wallet at all.
+- **Settings that cannot be read are not taken for no bridges.** If the
+  settings file is there and cannot be read, or its bridges cannot, the
+  app does not know whether there were bridges, and without them Tor is
+  connected to directly. It says so on a screen of its own, before any
+  screen that starts Tor, and goes on only when the user has set bridges
+  again or said that there are to be none. No file at all is how every
+  installation begins, and nothing is said then.
 
 ## Screens
 
-1. **Start:** Create wallet, or Restore from recovery phrase.
+1. **Start:** Create wallet, or Restore from recovery phrase, and a
+   quiet way to the Tor bridges.
 2. **Home:** balance, sync status, Tor status, Receive and Send buttons,
    recent activity.
 3. **Receive:** QR code and address.
@@ -358,16 +372,6 @@ run where is set out in [development.md](development.md).
   failure, the node is asked twice, and the coin is what the two requests
   have in common. The node learns which earlier transaction the money
   came from. It learns no address and no amount.
-- **A settings file that cannot be read takes the bridges with it, and
-  the app does not say so.** Language, theme, auto-lock and bridges are
-  kept in a plain file, because bridges have to be known before a wallet
-  is open. A file that is damaged reads as no settings: the app starts
-  with its defaults, which is without bridges, and Tor then connects
-  directly the next time the wallet is opened. The file is replaced whole
-  when it is saved, so the app being ended in the middle no longer
-  damages it; a fault of the disk or an edit by hand still can. Bridges
-  are set in Settings, which is behind an open wallet, so there is no way
-  yet to put them back before Tor has started.
 - **Polyseed is not supported by the official Monero GUI wallet.** Feather,
   Cake, and several other wallets do support it.
 
