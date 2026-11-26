@@ -64,6 +64,12 @@ abstract class WalletBackend {
     bool withoutBridges = false,
   });
 
+  /// Whether the wallet that is open reaches Tor through bridges. Then
+  /// "Tor cannot reach its network" may mean a bridge that does not
+  /// answer, on a device whose own connection is in order, and the
+  /// screens say so. False while no wallet is open.
+  bool get viaBridges;
+
   /// How the app is set to behave. Loaded by [loadSettings].
   ValueListenable<AppSettings> get settings;
 

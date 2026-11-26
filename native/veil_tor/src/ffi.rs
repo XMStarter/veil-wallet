@@ -178,6 +178,7 @@ mod tests {
 
     #[test]
     fn null_handle_reads_as_not_running() {
+        // SAFETY: null is accepted everywhere.
         unsafe {
             assert_eq!(veil_tor_state(ptr::null()), VEIL_TOR_FAILED);
             assert_eq!(veil_tor_bootstrap_percent(ptr::null()), 0);
@@ -191,6 +192,7 @@ mod tests {
     #[test]
     fn start_rejects_missing_paths() {
         let empty = CString::new("").unwrap();
+        // SAFETY: null, or valid strings that outlive the calls.
         unsafe {
             assert!(veil_tor_start(ptr::null(), ptr::null()).is_null());
             assert!(veil_tor_start(empty.as_ptr(), empty.as_ptr()).is_null());
@@ -206,6 +208,8 @@ mod tests {
         let state = CString::new(root.join("state").to_str().unwrap()).unwrap();
         let cache = CString::new(root.join("cache").to_str().unwrap()).unwrap();
 
+        // SAFETY: valid strings that outlive the calls, and a handle from
+        // `veil_tor_start` that is used until it is stopped and not after.
         unsafe {
             let handle = veil_tor_start(state.as_ptr(), cache.as_ptr());
             assert!(!handle.is_null());

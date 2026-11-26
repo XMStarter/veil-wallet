@@ -260,6 +260,7 @@ class FakeBackend implements WalletBackend {
       );
     }
     startedWith = source;
+    _viaBridges = !withoutBridges && _settings.value.bridges.isNotEmpty;
     restoredPhrase = phrase;
     restoredHeight = restoreHeight;
     this.password = password;
@@ -267,6 +268,10 @@ class FakeBackend implements WalletBackend {
     if (source == WalletSource.restore) confirmed = true;
     _state.value = _newSession(++_revision);
   }
+
+  @override
+  bool get viaBridges => _viaBridges;
+  bool _viaBridges = false;
 
   /// Whether the bridges in the settings have stopped working.
   bool bridgesBroken = false;
@@ -277,6 +282,9 @@ class FakeBackend implements WalletBackend {
 
   @override
   Future<void> loadSettings() async {}
+
+  /// What the settings are when the app starts, as if read from a file.
+  void settingsAre(AppSettings settings) => _settings.value = settings;
 
   @override
   Future<void> saveSettings(AppSettings settings) async {
@@ -531,6 +539,7 @@ class FakeBackend implements WalletBackend {
   @override
   Future<Problem?> close() async {
     calls.add('close');
+    _viaBridges = false;
     _state.value = null;
     final broken = breakClose;
     breakClose = null;

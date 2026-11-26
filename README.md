@@ -48,6 +48,7 @@ fresh address.
 - [Concept](docs/concept.md): what Veil is and how it protects the user
 - [Design](docs/design.md): visual language and screens
 - [Development](docs/development.md): how the code is written, tested, and released
+- [For an audit](docs/audit.md): what is in scope, what Veil defends against and what it does not, and where each promise is kept
 - [Disclaimer](DISCLAIMER.md)
 
 ## License

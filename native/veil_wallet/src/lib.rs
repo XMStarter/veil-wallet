@@ -17,6 +17,14 @@
 //! A [`Wallet`] is not thread-safe. Give it to one thread and talk to that
 //! thread.
 
+// The `regtest` feature lets a wallet connect straight to a daemon on this
+// machine, around Tor, and accept a private chain. It is for tests, and
+// tests are built with debug assertions. An optimised build, which is what
+// an app is made of, does not compile with it: "never enabled in the app"
+// is then something the compiler says and not only a comment.
+#[cfg(all(feature = "regtest", not(debug_assertions)))]
+compile_error!("the `regtest` feature is for tests; an optimised build must not have it");
+
 mod amount;
 mod error;
 mod seed;

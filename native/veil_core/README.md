@@ -268,5 +268,5 @@ runner they fail before starting anything.
   unknown, instead of building a new one once it is settled.
 - Bridges changed while a wallet is open. They are given at the start, so
   new ones take effect the next time the wallet is opened.
-- The programs bridges need. They are looked for among those installed;
-  none comes with Veil yet.
+- The programs bridges need on a desktop. They are looked for among
+  those installed; only the app for Android brings one along.

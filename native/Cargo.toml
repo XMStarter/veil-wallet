@@ -7,3 +7,9 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 publish = false
+
+# Every `unsafe` block says why it is sound, in a comment that begins with
+# `SAFETY:`. The lint makes that a rule: `check.sh` treats a warning as an
+# error.
+[workspace.lints.clippy]
+undocumented_unsafe_blocks = "warn"

@@ -12,6 +12,17 @@ How Veil is written, reviewed, tested, and released.
 - **No secrets in the repository.** Signing keys, passwords, and real wallet
   files never get committed.
 - **No real funds in tests.** Tests use a local chain or the Monero stagenet.
+- **No way around Tor in an app.** Tests have two: a wallet that goes
+  straight to a daemon on the machine (the `regtest` feature) and
+  listeners that lead to local ports instead of into Tor (`stand-in`).
+  Neither compiles in an optimised build, which is what an app is made
+  of, and `check.sh` shows that after it has built the core for an app.
+- **Every `unsafe` block says why it is sound**, in a comment that begins
+  with `SAFETY:`. The lint that asks for it is on for the whole workspace.
+
+[audit.md](audit.md) is where somebody who is to examine Veil starts. It
+names the code that keeps each promise and the test that shows it, so a
+change to one of those belongs in that document too.
 
 ## Repository workflow
 
@@ -52,7 +63,7 @@ machine. The log of that run is the evidence that the step is done.
 | `regtest` | The wallet on a private chain, alone and behind a stand-in for Tor, with and without lost connections. Starts a Monero daemon. | The owner's machine |
 | `tor` | The tests that start the real Tor client, a connection to an onion service, and a new wallet synchronising with a public node. | The owner's machine |
 | `stagenet` | The command-line tool: a new wallet synchronises with a public stagenet node through Tor. | The owner's machine |
-| `bridges` | Tor through obfs4 and Snowflake bridges, a bridge that does not exist, and the tool synchronising through bridges. | The owner's machine |
+| `bridges` | Tor through obfs4 and Snowflake bridges, through obfs4 again on the same files after Snowflake, a bridge that does not exist, and the tool synchronising through bridges. | The owner's machine |
 | `leaks` | The Rust tests of `offline` once more, with every network call of theirs recorded: none may name an address outside the machine. Needs the wallet library and `strace`; Linux only. | Any Linux machine with the wallet library |
 | `leaks-chain` | The same for the tests of `regtest`. Starts a Monero daemon, whose own calls are left out. | The owner's machine |
 | `fuzz` | The tests on made-up input once more, each for a minute and from a seed of this run's own. Uses the wallet library when it has been built. | Any machine; not hosted CI |
@@ -95,7 +106,7 @@ can be said:
 | What a node answers (`veil_core/src/tests.rs`) | The synchronisation ends, no block counts as scanned, the balance is nothing, and the program is still there. This one reaches the wallet library's own reading of a node. |
 | An address, and a phrase of the right length, in the wallet library (`veil_wallet/tests/offline.rs`) | Only a whole address passes; a phrase is refused and leaves no file, or is a wallet. |
 | A record of network calls (`veil_test_guard/src/trace.rs`) | It is read, and a connection outside is found after whatever stands before it. |
-| A code or a paste, a phrase, lines of bridges and nodes, the settings file (`app/test/made_up_test.dart`) | Nothing is added to an address or an amount; words are letters; a settings file of any content costs settings and nothing else. |
+| A code or a paste, a phrase, lines of bridges and nodes, the settings file (`app/test/made_up_test.dart`) | Nothing is added to an address or an amount; words are letters; a settings file of any content costs settings and nothing else, and its bridges are the ones written in it or are said to be lost, never quietly none. |
 
 The input comes from `veil_test_guard::fuzz` for Rust and
 `app/test/made_up.dart` for Dart, and from a seed. In the `offline` level

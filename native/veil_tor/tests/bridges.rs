@@ -73,17 +73,22 @@ fn lines(variable: &str, builtin: &[&str]) -> Vec<String> {
 }
 
 fn start(name: &str, bridges: Bridges) -> (PathBuf, TorService) {
-    // Every test checks this first; again here for a test added later.
-    veil_test_guard::refuse_in_hosted_ci("connecting to the Tor network");
     let root = std::env::temp_dir().join(format!("veil-tor-bridges-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
-    let service = TorService::start(TorConfig {
+    let service = start_in(&root, bridges);
+    (root, service)
+}
+
+/// Starts Tor on the files in `root`, whatever an earlier Tor left there.
+fn start_in(root: &std::path::Path, bridges: Bridges) -> TorService {
+    // Every test checks this first; again here for a test added later.
+    veil_test_guard::refuse_in_hosted_ci("connecting to the Tor network");
+    TorService::start(TorConfig {
         state_dir: root.join("state"),
         cache_dir: root.join("cache"),
         bridges,
     })
-    .expect("service starts");
-    (root, service)
+    .expect("service starts")
 }
 
 fn wait_until_ready(service: &TorService) {
@@ -161,6 +166,28 @@ fn an_onion_service_answers(port: u16) -> bool {
     false
 }
 
+/// Asks for an onion service the way a wallet asks for its node: again,
+/// until one answers or `limit` is over. A Tor that starts on a directory
+/// it has kept calls itself ready before its bridges are of use to it,
+/// and refuses what it is asked for until then.
+fn an_onion_service_answers_within(port: u16, limit: Duration) -> bool {
+    const PAUSE: Duration = Duration::from_secs(5);
+    let started = Instant::now();
+    let mut asked = 0;
+    loop {
+        asked += 1;
+        if an_onion_service_answers(port) {
+            println!("answered at try {asked}, after {:.0?}", started.elapsed());
+            return true;
+        }
+        if started.elapsed() + PAUSE > limit {
+            println!("no answer in {asked} tries, {:.0?}", started.elapsed());
+            return false;
+        }
+        std::thread::sleep(PAUSE);
+    }
+}
+
 fn bootstrap_and_reach_an_onion_service(name: &str, bridges: Bridges) {
     let (root, service) = start(name, bridges);
     wait_until_ready(&service);
@@ -200,6 +227,58 @@ fn snowflake_carries_tor() {
         }],
     };
     bootstrap_and_reach_an_onion_service("snowflake", bridges);
+}
+
+/// The way it went wrong on a phone: Tor on the same files through obfs4,
+/// then through Snowflake, then through obfs4 again. Arti keeps the
+/// bridges it has used in its state and does not take one back that was
+/// out of the configuration in between (`src/state.rs`), so the third Tor
+/// was left with the bridges that had never answered.
+#[test]
+#[ignore = "needs the Tor network, an obfs4 program and a Snowflake program"]
+fn bridges_that_are_set_again_carry_tor_again() {
+    veil_test_guard::refuse_in_hosted_ci("connecting to the Tor network");
+    let obfs4 = || Bridges {
+        lines: lines("VEIL_TEST_OBFS4_BRIDGES", BUILTIN_OBFS4),
+        transports: vec![TransportProgram {
+            protocols: vec!["obfs4".into()],
+            path: installed(&["lyrebird", "obfs4proxy"]),
+            arguments: Vec::new(),
+        }],
+    };
+    let snowflake = Bridges {
+        lines: lines("VEIL_TEST_SNOWFLAKE_BRIDGES", BUILTIN_SNOWFLAKE),
+        transports: vec![TransportProgram {
+            protocols: vec!["snowflake".into()],
+            path: installed(&["snowflake-client", "lyrebird"]),
+            arguments: Vec::new(),
+        }],
+    };
+
+    // The second and third Tor find the directory the first one kept and
+    // are ready at once, before they have a bridge they can use; what
+    // matters is that they come to have one. A wallet asks again every
+    // minute, so this is three of its tries.
+    const LONG_ENOUGH: Duration = Duration::from_secs(180);
+
+    let root = std::env::temp_dir().join(format!("veil-tor-bridges-again-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    for (through, bridges) in [
+        ("obfs4", obfs4()),
+        ("Snowflake", snowflake),
+        ("obfs4 again", obfs4()),
+    ] {
+        println!("through {through}");
+        let service = start_in(&root, bridges);
+        wait_until_ready(&service);
+        assert!(
+            an_onion_service_answers_within(service.socks_port(Purpose::Sync), LONG_ENOUGH),
+            "no onion service answered through {through} in {LONG_ENOUGH:?}: {:?}",
+            service.status()
+        );
+        service.stop();
+    }
+    let _ = std::fs::remove_dir_all(root);
 }
 
 /// With a bridge set, Tor has no other way in. On this machine a direct

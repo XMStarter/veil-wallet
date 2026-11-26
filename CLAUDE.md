@@ -4,6 +4,9 @@ Veil is a hot Monero wallet for desktop and Android. Read
 [docs/concept.md](docs/concept.md) before making product decisions,
 [docs/design.md](docs/design.md) before touching the interface, and
 [docs/development.md](docs/development.md) before committing.
+[docs/audit.md](docs/audit.md) names, for each thing Veil promises, the
+code that keeps it and the test that shows it: when one of those changes,
+that document changes with it.
 
 ## Language
 
@@ -28,6 +31,9 @@ that cannot lose the user's funds.
 - Do not commit secrets, signing keys, or wallet files.
 - Do not use real funds in tests. Use a local chain or stagenet.
 - Do not add settings that let the user weaken privacy defaults.
+- Do not make the test-only features (`regtest` in `veil_wallet`,
+  `stand-in` in `veil_tor`) compile in an optimised build. They are ways
+  around Tor.
 - Do not add a CI job that connects to the Tor network or starts a Monero
   daemon, on GitHub's runners or on a self-hosted one. CI compiles and runs
   offline tests, nothing else. The full list of what a workflow may do is in
@@ -56,7 +62,9 @@ that cannot lose the user's funds.
   - `veil_tor`: embedded Tor client (Arti) with onion-only loopback SOCKS
     listeners and a C interface. It reads the loss of its network from
     the connections it is asked for (`State::Lost`); its README says how,
-    and what that cannot tell.
+    and what that cannot tell. With bridges it keeps Tor's state in a
+    folder of its own that starts empty when the bridges change
+    (`state.rs`), because Arti does not take a bridge back.
   - `veil_wallet`: wallet operations over the Monero wallet library. Its
     README lists library behaviours the crate guards against; read it
     before changing `wallet.rs`.
@@ -134,7 +142,8 @@ that cannot lose the user's funds.
   `app/README.md` and `docs/design.md` before changing it. Colours,
   typefaces and sizes come from `app/lib/theme`; texts from the `.arb`
   files, always in both languages.
-- `docs/`: concept, design, development rules.
+- `docs/`: concept, design, development rules, and what an audit starts
+  from.
 - `.github/workflows`: hosted CI, builds and offline tests only. Pin
   actions to commit hashes. It installs Flutter with `check.sh flutter`,
   not with an action. The Windows job keeps the app it built as the
@@ -936,7 +945,224 @@ their fixed seed. The `offline` and `regtest` levels were not run again
 on that commit on the owner's machine; it differs from `4a9ce46` in that
 test, in the tool that makes the input, and in documents, and the
 `offline` level passed on it in a cloud session. With that, step 5.2
-has passed the owner's run on both systems.
+has passed the owner's run on both systems. Hosted CI passed on both
+systems, the app's tests on made-up input running as Windows programs
+there for the first time, and step 5.2 was merged on the owner's word.
+Step 5.3, what an external audit needs, is written: `docs/audit.md`. It
+says what Veil is made of and what of it is Veil's own, with the pinned
+versions of what is not; for each promise of the concept the code that
+keeps it and the test that would fail if it did not; whom the wallet
+defends against and whom it does not; where input from outside comes in;
+the `unsafe` code by file; where secrets live and for how long; what
+lies on the disk and who can read it; how to build it and run its checks;
+what is known to be weak; what was never tried; and where we would look
+first. Every statement in it was held against the code, and several did
+not hold as first written and were put right. Two rules it names were
+only comments before and are checked now. The two features that are ways
+around Tor for tests, `regtest` in `veil_wallet` and `stand-in` in
+`veil_tor`, do not compile in an optimised build (`compile_error!`), and
+`check.sh` shows that after each build of the core for an app
+(`no_test_features_in_a_release`). And every `unsafe` block has a comment
+that says why it is sound: clippy's `undocumented_unsafe_blocks` is on
+for the workspace; three blocks in tests of `veil_tor` had none. Written
+down for the first time while doing this: the seven functions of
+`veil_tor`'s own C interface are exported from the app's core library,
+which does not call them; any program on the machine can use the two
+SOCKS listeners of an open wallet to reach onion services; and nothing
+checks the pinned packages against a list of known vulnerabilities. None
+of the three is changed. The audit itself is the owner's to commission,
+and the document has no address to send findings to. Tried in a cloud
+session: the `offline` level, with the new step in it, and `./check.sh
+--android offline`. The new step runs where a core for an app is built:
+on the owner's machine and in hosted CI's Windows job, where it has not
+run yet. On commit `c54d0de` the owner's run passed at the `offline`
+level as Linux and as Windows programs. As Linux programs the new step
+ran after the core for the app was built, and all three builds with a
+test-only feature were refused. As Windows programs that step does not
+run: no app is built there. With that, step 5.3 has passed the owner's
+run; `docs/audit.md` itself is for the owner to read, which no run does.
+After that, by the owner's word, bridges before a wallet is open. Two
+things were wrong, and the second was found while looking at the first.
+A settings file that could not be read gave the app its defaults, which
+is no bridges, and Tor was then connected to directly without a word.
+And bridges could be set only in Settings, behind an open wallet, while
+making, restoring and opening a wallet all start Tor: on a network that
+blocks Tor there was no way to a wallet at all. Now the first screen and
+the screen that asks for a wallet's password each have a line of words
+that says how the bridges stand and leads to the screen where they are
+set, the same one Settings leads to; it needs no open wallet. And
+settings read from a file that is there and cannot be read, or whose
+bridges cannot, are marked as lost (`AppSettings.lost`): the app then
+shows a screen of its own in place of every screen that starts Tor
+(`SettingsLostScreen`, chosen in `app.dart`), with a warning and two
+buttons, set bridges or go on without. Either writes the settings again
+and the app goes on to its first screen. No file at all, which is how
+every installation begins, is no loss. Only the app changed: neither the
+core nor the wallet library. Six tests on the wallet that only pretends
+walk both ways, and the test of the settings file on made-up input now
+also holds that bridges are the ones written or are said to be lost,
+never quietly none. The `offline` level passes in a cloud session with
+them. With the APK built from commit `d7d74f2` the owner sent one
+picture from the phone and three answers: Home said "Tor has lost its
+connection" and that the device's internet connection should be checked,
+with Wi-Fi shown as connected; bridges were set; it was right after the
+wallet was opened; whether it went away was not looked at. Which bridges
+and where they were set was not said, so the picture does not show that
+the new line on the first screens was used. The reading: Tor reads the
+loss of its network from a connection that fails on the way to the first
+relay, with bridges the first relay is a bridge, and some of the obfs4
+bridges built into Tor Browser do not answer. That a bridge was the
+cause was not seen. The state is left as it is, since the two cannot be
+told apart from where it is read; the words are changed. A wallet opened
+through bridges (`WalletBackend.viaBridges`) now says that Tor cannot
+reach its network through the bridges that are set and that one may not
+be answering, on Home and on Send; without bridges the words are as
+before. Not known: whether the message goes away by itself there within
+a minute or two, as it should when the next connection gets through.
+The owner then said that bridges had worked before the last change and
+do not now, and, given an APK with the app as it was before the bridges
+change (the app of commit `2e11c9d` on the same native parts), that it
+does not work with that one either. So the change of the app is not the
+cause. What "does not work" looked like, how long it was waited, and
+which bridges were set was not said. Looked at in a cloud session: no
+code on the way of Tor or of bridges has changed since the APK on which
+bridges worked at step 4.6 (`ecc8c94`) but for the last dot of an onion
+name being taken off, and the transport program in the new APKs is the
+same file byte for byte. And one of the four obfs4 bridges the tests and
+the owner use, `212.83.43.95:443`, is no longer among those the Tor
+Project serves (`bridges.torproject.org/moat/circumvention/builtin`,
+read on 26 November 2026); the other three and both Snowflake bridges
+still are. Whether the three answer from the owner's network is not
+known, and nothing in a cloud session can tell: the `bridges` level on
+the owner's machine can, with the same lines and the same code. The
+list in `native/veil_tor/tests/bridges.rs` is left as it is until that
+run has been seen, so that it tries what the phone tried.
+The owner ran the `bridges` level on commit `c54d0de` and it passed:
+Tor was ready through the four obfs4 lines in 22 seconds and through
+Snowflake in 28, an onion service answered through each, and the tool
+synchronised a new wallet through the obfs4 bridges in 951 seconds. So
+the bridges answer from the owner's network, the one that is no longer
+served among them or not, and the code carries Tor through them on
+Linux. On the phone, by the owner's word and a second picture: without
+bridges everything works, and with obfs4 and with Snowflake alike Home
+says that Tor has lost its connection, with the older APK too. Both
+transports failing on the phone and neither on the desktop points at
+what only the phone has: the transport program the package brings,
+which the desktop does not use (it has the system's `obfs4proxy` and
+`snowflake-client`), and how Android lets it be started. Why it worked
+there at step 4.6 and does not now is not known. The app shows only
+that the way to the first relay failed, not why; the owner was given an
+APK built from a change that is not in the repository, which puts the
+whole of Arti's error on Home, to read the reason from.
+What it showed on the phone, with bridges set: Arti could not download
+the onion service's descriptor because it could build no circuit, and
+the reason for every attempt was the same, within three thousandths of
+a second: `AllGuardsDown`. Of five bridges four were counted as not
+running, which is what Arti calls a guard that failed a moment ago, and
+the fifth was running but "not suitable", which for a circuit of
+several hops means that Arti has no descriptor of that bridge. Arti
+gives that the kind that `veil_tor` reads as a lost network, so the
+state on Home is as written; the words about the device's connection
+were what was wrong. What it did not show is why the four failed: Arti
+keeps that for its log, and `veil_tor` sets up no logger. So a transport
+program that does not start is neither shown nor ruled out. The phone's
+clock was right to within seconds, by the time in the error and the
+time of the owner's message. A second such APK, again from a change
+that is not in the repository, keeps what Arti logs about transports,
+channels, guards and circuits and shows it with the error.
+The owner sent thirty-four lines of that log, from the thirtieth second
+of a session to the fifty-first; what came before them did not arrive.
+They show Arti opening a channel "via obfs4" to one bridge
+(`146.57.248.225:22`) three times, ten seconds apart, the first ending
+in `ChanTimeout`, and every other circuit refused for want of a guard.
+So Arti does go to the transport program, and a channel through it gets
+no answer within Arti's ten seconds. Whether the program was started,
+is running, or is itself waiting for the bridge, the lines do not say:
+its start is in the part that did not arrive, and it keeps a log of its
+own only when told to. A third such APK tells it to (`-enableLogging
+-logLevel DEBUG`), shows the end of that log first, and leaves out the
+line Arti repeats for every circuit it cannot build.
+What that one showed, in a text that arrived whole: the transport
+program is started from the package, says "accepting connections" within
+a fifth of a second, and Arti takes it up; so starting it on the phone
+was never the fault. And Arti loads five bridges from its state, two of
+them ones that had worked, and takes one as usable: the one bridge it had
+never learned more about than its line, `146.57.248.225:22`, which does
+not answer from the phone. The other four it does not try at all. Read
+in Arti's code, and then shown on it: a bridge that is taken out of the
+configuration is marked as no longer listed; put back, it loses the mark
+only if Arti had never read its description, because with the
+description once read Arti wants it again first, and asks only for the
+descriptions of bridges without the mark (`tor-guardmgr` 0.48,
+`Guard::update_from_universe`). A test added to a copy of that crate
+(`native/veil_tor/upstream/tor-guardmgr-bridge-put-back.patch`) says it
+in two lines: never described, put back, usable; described, put back,
+not usable. That fits everything the phone did: obfs4 and then Snowflake
+worked at step 4.6; obfs4 set again left only the bridge that had never
+worked; Snowflake set again left none; the older APK failed on the same
+files; without bridges everything worked; and the desktop's tests, which
+start from empty folders, passed. Whether it is all of the cause the
+phone has still to show. No report of it was found, and none was made to
+the Tor Project. Veil goes around it: with bridges Tor keeps its state in
+a folder of its own (`<state_dir>/bridged`, `veil_tor/src/state.rs`),
+beside a note of the bridge lines it belongs to, and the folder starts
+empty when the lines are others, in whatever order. Three offline tests
+hold that; `bridges_that_are_set_again_carry_tor_again` walks the phone's
+way, obfs4, Snowflake, obfs4 on the same files, at the `bridges` level
+and has not run.
+The offline level passed with it in a cloud session, and the code was
+linted for Windows and for Android. With the APK built from commit
+`05b8dd9`, installed over the one before, the owner reported that bridges
+work again on the phone, obfs4 and Snowflake. Asked for were obfs4, then
+Snowflake, then obfs4 again, each after the wallet was closed and opened;
+whether obfs4 was set a second time was not said. Not run on the owner's
+machine with it: anything. The three tests of the folder have not run as
+Windows programs, and the test on the real network has not run at all.
+The owner then ran `./accept.sh --no-app offline bridges` on commit
+`fecd2a3`. The `offline` level passed as Linux programs, the three tests
+of the folder among them. The `bridges` level failed in the new test and
+nowhere else, and for the test's own haste: its first Tor, through
+obfs4, was ready in 14 seconds and an onion service answered; its
+second, through Snowflake on the same files, called itself ready after 4
+seconds, having found the directory the first had kept, and refused both
+connections asked of it at once with the answer that reads as a lost
+network. The test asked once and gave up; it never came to obfs4 again.
+The two older tests, each from empty folders, passed in the same run,
+Snowflake ready in 11 seconds. The reading, not seen in a log: with a
+directory already there Arti is ready before it has the description of a
+bridge it has not used before, and until then it has no bridge to build
+a circuit with. A wallet asks again every minute, so in the app this is
+"Tor cannot reach its network through the bridges" for up to a minute
+after bridges were changed; whether it also shows at every start with
+the same bridges is not known. The test now asks again every five
+seconds for three minutes, as a wallet would, and prints at which try it
+was answered, which will say how long that state lasts. Because the run
+stopped there, nothing ran as Windows programs.
+On commit `215f5cb` the same run passed: the `offline` level as Linux
+and as Windows programs, the three tests of the folder both ways, and
+the `bridges` level. In the new test Tor was ready through obfs4 in 15
+seconds and answered at the first try; through Snowflake on the same
+files it was ready in 4 seconds, refused the first try's two connections
+and carried the second try's, 18 seconds after it was ready; through
+obfs4 again it was ready in 3 seconds and answered at the first try. So
+the way that failed on the phone works on Linux with the folder of its
+own, and the state in which Tor is ready and of no use lasted under 18
+seconds there, once, with bridges it had not used. In the app that
+would be the words about bridges on Home until the next
+synchronisation, a minute later; the owner has not seen them on the
+phone, where everything works by the owner's word. Nothing is changed
+for it; `native/veil_tor/README.md` has it. In the same run the older
+test through obfs4 took 64 seconds to be ready, with Arti saying once
+that it could not make progress, where it took 19 an hour before; the
+tool synchronised a new wallet through obfs4 in 543 seconds. The list
+of obfs4 bridges in the two tests still has `212.83.43.95:443`, which
+the Tor Project no longer serves: the level passes with it, and it is
+to be replaced when the level fails for it (`VEIL_TEST_OBFS4_BRIDGES`
+names other lines meanwhile). With that, the bridges before a wallet,
+the words for a lost Tor with bridges, and the folder of its own have
+passed the owner's run on both systems and work on the phone. Which of
+the new screens the owner used there was not said. They and step 5.3
+are on one branch and in no pull request yet.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

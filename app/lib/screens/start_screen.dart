@@ -9,9 +9,13 @@ import '../widgets/veil_column.dart';
 import 'create_screen.dart';
 import 'navigation.dart';
 import 'restore_screen.dart';
+import 'settings_lost_screen.dart';
+import 'settings_screen.dart';
 
 /// The first screen on a device without a wallet: the logo, and the two
-/// ways to a wallet.
+/// ways to a wallet. Both start Tor, so the bridges Tor is to be reached
+/// through can be set from here: on a network that blocks Tor there would
+/// otherwise be no way to a wallet at all.
 class StartScreen extends StatelessWidget {
   const StartScreen({super.key, required this.backend});
 
@@ -49,6 +53,13 @@ class StartScreen extends StatelessWidget {
               label: text.startRestore,
               primary: false,
               onPressed: () => open(context, RestoreScreen(backend: backend)),
+            ),
+            ValueListenableBuilder(
+              valueListenable: backend.settings,
+              builder: (context, settings, _) => VeilQuietButton(
+                label: bridgesBefore(text, settings),
+                onPressed: () => open(context, BridgesScreen(backend: backend)),
+              ),
             ),
           ],
         ),

@@ -712,6 +712,33 @@ app_side() {
   bundle_native_parts
 }
 
+# The two features that are for tests only, a wallet that goes straight to
+# a daemon on this machine (`regtest`) and listeners that lead to local
+# ports instead of into Tor (`stand-in`), must not be something an app can
+# be built with. The crates refuse to compile with them in an optimised
+# build; this shows that they still do, right after the core for the app
+# was built, when everything they need is compiled already.
+no_test_features_in_a_release() {
+  local spec
+  for spec in "veil_wallet regtest" "veil_tor stand-in" "veil_core regtest"; do
+    set -- $spec
+    echo
+    echo "--- cargo build -p $1 --release --features $2 --locked (has to be refused)"
+    local said
+    if said="$(cargo build -p "$1" --release --features "$2" --locked 2>&1)"; then
+      echo "error: $1 was built for release with its test-only feature '$2'." >&2
+      return 1
+    fi
+    # Refused for this reason, and not because something else is broken.
+    if ! grep -q "feature is for tests" <<<"$said"; then
+      echo "$said"
+      echo "error: that build failed, but not for its test-only feature." >&2
+      return 1
+    fi
+    echo "refused, as it has to be"
+  done
+}
+
 # Puts the core next to the app that was just built, so that the app can be
 # started, and the wallet library too where it has been built.
 #
@@ -727,6 +754,7 @@ bundle_native_parts() {
   fi
   local bundle="$here/../app/build/linux/x64/release/bundle"
   step cargo build -p veil_core --release --locked &&
+    no_test_features_in_a_release &&
     step cp "$here/target/release/libveil_core.so" "$VEIL_WALLET_LIB" "$bundle/lib/" &&
     echo "the app with its native parts: $bundle/veil"
 }
@@ -747,6 +775,7 @@ bundle_for_windows() {
   local system32 runtime
   system32="$(cygpath -u "${SYSTEMROOT:-C:\\Windows}")/System32"
   step cargo build -p veil_core --release --locked &&
+    no_test_features_in_a_release &&
     step cp "$here/target/release/veil_core.dll" "$bundle/" || return 1
   for runtime in msvcp140.dll vcruntime140.dll vcruntime140_1.dll; do
     step cp "$system32/$runtime" "$bundle/" || return 1

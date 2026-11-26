@@ -49,6 +49,18 @@
   "unlockWorking": "Opening the wallet…",
   "unlockWithoutBridges": "Open without bridges",
   "unlockBridgesNotice": "Tor could not be started through the bridges in the settings. Without them Tor is connected to directly, which a network that watches for Tor can see.",
+  "bridgesBefore": "Tor bridges: {state}",
+  "@bridgesBefore": {
+    "placeholders": {
+      "state": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsLostTitle": "Settings lost",
+  "settingsLostNotice": "The file with this app's settings could not be read in full. What could not be read is as it is at the start. If Tor was reached through bridges, they are gone, and without them Tor is connected to directly, which a network that watches for Tor can see. Nothing is connected to until you choose.",
+  "settingsLostSetBridges": "Set bridges",
+  "settingsLostGoOn": "Go on without bridges",
   "homeTitle": "Wallet",
   "homeBalanceHide": "Hide the balance",
   "homeBalanceShow": "Show the balance",
@@ -274,6 +286,7 @@
   "problemTorFailed": "Tor could not start.",
   "problemTorNotReady": "Tor is not connected.",
   "problemTorLost": "Tor cannot reach its network. Check the internet connection of this device.",
+  "problemTorLostBridges": "Tor cannot reach its network through the bridges that are set. A bridge may not be answering. If this stays, check the bridges and the internet connection of this device.",
   "problemNoNode": "No node answered.",
   "problemTooManyAddresses": "Several addresses in a row have not been paid yet. Use one of them first: with more of them unused, a payment could be missed when the wallet is restored from its phrase.",
   "problemInvalidAddress": "This is not a Monero address of this network.",

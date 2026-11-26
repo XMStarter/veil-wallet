@@ -11,6 +11,7 @@ class AppSettings {
     this.dark = false,
     this.autoLockMinutes = defaultAutoLock,
     this.bridges = const [],
+    this.lost = false,
   });
 
   /// Lock after five minutes without use, unless the user says otherwise.
@@ -28,6 +29,14 @@ class AppSettings {
 
   /// Bridge lines to reach Tor through. Empty: directly.
   final List<String> bridges;
+
+  /// Whether these are what was left of a settings file that could not be
+  /// read, or whose bridges could not. The bridges are then not known to
+  /// be none: they may have been there and be gone, and without them Tor
+  /// is connected to directly. The app says so and connects nowhere until
+  /// the user has chosen. Not kept in the file; whatever is saved is not
+  /// lost.
+  final bool lost;
 
   AppSettings copyWith({
     String? Function()? language,
@@ -50,13 +59,18 @@ class AppSettings {
 
   /// Reads what [toJson] wrote. Anything missing or of the wrong kind
   /// falls back to its default, so a damaged file costs settings and
-  /// nothing else.
+  /// nothing else. Bridges are the exception: where they cannot be read,
+  /// the settings say that they were [lost] instead of saying that there
+  /// are none.
   factory AppSettings.fromJson(Object? json) {
-    if (json is! Map<String, dynamic>) return const AppSettings();
+    if (json is! Map<String, dynamic>) return const AppSettings(lost: true);
     final language = json['language'];
     final dark = json['dark'];
     final minutes = json['auto_lock_minutes'];
     final bridges = json['bridges'];
+    final readable =
+        bridges == null ||
+        (bridges is List && bridges.every((line) => line is String));
     return AppSettings(
       language: language == 'en' || language == 'ru'
           ? language as String
@@ -66,21 +80,24 @@ class AppSettings {
       autoLockMinutes: minutes is int && autoLockChoices.contains(minutes)
           ? minutes
           : defaultAutoLock,
-      bridges: bridges is List
-          ? bridges.whereType<String>().toList()
+      bridges: bridges is List && readable
+          ? bridges.cast<String>().toList()
           : const [],
+      lost: !readable,
     );
   }
 
-  /// The settings in [file]; the defaults if there is none or it cannot
-  /// be read.
+  /// The settings in [file]: the defaults if there is no such file, which
+  /// is how every installation begins, and the defaults marked as [lost]
+  /// if there is one and it cannot be read.
   static Future<AppSettings> load(String file) async {
+    if (!await File(file).exists()) return const AppSettings();
     try {
       return AppSettings.fromJson(jsonDecode(await File(file).readAsString()));
     } on FileSystemException {
-      return const AppSettings();
+      return const AppSettings(lost: true);
     } on FormatException {
-      return const AppSettings();
+      return const AppSettings(lost: true);
     }
   }
 

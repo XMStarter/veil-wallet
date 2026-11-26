@@ -22,3 +22,6 @@ libc = "0.2"
 
 [dev-dependencies]
 veil_test_guard = { path = "../veil_test_guard" }
+
+[lints]
+workspace = true

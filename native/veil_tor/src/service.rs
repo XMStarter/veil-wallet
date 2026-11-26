@@ -23,11 +23,14 @@ use tor_rtcompat::PreferredRuntime;
 
 use crate::bridges::Bridges;
 use crate::socks::{self, ConnectFailure, Connector};
+use crate::state;
 
 /// Where Tor keeps its files. Both directories must be private to the app.
 #[derive(Debug, Clone)]
 pub struct TorConfig {
-    /// Long-lived state: guard relays and keys.
+    /// Long-lived state: guard relays and keys. With bridges, Tor keeps
+    /// it in a folder of its own inside this one, which starts empty when
+    /// the bridges are others than the last time (see `state.rs`).
     pub state_dir: PathBuf,
     /// Cached directory information. Safe to delete; Tor downloads it again.
     pub cache_dir: PathBuf,
@@ -214,14 +217,17 @@ impl TorService {
     pub fn start(config: TorConfig) -> Result<TorService, TorError> {
         // Checked first: a wrong bridge setting stops everything before a
         // directory is made or a thread started.
-        let mut builder =
-            TorClientConfigBuilder::from_directories(&config.state_dir, &config.cache_dir);
+        let state_dir = state::folder(&config.state_dir, &config.bridges);
+        let mut builder = TorClientConfigBuilder::from_directories(&state_dir, &config.cache_dir);
         config.bridges.apply(&mut builder)?;
         let tor_config: TorClientConfig = builder
             .build()
             .map_err(|e| TorError::Config(e.to_string()))?;
 
         prepare_private_dir(&config.state_dir)?;
+        // What Tor remembers of bridges is good for those bridges only.
+        state::keep_for(&config.state_dir, &config.bridges)?;
+        prepare_private_dir(&state_dir)?;
         prepare_private_dir(&config.cache_dir)?;
 
         // Arti requires the application to choose the TLS cryptography

@@ -257,7 +257,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            syncWords(text, state),
+            syncWords(text, state, viaBridges: widget.backend.viaBridges),
             style: VeilText.body,
             textAlign: TextAlign.center,
           ),

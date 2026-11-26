@@ -8,6 +8,7 @@ import 'core/backend.dart';
 import 'l10n/app_localizations.dart';
 import 'screens/navigation.dart';
 import 'screens/problem_words.dart';
+import 'screens/settings_lost_screen.dart';
 import 'screens/start_screen.dart';
 import 'screens/unlock_screen.dart';
 import 'theme/theme.dart';
@@ -240,6 +241,11 @@ class _VeilAppState extends State<VeilApp> {
           future: _walletExists,
           builder: (context, found) {
             if (!found.hasData) return const Scaffold();
+            // Settings that could not be read are dealt with before
+            // anything that starts Tor is within reach.
+            if (widget.backend.settings.value.lost) {
+              return SettingsLostScreen(backend: widget.backend);
+            }
             return found.data!
                 ? UnlockScreen(backend: widget.backend)
                 : StartScreen(backend: widget.backend);

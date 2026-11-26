@@ -152,6 +152,18 @@ void main() {
     addTearDown(() => dir.delete(recursive: true));
     final file = File('${dir.path}/settings.json');
 
+    // Bridges are never quietly none: they are the ones in the file, or
+    // the settings say that they could not be read.
+    void bridgesAreKnown(Object? json, AppSettings settings) {
+      if (settings.lost) {
+        expect(settings.bridges, isEmpty);
+        return;
+      }
+      expect(json, isA<Map<String, dynamic>>());
+      final written = (json as Map<String, dynamic>)['bridges'];
+      expect(settings.bridges, written ?? isEmpty);
+    }
+
     void sane(AppSettings settings) {
       expect(settings.language, anyOf(isNull, 'en', 'ru'));
       // There is no "never", and nothing the user could not have chosen.
@@ -170,7 +182,9 @@ void main() {
       } on FormatException {
         return;
       }
-      sane(AppSettings.fromJson(json));
+      final settings = AppSettings.fromJson(json);
+      sane(settings);
+      bridgesAreKnown(json, settings);
     });
 
     // And through the file itself, text or not.
@@ -181,8 +195,23 @@ void main() {
           ? utf8.encode(text)
           : [for (final unit in text.codeUnits) unit & 0xff];
       await file.writeAsBytes(bytes, flush: true);
-      sane(await AppSettings.load(file.path));
+      final settings = await AppSettings.load(file.path);
+      sane(settings);
+      Object? json;
+      try {
+        json = jsonDecode(utf8.decode(bytes));
+      } on FormatException {
+        // No text, or no JSON: then nothing in it could be read.
+        expect(settings.lost, isTrue);
+        return;
+      }
+      bridgesAreKnown(json, settings);
     }, atMost: 300);
+
+    // No file at all is how every installation begins, and is no loss.
+    final none = await AppSettings.load('${dir.path}/never-written.json');
+    expect(none.lost, isFalse);
+    expect(none.bridges, isEmpty);
   });
 
   test('settings are replaced whole, never left half written', () async {
