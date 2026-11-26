@@ -334,8 +334,8 @@ run where is set out in [development.md](development.md).
       input reaches.
    3. *External audit.* What an auditor needs to begin: what is in scope,
       what the wallet defends against and what it does not, and how to
-      build it and run its checks. The audit itself is the owner's to
-      commission.
+      build it and run its checks. It is [audit.md](audit.md). The audit
+      itself is the owner's to commission.
 6. **Release.** Open source, reproducible builds, signed APKs, F-Droid.
 
 ## Known limitations

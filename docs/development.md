@@ -12,6 +12,17 @@ How Veil is written, reviewed, tested, and released.
 - **No secrets in the repository.** Signing keys, passwords, and real wallet
   files never get committed.
 - **No real funds in tests.** Tests use a local chain or the Monero stagenet.
+- **No way around Tor in an app.** Tests have two: a wallet that goes
+  straight to a daemon on the machine (the `regtest` feature) and
+  listeners that lead to local ports instead of into Tor (`stand-in`).
+  Neither compiles in an optimised build, which is what an app is made
+  of, and `check.sh` shows that after it has built the core for an app.
+- **Every `unsafe` block says why it is sound**, in a comment that begins
+  with `SAFETY:`. The lint that asks for it is on for the whole workspace.
+
+[audit.md](audit.md) is where somebody who is to examine Veil starts. It
+names the code that keeps each promise and the test that shows it, so a
+change to one of those belongs in that document too.
 
 ## Repository workflow
 

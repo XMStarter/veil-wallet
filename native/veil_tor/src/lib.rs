@@ -15,6 +15,13 @@
 //! * **Loopback only.** The listeners bind to `127.0.0.1` on a port chosen by
 //!   the operating system.
 
+// The `stand-in` feature adds listeners that lead to ports on this machine
+// instead of into Tor. It is for tests, and tests are built with debug
+// assertions. An optimised build, which is what an app is made of, does
+// not compile with it.
+#[cfg(all(feature = "stand-in", not(debug_assertions)))]
+compile_error!("the `stand-in` feature is for tests; an optimised build must not have it");
+
 mod bridges;
 pub mod ffi;
 mod onion;

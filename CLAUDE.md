@@ -4,6 +4,9 @@ Veil is a hot Monero wallet for desktop and Android. Read
 [docs/concept.md](docs/concept.md) before making product decisions,
 [docs/design.md](docs/design.md) before touching the interface, and
 [docs/development.md](docs/development.md) before committing.
+[docs/audit.md](docs/audit.md) names, for each thing Veil promises, the
+code that keeps it and the test that shows it: when one of those changes,
+that document changes with it.
 
 ## Language
 
@@ -28,6 +31,9 @@ that cannot lose the user's funds.
 - Do not commit secrets, signing keys, or wallet files.
 - Do not use real funds in tests. Use a local chain or stagenet.
 - Do not add settings that let the user weaken privacy defaults.
+- Do not make the test-only features (`regtest` in `veil_wallet`,
+  `stand-in` in `veil_tor`) compile in an optimised build. They are ways
+  around Tor.
 - Do not add a CI job that connects to the Tor network or starts a Monero
   daemon, on GitHub's runners or on a self-hosted one. CI compiles and runs
   offline tests, nothing else. The full list of what a workflow may do is in
@@ -134,7 +140,8 @@ that cannot lose the user's funds.
   `app/README.md` and `docs/design.md` before changing it. Colours,
   typefaces and sizes come from `app/lib/theme`; texts from the `.arb`
   files, always in both languages.
-- `docs/`: concept, design, development rules.
+- `docs/`: concept, design, development rules, and what an audit starts
+  from.
 - `.github/workflows`: hosted CI, builds and offline tests only. Pin
   actions to commit hashes. It installs Flutter with `check.sh flutter`,
   not with an action. The Windows job keeps the app it built as the
@@ -936,7 +943,37 @@ their fixed seed. The `offline` and `regtest` levels were not run again
 on that commit on the owner's machine; it differs from `4a9ce46` in that
 test, in the tool that makes the input, and in documents, and the
 `offline` level passed on it in a cloud session. With that, step 5.2
-has passed the owner's run on both systems.
+has passed the owner's run on both systems. Hosted CI passed on both
+systems, the app's tests on made-up input running as Windows programs
+there for the first time, and step 5.2 was merged on the owner's word.
+Step 5.3, what an external audit needs, is written: `docs/audit.md`. It
+says what Veil is made of and what of it is Veil's own, with the pinned
+versions of what is not; for each promise of the concept the code that
+keeps it and the test that would fail if it did not; whom the wallet
+defends against and whom it does not; where input from outside comes in;
+the `unsafe` code by file; where secrets live and for how long; what
+lies on the disk and who can read it; how to build it and run its checks;
+what is known to be weak; what was never tried; and where we would look
+first. Every statement in it was held against the code, and several did
+not hold as first written and were put right. Two rules it names were
+only comments before and are checked now. The two features that are ways
+around Tor for tests, `regtest` in `veil_wallet` and `stand-in` in
+`veil_tor`, do not compile in an optimised build (`compile_error!`), and
+`check.sh` shows that after each build of the core for an app
+(`no_test_features_in_a_release`). And every `unsafe` block has a comment
+that says why it is sound: clippy's `undocumented_unsafe_blocks` is on
+for the workspace; three blocks in tests of `veil_tor` had none. Written
+down for the first time while doing this: the seven functions of
+`veil_tor`'s own C interface are exported from the app's core library,
+which does not call them; any program on the machine can use the two
+SOCKS listeners of an open wallet to reach onion services; and nothing
+checks the pinned packages against a list of known vulnerabilities. None
+of the three is changed. The audit itself is the owner's to commission,
+and the document has no address to send findings to. Tried in a cloud
+session: the `offline` level, with the new step in it, and `./check.sh
+--android offline`. The new step runs where a core for an app is built:
+on the owner's machine and in hosted CI's Windows job, where it has not
+run yet.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
