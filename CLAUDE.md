@@ -1068,6 +1068,18 @@ clock was right to within seconds, by the time in the error and the
 time of the owner's message. A second such APK, again from a change
 that is not in the repository, keeps what Arti logs about transports,
 channels, guards and circuits and shows it with the error.
+The owner sent thirty-four lines of that log, from the thirtieth second
+of a session to the fifty-first; what came before them did not arrive.
+They show Arti opening a channel "via obfs4" to one bridge
+(`146.57.248.225:22`) three times, ten seconds apart, the first ending
+in `ChanTimeout`, and every other circuit refused for want of a guard.
+So Arti does go to the transport program, and a channel through it gets
+no answer within Arti's ten seconds. Whether the program was started,
+is running, or is itself waiting for the bridge, the lines do not say:
+its start is in the part that did not arrive, and it keeps a log of its
+own only when told to. A third such APK tells it to (`-enableLogging
+-logLevel DEBUG`), shows the end of that log first, and leaves out the
+line Arti repeats for every circuit it cannot build.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
