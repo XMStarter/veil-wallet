@@ -111,7 +111,13 @@ runtime.
    for.
 6. **Settings.** One line for each thing, saying how it stands and leading
    to where it is changed: Tor status, node, bridges, password, auto-lock,
-   show recovery phrase, language, theme, and removing the wallet. A choice
+   show recovery phrase, language, theme, removing the wallet, and, last,
+   what this app is a build of. That last line leads to About Veil: the
+   version and the commit, where the source is, and a line for each part
+   of the package that leads to its licence texts, each text on a line
+   that names what it comes with. A licence is shown as its authors wrote
+   it, in its own language, in the secondary type; it can be selected and
+   copied. A choice
    among a few is a list in which the one in force says so in a word.
    Removing the wallet and showing the phrase ask for the password. On a
    phone that can, there is a line for opening the wallet with a

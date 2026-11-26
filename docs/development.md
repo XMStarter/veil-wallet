@@ -436,7 +436,44 @@ on pull requests and by hand. Its limits are in
 Veil's own code is MIT. The Monero wallet library it loads is LGPL-3.0
 (monero_c) and BSD-3-Clause (Monero). It must be shipped as a separate
 shared library with its licence texts and source. Details are in
-[`native/wallet_lib/README.md`](../native/wallet_lib/README.md).
+[`native/wallet_lib/README.md`](../native/wallet_lib/README.md). The
+transport program in the app for Android, lyrebird, is under the GPL,
+version 3 or later, and is a program of its own that Tor starts
+([`native/transports/README.md`](../native/transports/README.md)).
+
+### Licence texts
+
+A package of the app is built from other people's work, and nearly all
+of it asks that its licence text goes along. The texts are kept in the
+repository, in `app/assets/licences`, so that every build of the app
+has them and a change to them is a change somebody reads:
+
+| File | Whose texts | Where they are read from |
+|---|---|---|
+| `veil.txt` | Veil's own licence | `LICENSE` |
+| `core.txt` | The Rust packages in the core, about 380 | Each package's own folder, by what `cargo metadata` says is in the core on each system (`native/veil_notices`) |
+| `wallet-library.txt` | monero_c, Monero and what the library is built from | The source the library was built from (`native/wallet_lib/notices.sh`) |
+| `transport.txt` | lyrebird, Go, and the Go packages in the program | The source the program was built from (`native/transports/notices.sh`) |
+| `typefaces.txt` | The three typefaces | `app/fonts` |
+| `android.txt` | The libraries an app for Android is built with, all under the Apache License | A list written by hand in `native/notices.sh` |
+
+Flutter's own texts and those of the Dart packages are put into the app
+by Flutter when it is built. The app shows all of them under Settings,
+About Veil, with the version and the commit the build was made from.
+
+`native/notices.sh` writes the files and `native/notices.sh --check`
+says whether they are still right; the `offline` level runs the check as
+Linux programs. After a change to `Cargo.lock`, to a pinned version of
+the wallet library or of lyrebird, to a typeface or to the Android
+libraries, run it without `--check` and commit what changed. Two of the
+files can only be checked on a machine that has the source they are
+read from, which is there once the wallet library was built for Windows
+or Android and the transport program was built; elsewhere the script
+says that it left them as they are. In hosted CI that is always so.
+
+The tool reads no licence and judges none: it does not lose the texts.
+Whether what a package does with them is enough is a question for
+somebody who knows licences, and has not been put to anybody.
 
 The app built for Windows by hosted CI carries three libraries of
 Microsoft's C++ runtime (`msvcp140.dll`, `vcruntime140.dll`,
@@ -449,7 +486,12 @@ asking for Microsoft's own installer, is decided at the release step.
 
 - Builds are reproducible: anyone can rebuild a release and get the same
   binary.
-- Release artifacts are signed. The signing keys stay with the maintainer and
-  are provided to CI as secrets.
+- Release artifacts are signed. The signing keys stay on the maintainer's
+  machine and are used there. Hosted CI is never given one: it compiles
+  and runs offline tests, and what it builds is for trying, not for
+  handing on.
+- A package carries the licence texts of everything it is built from
+  (`app/assets/licences`, see "Licence texts" below) and says which
+  commit it was built from.
 - Android builds contain no Google services and target F-Droid as well as
   direct APK downloads.

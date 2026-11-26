@@ -30,6 +30,10 @@ flutter:
 
   assets:
     - assets/brand/veil-logo.jpg
+    # The licence texts of everything a package of the app is built
+    # from, written by native/notices.sh. They have to go wherever the
+    # package goes; the app also shows them (Settings, About Veil).
+    - assets/licences/
 
   # Bundled with the app; nothing is fetched at runtime. Each is one
   # variable font file under the SIL Open Font License; the licence texts

@@ -54,9 +54,14 @@ fresh address.
 
 ## License
 
-Veil's own code is under the [MIT License](LICENSE). The Monero wallet
-library it loads at run time has its own licences; see
-[native/wallet_lib](native/wallet_lib/README.md).
+Veil's own code is under the [MIT License](LICENSE). A package of the
+app also holds other people's work under their own licences: the Monero
+wallet library it loads at run time, part of which is under the GNU
+Lesser General Public License ([native/wallet_lib](native/wallet_lib/README.md)),
+and in the app for Android the transport program for Tor bridges, under
+the GNU General Public License ([native/transports](native/transports/README.md)).
+Their texts, and those of everything else a package is built from, are
+in [app/assets/licences](app/assets/licences) and are shown in the app.
 
 ## Notices
 

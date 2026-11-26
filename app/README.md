@@ -23,7 +23,11 @@ last look, and then how it went: sent, or, if the connection was lost,
 not known, which the wallet then clears up by itself. Settings has a line
 for each thing that can be set: the user's own node, Tor bridges, the
 password, the auto-lock, the recovery phrase shown again, language, the
-light or dark theme, and the wallet taken off the device. The network is
+light or dark theme, and the wallet taken off the device; its last line
+leads to About Veil, which says what version and commit this is a build
+of and shows the licence texts of everything in the package
+(`assets/licences`, written by `native/notices.sh`; `lib/core/notices.dart`
+reads them). The network is
 stagenet.
 
 The app reaches the wallet only through the core

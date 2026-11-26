@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../core/backend.dart';
+import '../core/notices.dart';
 import '../core/phrase.dart';
 import '../core/settings.dart';
 import '../l10n/app_localizations.dart';
@@ -12,6 +14,7 @@ import '../widgets/password_fields.dart';
 import '../widgets/veil_button.dart';
 import '../widgets/veil_field.dart';
 import '../widgets/veil_screen.dart';
+import 'about_screen.dart';
 import 'navigation.dart';
 import 'problem_words.dart';
 import 'start_screen.dart';
@@ -193,6 +196,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     title: text.settingsRemove,
                     value: text.settingsRemoveValue,
                     onTap: () => _go(RemoveWalletScreen(backend: backend)),
+                  ),
+                  _Line(
+                    title: text.settingsAbout,
+                    value: text.settingsAboutValue(veilVersion),
+                    onTap: () => _go(
+                      AboutScreen(
+                        onAndroid:
+                            defaultTargetPlatform == TargetPlatform.android,
+                      ),
+                    ),
                   ),
                 ],
               );

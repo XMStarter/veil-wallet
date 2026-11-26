@@ -5054,6 +5054,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "veil_notices"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "veil_test_guard"
 version = "0.1.0"
 

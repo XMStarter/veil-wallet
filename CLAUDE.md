@@ -88,6 +88,12 @@ that cannot lose the user's funds.
     for Android brings along for bridges (the Tor Project's lyrebird,
     for obfs4, Snowflake and WebTunnel), and why it is built the way it
     is. It is under the GPL; the README says what that means.
+  - `veil_notices`, `notices.sh`: the licence texts a package of the app
+    carries for everything it is built from (`app/assets/licences`).
+    `./notices.sh` writes them and `--check` says whether they are still
+    right; after a change to `Cargo.lock` or to a pinned version of the
+    wallet library or of lyrebird, write them again and commit them.
+    `docs/development.md`, "Licence texts".
   - `veil_test_guard`: called first by every test that starts Tor or a
     daemon; fails the test on a CI runner. A new test of that kind calls it
     too. It also starts the daemon for tests, one at a time, and when the
@@ -135,7 +141,8 @@ that cannot lose the user's funds.
   a face, which is `Biometrics`).
   So
   far the way to an open wallet (create, recovery phrase, restore, unlock),
-  Home, Receive, Send, and Settings.
+  Home, Receive, Send, and Settings, whose last line leads to About
+  Veil: the version, the commit, and the licence texts.
   Screens talk to `WalletBackend` (`app/lib/core`), never to the core
   directly; tests use a backend that only pretends, and no test opens a
   real wallet, because that starts Tor. Read
@@ -1174,8 +1181,43 @@ was reminded of the licence of the transport program first, as asked,
 and of the other things that are the owner's to decide before anything
 is published: when Veil may hold real money, the name and the
 identifier Android knows the app by, and who holds the key for
-releases. None of them is answered yet. The README's status, which
-still said that there was no app, says what there is.
+releases. The README's status, which still said that there was no app,
+says what there is. The owner answered all four at once: the transport
+program stays in the package for Android and is handed on under its own
+terms; the first release is for the main network, without an audit
+before it; the name Veil and the identifier `io.github.xmstarter.veil`
+stay; and the key for releases never leaves the owner's machine, where
+a script signs with it. They are in `docs/concept.md` under "Decided
+for the release", and `docs/development.md` no longer says that hosted
+CI is given signing keys. Until the part of this step that brings the
+main network, the app and the tool know stagenet only, and the rules
+above about real funds in tests and about `veil_cli` stand.
+Step 6.1, what a package owes others, is written. Every package of the
+app carries the licence texts of what it is built from, in
+`app/assets/licences`, and the app shows them under Settings, About
+Veil, with its version and the commit it was built from, which
+`check.sh` now tells the build. Six files: Veil's own licence; the
+texts of the 382 Rust packages in the core, read from each package by a
+new crate, `veil_notices`, which asks `cargo metadata` what is in the
+core on each of the four systems an app is built for and leaves out
+what only builds or tests; those of the wallet library and its sixteen
+parts, with the GNU General Public License that the Lesser one of
+monero_c and polyseed builds on; those of lyrebird, Go and the sixty Go
+packages the program says are in it; the three typefaces; and the
+Android libraries, a list by hand. `native/notices.sh` writes them and
+with `--check` says whether they are still right, which the `offline`
+level asks as Linux programs. The wallet library's and the transport
+program's can be checked only where their source is, which in hosted CI
+is nowhere. Found while reading for it: the library for Linux is linked
+with whatever the machine has of Boost, OpenSSL and the like, as shared
+libraries that are in no package, so a package for Linux is not
+complete in itself yet; that is for the part about the same build
+twice. And on Android the library is not linked with readline, which is
+under the GPL and which Monero's dependency build makes: the script
+that collects the texts reads the line the library is linked with and
+stops at a part it does not know. Nobody who knows licences has looked
+at any of this. Tests: seven of the crate, twelve of the app, on a
+package that only pretends and on the files as they are.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

@@ -131,3 +131,23 @@ loaded at run time. Anyone distributing a build of Veil must:
 - include the LGPL-3.0 and Monero licence texts;
 - make the library's source available, which is the pinned revisions above
   plus the patches in this directory.
+
+The texts are in every package of the app, and the app shows them and
+says which commit of this repository it was built from (Settings, About
+Veil). `notices.sh` collects them into
+`app/assets/licences/wallet-library.txt`: the licences of monero_c and
+of Monero, of what Monero's source brings along (polyseed, RandomX,
+LMDB, utf8proc, bc-ur, RapidJSON, Easylogging++), and of what the
+dependency build makes for the libraries for Windows and for Android
+(Boost, OpenSSL, libsodium, Unbound, ZeroMQ, and for Windows hidapi and
+libiconv), with the text of the GNU General Public License that the
+Lesser one builds on. Which parts there are is written into that script
+by hand and held against the line the library is linked with, where a
+build for Windows or for Android is at hand; a part it does not know
+stops it. The library for Linux takes Boost, OpenSSL and the like from
+the machine it is built on, as shared libraries that are in no package
+of Veil's; what a package for Linux brings along is a matter of the
+release step. `../notices.sh --check`, which the `offline` level runs,
+says whether the file is still what the source says, on a machine that
+has the source. Nobody who knows licences has looked at this; it is not
+legal advice.

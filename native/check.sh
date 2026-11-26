@@ -260,8 +260,34 @@ level_offline() {
   step cargo fmt --check &&
     step cargo_for_target clippy --workspace --all-targets --all-features --locked -- -D warnings &&
     step cargo_for_target test --workspace --locked --no-fail-fast &&
+    notices_side &&
     dart_side &&
     app_side
+}
+
+# What tells an app which commit it is built from, so that it can say
+# where its source is (Settings, About Veil): the commit's hash, with
+# "+changes" where files differ from it, and nothing where this is no
+# checkout at all.
+built_from() {
+  local commit=""
+  if commit="$(git -C "$here" rev-parse --short=12 HEAD 2>/dev/null)"; then
+    if [ -n "$(git -C "$here" status --porcelain 2>/dev/null)" ]; then
+      commit="$commit+changes"
+    fi
+  fi
+  echo "--dart-define=VEIL_COMMIT=$commit"
+}
+
+# The licence texts the app carries (app/assets/licences): whether they
+# are still those of what the packages are built from. See notices.sh.
+# Once, as Linux programs: the texts are the same for every system, and
+# the script hands the program paths that a Windows program cannot read.
+notices_side() {
+  if [ "$windows" = 1 ] || on_windows; then
+    return 0
+  fi
+  step "$here/notices.sh" --check
 }
 
 # The Dart side of the core: its own tests, which also load the core as a
@@ -518,7 +544,8 @@ level_app() {
     cd "$here/../app" &&
       export ANDROID_HOME="$android_sdk" ANDROID_SDK_ROOT="$android_sdk" &&
       step "$flutter" --no-version-check pub get --enforce-lockfile "${offline[@]}" &&
-      step "$flutter" --no-version-check build apk --release --no-pub --target-platform android-arm64
+      step "$flutter" --no-version-check build apk --release --no-pub --target-platform android-arm64 \
+        "$(built_from)"
   ) || return 1
   echo
   echo "the app for Android: $apk"
@@ -707,7 +734,7 @@ app_side() {
       step "$dart" format --output=none --set-exit-if-changed lib test &&
       step "$flutter" --no-version-check analyze --no-pub --fatal-infos &&
       step "$flutter" --no-version-check test --no-pub &&
-      step "$flutter" --no-version-check build "$system" --release --no-pub
+      step "$flutter" --no-version-check build "$system" --release --no-pub "$(built_from)"
   ) || return 1
   bundle_native_parts
 }

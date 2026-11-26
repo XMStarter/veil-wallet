@@ -41,6 +41,7 @@ of its own.
 | Core, session, C interface | Rust | 7,400, of which 4,100 are tests | `native/veil_core` |
 | Command-line tool | Rust | 1,100, and 550 of tests | `native/veil_cli` |
 | Test helpers | Rust | 1,750 | `native/veil_test_guard` |
+| Licence texts for a package | Rust and shell | 600 | `native/veil_notices`, `native/notices.sh` and the two it calls; not in an app |
 | Dart side of the core | Dart | 740 | `dart/veil_bridge` |
 | App | Dart | 5,000 without generated texts | `app/lib` |
 | App, Android side | Kotlin | 770 | `app/android` |
@@ -314,8 +315,12 @@ Each of these is known to the project and not put right.
 - **The listeners take any program on the machine**, as said above.
 - **Dart and Kotlin strings cannot be wiped**, so a password and a phrase
   stay in the app's memory until it is freed and reused.
-- **The licence of the transport program** in the Android package is not
-  settled (`docs/concept.md`, "Open decisions").
+- **How the packages meet other people's licences** has been looked at
+  by nobody who knows licences. The wallet library is in part under the
+  GNU Lesser General Public License and the transport program in the
+  Android package under the GNU General Public License; a package
+  carries their texts and names its source (`native/notices.sh`,
+  `docs/concept.md`, "Decided for the release").
 
 ## Never tried
 

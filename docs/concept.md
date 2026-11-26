@@ -365,25 +365,22 @@ run where is set out in [development.md](development.md).
       itself is the owner's to commission.
 6. **Release.** Open source, reproducible builds, signed APKs, F-Droid.
    The code has been public from the start. What is left, in six parts;
-   several wait for a decision of the owner's, named with each:
+   what the owner decided for them is under "Decided for the release":
    1. *What a package owes others.* A package with the wallet library,
       the transport program and the core inside hands on other people's
       work under their terms: the licence texts travel with it and are
       shown in the app, with the version and the place where the source
-      of exactly that build is. Waits for nothing but one answer: whether
-      the transport program stays in the package (see "Open decisions").
+      of exactly that build is.
    2. *The same build twice.* Each part of a package built twice from
       the same commit, in different folders, and compared byte for byte;
       what does not come out the same is put right or said.
-   3. *Signed packages.* A key for releases, which no build machine but
-      the owner's ever holds, a script that signs with it, and what a
-      user compares a download with. Waits for: who holds the key and
-      where, and the name and the identifier Android knows the app by,
-      which can never change afterwards.
+   3. *Signed packages.* A key for releases, which no machine but the
+      owner's ever holds, a script that signs with it there, and what a
+      user compares a download with.
    4. *The main network.* Until here the app and the tool know stagenet
       only. The main network needs its list of nodes and a way of
-      building for it that no test can take by accident. Waits for: when
-      Veil may hold real money, before or after an audit.
+      building for it that no test can take by accident. The first
+      release is for it.
    5. *F-Droid.* Its description of the app and its recipe, which builds
       everything from source on F-Droid's machines.
    6. *The release.* A version, what it says about itself, where it is
@@ -412,10 +409,41 @@ run where is set out in [development.md](development.md).
 - **Polyseed is not supported by the official Monero GUI wallet.** Feather,
   Cake, and several other wallets do support it.
 
+## Decided for the release
+
+The owner decided these when the release step began.
+
+- **The transport program stays in the package for Android, on its own
+  terms.** lyrebird is under the GNU General Public License, version 3 or
+  later; Veil is under the MIT licence. They are separate programs, and
+  Tor starts the one as a process of its own, so Veil's code stays as it
+  is licensed. A package with lyrebird inside hands that part on under
+  lyrebird's terms: its licence texts go with the package, and the
+  source of exactly that build is named, which is the commit of this
+  repository with the script that builds lyrebird from the commit it
+  pins. The same holds for the wallet library, part of which is under
+  the GNU Lesser General Public License. Nobody who knows licences has
+  looked at how this is done; that is still to be asked before a
+  release.
+- **The first release is for the main network.** Veil holds real money
+  from its first release on, without an audit by anybody outside before
+  it. What that means for whoever uses it is in the
+  [disclaimer](../DISCLAIMER.md) and has to be said where the app is
+  downloaded and in the app. Until the part of the release step that
+  brings the main network, the app and the tool still know stagenet
+  only.
+- **The name stays, and so does what Android knows the app by.** Veil,
+  and `io.github.xmstarter.veil`. The identifier can never change once
+  people have the app. That "Veil" is also the name of an existing
+  cryptocurrency stays a risk the owner has taken.
+- **The key for releases never leaves the owner's machine.** Android
+  takes an update only from the key the app was first signed with, so
+  that key is the app for as long as it exists, and whoever has it can
+  hand out a Veil of their own. Releases are signed on the owner's
+  machine by a script; hosted CI is never given the key.
+
 ## Open decisions
 
-- **Name.** "Veil" is also the name of an existing privacy cryptocurrency
-  (ticker VEIL). This can cause confusion and possibly trademark objections.
 - **Recovery phrase format.** Polyseed (16 words) is planned for new wallets.
   The alternative is the classic 25-word phrase, which every Monero wallet
   understands but which requires a creation date when restoring.
@@ -428,32 +456,6 @@ run where is set out in [development.md](development.md).
   runs on a phone: inside the app it connected and carried a
   synchronisation and a payment. So the fallback to the reference
   implementation has not been needed.
-- **The licence of the transport program.** lyrebird is under the GNU
-  General Public License, version 3 or later; Veil is under the MIT
-  licence. They are separate programs, and Tor starts the one as a
-  process of its own, so Veil's code stays as it is licensed. But a
-  package with lyrebird inside has to be handed on under lyrebird's
-  terms for that part: its licence texts with it, and its source
-  offered. To be settled before a release, with advice from somebody
-  who knows licences: carry it and meet those terms, as Tor Browser
-  does, or leave bridges on Android to a separate download. The owner
-  decides this at the release step and has asked to be reminded then.
-- **When Veil may hold real money.** The app and the tool know stagenet
-  only, and nothing has been audited by anybody outside. A first release
-  can be for stagenet, for people to try, with the main network after an
-  audit; or for the main network at once. The owner decides, at the
-  release step.
-- **Who holds the key for releases.** Android takes an update only from
-  the key the app was first signed with, so that key is the app for as
-  long as it exists, and whoever has it can hand out a Veil of their
-  own. [development.md](development.md) says that signing keys are given
-  to hosted CI as secrets; the other way is a key that never leaves the
-  owner's machine, with releases signed there. To be settled before the
-  first signed package.
-- **The app's name on Android.** Android knows an app by an identifier
-  that can never change once people have the app. For now it is
-  `io.github.xmstarter.veil`, after the project's place on GitHub. It is
-  to be settled, with the name, before anything is published.
 - **The compiler of the wallet library for Android.** Monero's dependency
   build brings its own Android compiler, a release of 2018, and the
   library is built with it; the core and the app are built with the
