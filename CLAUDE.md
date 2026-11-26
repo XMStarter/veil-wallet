@@ -1324,7 +1324,11 @@ from that commit, the one for the main network and the one for
 stagenet, and reported that on the phone everything works; whether the
 lines were looked at while a payment was on its way was not said in so
 many words. With that, step 6.4 has passed the owner's run on both
-systems and on the phone, with real money.
+systems and on the phone, with real money. Hosted CI passed on both
+systems, and steps 6.1 and 6.4 with the fix were merged on the owner's
+word. Left of step 6: the same build twice (6.2), signed packages
+(6.3), F-Droid (6.5) and the release itself (6.6). The `tor` level has
+not run with the list of five nodes.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
