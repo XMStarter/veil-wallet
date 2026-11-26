@@ -1314,7 +1314,17 @@ gave. Now `SendState::Sending` carries what `Review` carried
 the state, the fixture on both sides, and the screen on a wallet that
 pretends the way the core now behaves; the scenario on a private chain
 checks the state whenever it catches a payment on its way and fails if
-it never does in four payments, and has not run.
+it never does in four payments.
+On that commit, `fb781ac`, the owner's run passed at the `offline` and
+`regtest` levels as Linux and as Windows programs, the scenario with
+its new check both ways; so a payment was caught on its way there at
+least once on each system and named what was being paid. How often of
+the four the log does not say. The owner installed the two apps built
+from that commit, the one for the main network and the one for
+stagenet, and reported that on the phone everything works; whether the
+lines were looked at while a payment was on its way was not said in so
+many words. With that, step 6.4 has passed the owner's run on both
+systems and on the phone, with real money.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
