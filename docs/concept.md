@@ -364,6 +364,30 @@ run where is set out in [development.md](development.md).
       build it and run its checks. It is [audit.md](audit.md). The audit
       itself is the owner's to commission.
 6. **Release.** Open source, reproducible builds, signed APKs, F-Droid.
+   The code has been public from the start. What is left, in six parts;
+   several wait for a decision of the owner's, named with each:
+   1. *What a package owes others.* A package with the wallet library,
+      the transport program and the core inside hands on other people's
+      work under their terms: the licence texts travel with it and are
+      shown in the app, with the version and the place where the source
+      of exactly that build is. Waits for nothing but one answer: whether
+      the transport program stays in the package (see "Open decisions").
+   2. *The same build twice.* Each part of a package built twice from
+      the same commit, in different folders, and compared byte for byte;
+      what does not come out the same is put right or said.
+   3. *Signed packages.* A key for releases, which no build machine but
+      the owner's ever holds, a script that signs with it, and what a
+      user compares a download with. Waits for: who holds the key and
+      where, and the name and the identifier Android knows the app by,
+      which can never change afterwards.
+   4. *The main network.* Until here the app and the tool know stagenet
+      only. The main network needs its list of nodes and a way of
+      building for it that no test can take by accident. Waits for: when
+      Veil may hold real money, before or after an audit.
+   5. *F-Droid.* Its description of the app and its recipe, which builds
+      everything from source on F-Droid's machines.
+   6. *The release.* A version, what it says about itself, where it is
+      downloaded from, and where a finding about its security is sent.
 
 ## Known limitations
 
@@ -414,6 +438,18 @@ run where is set out in [development.md](development.md).
   who knows licences: carry it and meet those terms, as Tor Browser
   does, or leave bridges on Android to a separate download. The owner
   decides this at the release step and has asked to be reminded then.
+- **When Veil may hold real money.** The app and the tool know stagenet
+  only, and nothing has been audited by anybody outside. A first release
+  can be for stagenet, for people to try, with the main network after an
+  audit; or for the main network at once. The owner decides, at the
+  release step.
+- **Who holds the key for releases.** Android takes an update only from
+  the key the app was first signed with, so that key is the app for as
+  long as it exists, and whoever has it can hand out a Veil of their
+  own. [development.md](development.md) says that signing keys are given
+  to hosted CI as secrets; the other way is a key that never leaves the
+  owner's machine, with releases signed there. To be settled before the
+  first signed package.
 - **The app's name on Android.** Android knows an app by an identifier
   that can never change once people have the app. For now it is
   `io.github.xmstarter.veil`, after the project's place on GitHub. It is

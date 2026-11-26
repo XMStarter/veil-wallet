@@ -1161,8 +1161,21 @@ to be replaced when the level fails for it (`VEIL_TEST_OBFS4_BRIDGES`
 names other lines meanwhile). With that, the bridges before a wallet,
 the words for a lost Tor with bridges, and the folder of its own have
 passed the owner's run on both systems and work on the phone. Which of
-the new screens the owner used there was not said. They and step 5.3
-are on one branch and in no pull request yet.
+the new screens the owner used there was not said. Hosted CI passed on
+both systems, the three tests of the folder as Windows programs there
+too, and its Windows job ran the step that has a build with a test-only
+feature refused for the first time: all three were. Step 5.3 and the
+three changes about bridges were merged on the owner's word. That
+completes step 5 of the build plan, hardening.
+Next is step 6, the release, in the six parts now listed in the build
+plan: what a package owes others, the same build twice, signed
+packages, the main network, F-Droid, and the release itself. The owner
+was reminded of the licence of the transport program first, as asked,
+and of the other things that are the owner's to decide before anything
+is published: when Veil may hold real money, the name and the
+identifier Android knows the app by, and who holds the key for
+releases. None of them is answered yet. The README's status, which
+still said that there was no app, says what there is.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
