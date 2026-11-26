@@ -924,6 +924,19 @@ ran only up to its limit, so the run "passed" without reaching the
 input. A number of cases that is asked for is run in full now. The other twelve Rust
 tests passed there as Windows programs for their minute, the node that
 answers with made-up bytes and the wallet library's two among them.
+On commit `6316712`, which has those two changes, the owner ran the
+`fuzz` level alone, and it passed as Linux programs, the app's four
+tests included, and as Windows programs, all thirteen Rust tests for
+their minute, the one of Tor's listener among them. So the listener's
+test no longer runs out of ports there; that the ports were what it ran
+out of is still a reading and was not looked at on the machine. The
+app's tests on made-up input have not run as Windows programs: there is
+no Flutter for Windows in that setup, and hosted CI runs them there at
+their fixed seed. The `offline` and `regtest` levels were not run again
+on that commit on the owner's machine; it differs from `4a9ce46` in that
+test, in the tool that makes the input, and in documents, and the
+`offline` level passed on it in a cloud session. With that, step 5.2
+has passed the owner's run on both systems.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
