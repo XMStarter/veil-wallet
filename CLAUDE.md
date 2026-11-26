@@ -1118,6 +1118,26 @@ Snowflake, then obfs4 again, each after the wallet was closed and opened;
 whether obfs4 was set a second time was not said. Not run on the owner's
 machine with it: anything. The three tests of the folder have not run as
 Windows programs, and the test on the real network has not run at all.
+The owner then ran `./accept.sh --no-app offline bridges` on commit
+`fecd2a3`. The `offline` level passed as Linux programs, the three tests
+of the folder among them. The `bridges` level failed in the new test and
+nowhere else, and for the test's own haste: its first Tor, through
+obfs4, was ready in 14 seconds and an onion service answered; its
+second, through Snowflake on the same files, called itself ready after 4
+seconds, having found the directory the first had kept, and refused both
+connections asked of it at once with the answer that reads as a lost
+network. The test asked once and gave up; it never came to obfs4 again.
+The two older tests, each from empty folders, passed in the same run,
+Snowflake ready in 11 seconds. The reading, not seen in a log: with a
+directory already there Arti is ready before it has the description of a
+bridge it has not used before, and until then it has no bridge to build
+a circuit with. A wallet asks again every minute, so in the app this is
+"Tor cannot reach its network through the bridges" for up to a minute
+after bridges were changed; whether it also shows at every start with
+the same bridges is not known. The test now asks again every five
+seconds for three minutes, as a wallet would, and prints at which try it
+was answered, which will say how long that state lasts. Because the run
+stopped there, nothing ran as Windows programs.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

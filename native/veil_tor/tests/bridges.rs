@@ -166,6 +166,28 @@ fn an_onion_service_answers(port: u16) -> bool {
     false
 }
 
+/// Asks for an onion service the way a wallet asks for its node: again,
+/// until one answers or `limit` is over. A Tor that starts on a directory
+/// it has kept calls itself ready before its bridges are of use to it,
+/// and refuses what it is asked for until then.
+fn an_onion_service_answers_within(port: u16, limit: Duration) -> bool {
+    const PAUSE: Duration = Duration::from_secs(5);
+    let started = Instant::now();
+    let mut asked = 0;
+    loop {
+        asked += 1;
+        if an_onion_service_answers(port) {
+            println!("answered at try {asked}, after {:.0?}", started.elapsed());
+            return true;
+        }
+        if started.elapsed() + PAUSE > limit {
+            println!("no answer in {asked} tries, {:.0?}", started.elapsed());
+            return false;
+        }
+        std::thread::sleep(PAUSE);
+    }
+}
+
 fn bootstrap_and_reach_an_onion_service(name: &str, bridges: Bridges) {
     let (root, service) = start(name, bridges);
     wait_until_ready(&service);
@@ -233,6 +255,12 @@ fn bridges_that_are_set_again_carry_tor_again() {
         }],
     };
 
+    // The second and third Tor find the directory the first one kept and
+    // are ready at once, before they have a bridge they can use; what
+    // matters is that they come to have one. A wallet asks again every
+    // minute, so this is three of its tries.
+    const LONG_ENOUGH: Duration = Duration::from_secs(180);
+
     let root = std::env::temp_dir().join(format!("veil-tor-bridges-again-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     for (through, bridges) in [
@@ -244,8 +272,9 @@ fn bridges_that_are_set_again_carry_tor_again() {
         let service = start_in(&root, bridges);
         wait_until_ready(&service);
         assert!(
-            an_onion_service_answers(service.socks_port(Purpose::Sync)),
-            "no onion service answered through {through}"
+            an_onion_service_answers_within(service.socks_port(Purpose::Sync), LONG_ENOUGH),
+            "no onion service answered through {through} in {LONG_ENOUGH:?}: {:?}",
+            service.status()
         );
         service.stop();
     }
