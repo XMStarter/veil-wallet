@@ -1402,6 +1402,56 @@ characters of each SHA-256, which `build.sh` now prints): the wallet
 library for Android `e41051ed8baf5e38`, for Windows `c066ba144ef8129b`,
 for Linux `f5bbe2c8fc8bb5a3` with Polyseed `93c8dd53fb487964`, and the
 transport program `ba57d65aba48a697`.
+On that commit, `d39e09f`, the owner built the library again for Linux
+and for Windows, which was the first time anything of Veil was built on
+two machines and compared. The build's view of the folders worked there
+as an ordinary user, at the first try. The run passed at the `offline`
+and `regtest` levels as Linux programs and at the `regtest` level as
+Windows programs, and the owner reported that on the phone everything
+works with the two apps built from that commit. Two things did not come
+out as hoped. The sums: Polyseed for Linux was the same file on both
+machines; the library for Linux was not (`2864b08445cd6b99` there), and
+of another size; the library for Windows was of the same size, 32,185,791
+bytes, with another sum (`c8e9b13b1fdd76e2` there). For Linux the cause
+was in the owner's log: Monero's build compiles for the processor it
+runs on unless told otherwise (`-march=native`), and RandomX inside it
+does too. The cloud session's library had some 3,400 instructions of
+AVX-512 in it. That was a fault of a package for Linux and not only a
+difference: such a library can end with an illegal instruction on a
+processor older than its builder's. `build.sh` now says `ARCH=default`,
+as Monero's dependency build always did for Windows and Android; built
+that way in a cloud session the library has none of those instructions,
+the offline level passes with it, and two builds in two folders are the
+same (`db59d3709be0fed0`). The script also fixes the language and the
+time zone of a build and switches off the compiler cache Monero's
+dependency build brings, none of which was seen to matter: of 1,678
+compilations of the two Android builds two had come from that cache.
+`built-how.txt` says the new way, so the owner has to run both setups
+once more; that is not asked for until the difference for Windows is
+found, so that it is one rebuild and not two. For Windows the cause is
+not known. Nothing in the cloud session's DLL names the machine, its
+kernel or a time, and the dependency build does not compile through the
+cache there. The owner was asked for the file; it has its symbols, so
+where the two differ will name the part. The other thing: the `offline`
+level as Windows programs failed, the test program of `veil_core` ended
+with status 116 after its first eleven tests, for the second time in
+the project (the first was at step 4.2, at the `regtest` level). The
+same tests with the `regtest` feature passed minutes later in the same
+run, all sixty-four. Both times it was the first minute of a freshly
+built test program of `veil_core`; this time the DLL was new as well and
+slow to load the first time (the tests of `veil_cli`, the first to load
+it, took 87 seconds). The diagnosis written after the first time did not
+run: it was called at the `regtest` level only, and at the `offline`
+level cargo goes on after a program that fails and ends with 101
+whatever happened. Now that level reads what cargo prints for such an
+ending (`tests_of_the_workspace`, `odd_endings` in `check.sh`), and the
+diagnosis first asks Windows what it recorded about programs that ended
+badly (`what_windows_recorded`: the Application log, which names the
+part of the program the fault was in and its code), then runs the tests
+again one at a time. Tried on the owner's own log with stand-ins for
+cargo and for PowerShell; the question to Windows has never been put to
+a real one. The owner was asked to put it by hand for that day's
+ending.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
@@ -1416,11 +1466,12 @@ See the build plan in `docs/concept.md`.
   Once, loading the DLL failed there with Windows error 995 (operation
   aborted) in one test and worked in every other; if it comes back, the
   first thing to try is loading it from a Windows disk, not over the WSL
-  file share. Once, a test program run as a Windows program ended with
-  status 116 a second or so after starting and passed when run again;
-  `check.sh` now runs such a program's tests again one at a time to name
-  the test, and what that run prints is the first thing to read if it
-  comes back. Once, the tests of `veil_core` that open a wallet all
+  file share. Twice, a test program of `veil_core` run as a Windows
+  program ended with status 116 within its first minute, freshly built
+  both times, and passed when run again; `check.sh` now asks Windows
+  what it recorded about the ending and runs such a program's tests again
+  one at a time to name the test, at the `offline` level too, and what
+  that prints is the first thing to read if it comes back. Once, the tests of `veil_core` that open a wallet all
   stood for over a minute at the start of a freshly built test program
   and then went on; the one with a limit failed. The tests now load the
   wallet library before they time anything and say when that took long.

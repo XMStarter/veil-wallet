@@ -169,6 +169,15 @@ export GIT_AUTHOR_NAME="veil build" GIT_AUTHOR_EMAIL="build@invalid"
 export GIT_COMMITTER_NAME="veil build" GIT_COMMITTER_EMAIL="build@invalid"
 export GIT_AUTHOR_DATE="2000-01-01T00:00:00+00:00" GIT_COMMITTER_DATE="2000-01-01T00:00:00+00:00"
 
+# Three more things a build can take from the machine it runs on, made the
+# same here for every build: the language, by which tools order lists and
+# write numbers; the time zone; and a store of what was compiled before
+# (ccache, which Monero's dependency build makes and Monero's own build
+# uses where it finds it), because what a build makes has to come from its
+# sources and not from a build before it. None of the three has been seen
+# to change what is built; they are closed because they are cheap to close.
+export LC_ALL=C TZ=UTC CCACHE_DISABLE=1
+
 if [ ! -d "$src/.git" ]; then
   git init -q "$src"
   git -C "$src" remote add origin "$MONERO_C_REPO"
@@ -339,11 +348,21 @@ else
   # place to look for it, and that folder is nowhere outside this build.
   # So the place written is "where this file is" instead, and Polyseed is
   # put next to the wallet library and goes wherever that goes.
+  #
+  # ARCH=default: left to itself, Monero's build compiles for the
+  # processor of the machine it runs on (-march=native), and so does
+  # RandomX inside it. The library then differs from one build machine to
+  # the next, and on a processor older than the builder's it can end with
+  # an illegal instruction. "default" names no processor: the compiler's
+  # own baseline for x86-64 plus AES, which is what the builds for
+  # Windows and Android get from Monero's dependency build and what
+  # Monero's own releases are built with.
   build="$work/build"
   out="$work/out"
   # The word is quoted once more for the shell that runs the linker, which
   # would take it for a variable of its own, and an empty one.
   cmake -S monero_libwallet2_api_c -B "$build" -G Ninja \
+    -DARCH=default \
     -DMONERO_FLAVOR=monero -DHOST_ABI=x86_64-linux-gnu -DOUTPUT_MODE=SHARED \
     -DCMAKE_BUILD_TYPE=Release -DUSE_DEVICE_TREZOR=OFF -DBUILD_TESTS=OFF \
     -DMANUAL_SUBMODULES=1 -DBUILD_DOCUMENTATION=OFF \

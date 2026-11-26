@@ -31,6 +31,15 @@ is built here and not the system's, Polyseed; it comes out as
 `libpolyseed.so.2` beside the wallet library, which looks for it where it
 itself is, and it goes wherever the wallet library goes.
 
+The build for Linux is told to compile for no processor in particular
+(`ARCH=default`). Left to itself Monero's build compiles for the
+processor of the machine it runs on, and RandomX inside it does the
+same: the library then differs from one build machine to the next, and
+on a processor older than the builder's it can end with an illegal
+instruction. That is how it was built here until a second machine's
+library was held against the first's. The builds for Windows and for
+Android never were: Monero's dependency build names no processor.
+
 ### Where it is built
 
 Whatever folder is named as the work folder, the build happens at one
@@ -57,6 +66,11 @@ builds now is emptied and built again from nothing, for every system,
 with only the dependency build's downloads kept: `built-how.txt` names
 the way, and goes into the sum by which `check.sh` tells a library of
 this checkout from any other.
+
+The script also sets the language and the time zone it builds in (`C`,
+UTC) and switches off the store of earlier compilations that Monero's
+dependency build brings (ccache). None of these has been seen to change
+what is built.
 
 `native/twice.sh` builds the library twice in two folders and compares
 the two; `docs/development.md`, "The same build twice", says what came

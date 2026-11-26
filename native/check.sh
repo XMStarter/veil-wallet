@@ -321,7 +321,7 @@ level_offline() {
   fi
   step cargo fmt --check &&
     step cargo_for_target clippy --workspace --all-targets --all-features --locked -- -D warnings &&
-    step cargo_for_target test --workspace --locked --no-fail-fast &&
+    tests_of_the_workspace &&
     notices_side &&
     dart_side &&
     app_side
@@ -516,10 +516,91 @@ where_it_ended() {
   echo "The test program did not finish: it ended with $status, where a failed"
   echo "test ends with 101. Running the same tests again one at a time, with"
   echo "their output, to see where. The level has failed either way."
+  what_windows_recorded
   step cargo_for_target test "$@" -- --test-threads=1 --nocapture
   local again=$?
   echo
   echo "one at a time it ended with $again"
+}
+
+# What Windows itself wrote down about programs that ended badly in the
+# last half hour: for each, the program, the part of it the fault was in,
+# and the code of the fault. A Windows program started from WSL hands back
+# only the last byte of how it ended, which is all "116" is; this is where
+# the rest of it is kept. Read as the values of each record and not as
+# its text, which is in the language Windows is set to. Nothing here is
+# an error: where it cannot be asked, nothing is printed.
+what_windows_recorded() {
+  if [ "$windows" != 1 ] && ! on_windows; then
+    return 0
+  fi
+  local powershell
+  powershell="$(command -v powershell.exe 2>/dev/null ||
+    ls /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe 2>/dev/null)"
+  if [ -z "$powershell" ]; then
+    return 0
+  fi
+  echo
+  echo "--- what Windows recorded about programs that ended badly (last 30 minutes)"
+  # Handed over encoded, as PowerShell takes it, so that no quote of it is
+  # lost between this shell and that one.
+  local asked
+  asked="$(iconv -f UTF-8 -t UTF-16LE <<'POWERSHELL' | base64 | tr -d '\n'
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
+$ProgressPreference = 'SilentlyContinue'
+$since = (Get-Date).AddMinutes(-30)
+$found = Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1000,1001; StartTime=$since} -ErrorAction SilentlyContinue
+if (-not $found) { 'nothing'; exit }
+foreach ($record in ($found | Sort-Object TimeCreated)) {
+  $record.TimeCreated.ToUniversalTime().ToString('u') + ' event ' + $record.Id + ': ' +
+    (($record.Properties | ForEach-Object { $_.Value }) -join ' | ')
+}
+POWERSHELL
+  )"
+  "$powershell" -NoProfile -NonInteractive -EncodedCommand "$asked" </dev/null 2>&1 |
+    tr -d '\r' || true
+}
+
+# Prints, for each test program in a record of `cargo test` that was
+# ended and did not finish, how it ended and what cargo says to pass to
+# run it again, with a tab between. A program whose tests failed ends
+# with 101 and is none of these.
+odd_endings() {
+  awk '
+    /^error: test failed, to rerun pass `/ {
+      again = $0
+      sub(/^[^`]*`/, "", again)
+      sub(/`.*$/, "", again)
+      next
+    }
+    /process didn.t exit successfully: .*\((exit status|signal): / && again != "" {
+      how = $0
+      sub(/^.*\(exit status: /, "", how)
+      sub(/^.*\(signal: /, "signal ", how)
+      sub(/[,)].*$/, "", how)
+      if (how != "101") printf "%s\t%s\n", how, again
+      again = ""
+    }
+  ' "$1"
+}
+
+# The tests of the whole workspace. cargo is told to go on after a test
+# program that fails, so it ends with 101 whatever happened, and a
+# program that was ended, by a crash or by the system, shows only as one
+# line of cargo's among a thousand. So what cargo prints is read for
+# such an ending, and each program that ended that way goes to
+# where_it_ended. That never turns a failed run into a passed one.
+tests_of_the_workspace() {
+  local seen status how again
+  seen="$(mktemp)"
+  step cargo_for_target test --workspace --locked --no-fail-fast 2>&1 | tee "$seen"
+  status="${PIPESTATUS[0]}"
+  while IFS=$'\t' read -r -u 3 how again; do
+    # shellcheck disable=SC2086  # several words for cargo, as cargo printed them
+    where_it_ended "$how" $again --locked
+  done 3< <(odd_endings "$seen")
+  rm -f "$seen"
+  return "$status"
 }
 
 level_tor() {

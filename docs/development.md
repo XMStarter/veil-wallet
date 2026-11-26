@@ -219,6 +219,17 @@ for Windows (see `native/wallet_lib/README.md`). Then:
 The `bridges` level has no Windows form yet: there are no transport
 programs for Windows to test with.
 
+A test program that is ended before it has finished, by a crash or by the
+system, ends with something other than the 101 of a failed test, and its
+tests have printed nothing by then. A Windows program started from WSL
+hands back only the last byte of how it ended. So when `check.sh` sees
+such an ending, at the `offline` level in what cargo prints and at the
+`regtest` level in how cargo ends, it asks Windows what it recorded about
+programs that ended badly in the last half hour (its Application log:
+the program, the part of it the fault was in, and the fault's code), and
+runs that program's tests again one at a time with their output, to name
+the test. Neither turns a failed level into a passed one.
+
 Two builds of the Rust code exist for Windows. Hosted CI compiles it with
 Microsoft's toolchain; this run compiles it with the GNU one, because that
 is the one that can be used from Linux. The wallet library is the same DLL
@@ -553,12 +564,29 @@ together on four cores. The folders are made in `~/veil-twice`
 | The transport program for Android | Nothing: it is built without paths and without the build's own mark (`transports/build.sh`). | | The same, and the same as the file in the packages built before this step |
 | The wallet library, for Android | The paths of some 770 source files, and the folder Monero's dependency build installs into. Then, with the paths the same, eight bytes: the name of the commit monero_c makes of its patches, which had the time of the build in it. | It is built at one path on every machine, and those commits have one date (`wallet_lib/README.md`, "Where it is built"). | The same |
 | The wallet library, for Windows | The same two things, and then six bytes: the time of linking, which a program for Windows has a place for in its first bytes, and a sum over the file that follows from it. | The same, and the linker is told to leave the time out. | The same, after both were linked again without the time; they were not built from nothing a second time |
-| The wallet library, for Linux | The same two things, and one more that was no difference but a fault: it looked for Polyseed in the folder it was built in. | The same; Polyseed lies beside the library and is looked for there. | The same, both files |
+| The wallet library, for Linux | The same two things, and one more that was no difference but a fault: it looked for Polyseed in the folder it was built in. And one that only a second machine could show: it was compiled for the processor of the machine that built it. | The same; Polyseed lies beside the library and is looked for there; and the build is told to compile for no processor in particular, as the other two are. | The same, both files |
 | The app for Android | Nothing in the 80 files of the package, given the same core, wallet library and transport program. The package as a whole differs in its signature, which has chance in it. | `twice.sh` finds where the signature lies in a package and holds everything else to being the same. | The same but for the signature |
 | The app for Linux | One file of the bundle, the program itself, in 483 bytes: it was linked with the folder it was built in as the place to look for its libraries, and the final place was written over that afterwards, in the room the folder's name had taken. | It is linked with the final place from the start (`app/linux/CMakeLists.txt`). | The same, all 25 files of the bundle |
 
 All of that is from a cloud session, on 26 November 2026, with the two
 builds of a part made one after the other on one machine.
+
+A second machine built the wallet library the same day, the owner's, from
+commit `d39e09f`: Ubuntu 24.04 under WSL2, where the build got its view of
+the folders as an ordinary user. Its sums were held against the cloud
+session's. Polyseed for Linux was the same file. The wallet library for
+Linux was not, and not of the same size: left to itself, Monero's build
+compiles for the processor it runs on (`-march=native`), so each machine
+had made a library for its own, the cloud session's with some 3,400
+instructions that only a server processor of the last years has. That was
+more than a difference. A package for Linux would have carried a library
+that ends with an illegal instruction on a processor older than its
+builder's. The build now names no processor (`ARCH=default` in
+`wallet_lib/build.sh`), which is what the builds for Windows and Android
+always had from Monero's dependency build; the library built that way has
+none of those instructions, and the second machine has not built it yet.
+The wallet library for Windows came out of the same size on both machines
+and with another sum. Where the two files differ is not known yet.
 
 What it does not show, and what is known to stand in the way of the same
 files on another machine:
@@ -567,7 +595,8 @@ files on another machine:
   Rust is pinned to a version, Go and both Android NDKs by checksum, and
   Flutter by checksum; the C and C++ compilers for Linux and the cross
   compiler for Windows are the distribution's, whatever version it has
-  that day. Nobody has built any part on a second machine and compared.
+  that day. One second machine has built the wallet library, as told
+  above; no other part has been built on one and compared.
 - **The wallet library for Linux** is linked against the distribution's
   Boost, OpenSSL and the rest, so it is the same only where those are the
   same, and a package for Linux needs them installed. Monero's dependency

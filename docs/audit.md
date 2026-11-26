@@ -282,10 +282,13 @@ byte for byte. On one machine the core, the transport program, the wallet
 library and the app come out the same that way, a package for Android but
 for its signature; `docs/development.md`, "The same build twice", has
 each part, what had to be done for it, and what that does not show.
-Nobody has built any of it on a second machine and compared, the wallet
-library for Linux is the same only where the distribution's libraries
-are, and the app for Windows is not compared at all. Nothing is signed
-with a key that means anything.
+On a second machine only the wallet library has been built, and it was
+not the same there: for Linux because it was compiled for the processor
+of whichever machine built it, which is put right and not built there
+again yet, for Windows in a way that is not found yet. The wallet
+library for Linux is in any case the same only where the distribution's
+libraries are, and the app for Windows is not compared at all. Nothing is
+signed with a key that means anything.
 
 ## Known to be weak
 
