@@ -6,8 +6,22 @@
 # The result is <work-dir>/out/libmonero_wallet2_api_c.so and, with
 # --with-daemon, <work-dir>/out/monerod for regtest tests.
 #
-# This is the development and test build: it links against the system's
-# libraries. Release builds will use the reproducible toolchain instead.
+# Built without --windows or --android, it links against the system's
+# libraries, which are then no part of what is built; why is said where
+# that build is made, below.
+#
+# Whatever folder <work-dir> is, the build happens at one path, the same on
+# every machine: /srv. The compilers write the paths of source files into
+# what they build, some hundreds of them, and the dependency build writes
+# the folder it installs into; with the work folder under its own name the
+# same sources gave another library in every folder. So the script starts
+# itself again in a view of the machine's folders that is its own, in which
+# <work-dir> is what lies at /srv, and builds there. Nothing outside that
+# view changes: /srv stays what it was for every other program, and the
+# files are written into <work-dir> as the user who runs this. It takes a
+# Linux that lets an ordinary user have such a view (user namespaces), or
+# root. A work folder built in before this was so is emptied and built
+# again from nothing; what the dependency build had downloaded stays.
 #
 # Needs git, cmake, ninja, a C++ compiler and these Debian/Ubuntu packages:
 #   pkg-config libssl-dev libzmq3-dev libunbound-dev libsodium-dev
@@ -67,6 +81,75 @@ jobs="$(nproc 2>/dev/null || echo 2)"
 
 mkdir -p "$work"
 work="$(cd "$work" && pwd)"
+
+# The one path everything is built at; see the top of this file.
+BUILT_AT=/srv
+if [ "${VEIL_WALLET_LIB_VIEW:-}" != "$work" ]; then
+  if [ ! -d "$BUILT_AT" ]; then
+    echo "error: this system has no folder $BUILT_AT, which the build needs as the" >&2
+    echo "place it puts the work folder at. As root: mkdir $BUILT_AT" >&2
+    exit 1
+  fi
+  # Root can have a view of its own as it is. Anybody else gets one as the
+  # root of a user namespace, and goes back to being themselves in it once
+  # the folder is in place.
+  if [ "$(id -u)" = 0 ]; then
+    enter=(unshare --mount --)
+    back=()
+  else
+    enter=(unshare --user --map-root-user --mount --)
+    back=(unshare --user "--map-user=$(id -u)" "--map-group=$(id -g)" --)
+  fi
+  if ! "${enter[@]}" ${back[@]+"${back[@]}"} true 2>/dev/null; then
+    echo "error: this system does not let this user have a view of the folders of its" >&2
+    echo "own (unshare, user namespaces), which the build needs so that it happens at" >&2
+    echo "the same path on every machine. See the top of $0." >&2
+    exit 1
+  fi
+  # shellcheck disable=SC2016
+  VEIL_WALLET_LIB_VIEW="$work" exec "${enter[@]}" bash -c '
+    work="$1" at="$2"
+    shift 2
+    mount --bind "$work" "$at" && exec "$@"
+  ' _ "$work" "$BUILT_AT" ${back[@]+"${back[@]}"} "$0" "$work" "$@"
+fi
+# From here on in the view: the folder as the user knows it is only named
+# in what is said to the user.
+shown="$work"
+work="$BUILT_AT"
+if [ ! "$work" -ef "$shown" ]; then
+  echo "error: $shown is not what lies at $BUILT_AT; the view was not made" >&2
+  exit 1
+fi
+
+# How a work folder is built, in a word, which is kept in a file of its
+# own (built-how.txt) because check.sh and windows-app.sh read it too: it
+# goes into the sum that tells a library built from this checkout from
+# any other, with the patches. A folder built another way is
+# built again from nothing: under its own path it has that path in what
+# was built, and its patches were committed at the time of that build,
+# which is in the library too (see the dates below). Only what the
+# dependency build downloaded is kept, and put back further down.
+BUILT_HOW="$(cat "$here/built-how.txt")"
+if [ "$(cat "$work/.built-how" 2>/dev/null)" != "$BUILT_HOW" ]; then
+  if [ -d "$work/monero_c" ] || [ -d "$work/android" ] || [ -d "$work/build" ]; then
+    echo "$shown was built in another way than this script builds now. Its sources"
+    echo "and everything built from them, for every system, are removed and made"
+    echo "again, here for one system; what was downloaded for the dependencies stays."
+    # What came out as well, for every system: a library built the old
+    # way must not be taken for one built this way.
+    rm -rf "$work/out"
+    for old in "$work" "$work/android"; do
+      rm -rf "$old/build" "$old/build-windows" "$old/host-libs" "$old/link-names"
+      if [ -d "$old/monero_c/monero/contrib/depends/sources" ] && [ ! -e "$old/depends-sources.kept" ]; then
+        mv "$old/monero_c/monero/contrib/depends/sources" "$old/depends-sources.kept"
+      fi
+      rm -rf "$old/monero_c"
+    done
+  fi
+  echo "$BUILT_HOW" > "$work/.built-how"
+fi
+
 # Where the sources are and where things are built. Android has a tree of
 # its own; what comes out goes under the same out/ either way.
 tree="$work"
@@ -76,9 +159,15 @@ if [ -n "$android" ]; then
 fi
 src="$tree/monero_c"
 
-# apply_patches.sh commits the patches it applies, which needs an identity.
+# apply_patches.sh commits the patches it applies, which needs an identity,
+# and a date: Monero writes the first nine characters of its commit's name
+# into the library as part of its version, and the name of a commit comes
+# from its date among other things. With the date of the build, every
+# build was another library in those nine characters. Any date does, as
+# long as it is always the same one.
 export GIT_AUTHOR_NAME="veil build" GIT_AUTHOR_EMAIL="build@invalid"
 export GIT_COMMITTER_NAME="veil build" GIT_COMMITTER_EMAIL="build@invalid"
+export GIT_AUTHOR_DATE="2000-01-01T00:00:00+00:00" GIT_COMMITTER_DATE="2000-01-01T00:00:00+00:00"
 
 if [ ! -d "$src/.git" ]; then
   git init -q "$src"
@@ -97,6 +186,15 @@ if [ ! -f monero/.patch-applied ]; then
     || git submodule update --init --force monero
   ./apply_patches.sh monero
 fi
+# What an earlier way of building had downloaded, back where the
+# dependency build looks for it.
+if [ -d "$tree/depends-sources.kept" ]; then
+  if [ ! -e monero/contrib/depends/sources ]; then
+    mv "$tree/depends-sources.kept" monero/contrib/depends/sources
+  else
+    rm -rf "$tree/depends-sources.kept"
+  fi
+fi
 
 # Veil's own patches, on top of monero_c's. They stay uncommitted, so that a
 # changed patch set can be dropped and applied again: the marker file holds
@@ -111,7 +209,7 @@ patches=("$here"/patches/monero/*.patch "$here"/patches/monero_c/*.patch)
 if [ -n "$android" ]; then
   patches+=("$here"/patches/android/bc-ur/*.patch)
 fi
-patch_set="$(cat "${patches[@]}" | sha256sum | cut -d' ' -f1)"
+patch_set="$(cat "${patches[@]}" "$here/built-how.txt" | sha256sum | cut -d' ' -f1)"
 if [ "$(cat .veil-patched 2>/dev/null)" != "$patch_set" ]; then
   if [ -f .veil-patched ]; then
     echo "Veil's patches changed; applying them again"
@@ -135,6 +233,15 @@ if [ "$(cat .veil-patched 2>/dev/null)" != "$patch_set" ]; then
   echo "$patch_set" > .veil-patched
 fi
 
+# Where the dependency build keeps what it downloads: in its own folder,
+# unless another is named, which twice.sh does so that two builds download
+# once. Every file is checked by its hash wherever it lies.
+depends_options=()
+beside=()
+if [ -n "${VEIL_DEPENDS_SOURCES:-}" ]; then
+  depends_options+=("SOURCES_PATH=$VEIL_DEPENDS_SOURCES")
+fi
+
 if [ -n "$windows" ]; then
   host=x86_64-w64-mingw32
   depends="$src/monero/contrib/depends"
@@ -142,7 +249,7 @@ if [ -n "$windows" ]; then
   # compiled for Windows from sources it downloads and checks by hash. Monero
   # needs the cross compiler in its POSIX-threads form, which the
   # distribution installs beside the default one.
-  make -C "$depends" HOST="$host" -j"$jobs" \
+  make -C "$depends" HOST="$host" -j"$jobs" ${depends_options[@]+"${depends_options[@]}"} \
     mingw32_CC="$host-gcc-posix" mingw32_CXX="$host-g++-posix"
 
   build="$work/build-windows"
@@ -153,13 +260,18 @@ if [ -n "$windows" ]; then
   # DLL that does not exist); and -static, so that the compiler's own
   # thread library goes into the DLL too and the result needs nothing but
   # Windows itself.
+  #
+  # And a fourth, for the same library from every build: no time of
+  # linking. A program for Windows has a place for it in its first bytes,
+  # the linker fills it in unless told not to, and a sum over the file
+  # follows from it; two builds differed in those six bytes.
   cmake -S monero_libwallet2_api_c -B "$build" -G Ninja \
     -DCMAKE_TOOLCHAIN_FILE="$depends/$host/share/toolchain.cmake" \
     -DMONERO_FLAVOR=monero -DHOST_ABI="$host" -DOUTPUT_MODE=SHARED \
     -DCMAKE_BUILD_TYPE=Release -DUSE_DEVICE_TREZOR=OFF -DBUILD_TESTS=OFF \
     -DMANUAL_SUBMODULES=1 -DBUILD_DOCUMENTATION=OFF \
-    -DCMAKE_SHARED_LINKER_FLAGS="-L$depends/$host/lib -static" \
-    -DCMAKE_EXE_LINKER_FLAGS="-L$depends/$host/lib -static" \
+    -DCMAKE_SHARED_LINKER_FLAGS="-L$depends/$host/lib -static -Wl,--no-insert-timestamp" \
+    -DCMAKE_EXE_LINKER_FLAGS="-L$depends/$host/lib -static -Wl,--no-insert-timestamp" \
     -DCMAKE_C_FLAGS="-DPOLYSEED_STATIC" -DCMAKE_CXX_FLAGS="-DPOLYSEED_STATIC"
   cmake --build "$build" -j"$jobs"
   library="libmonero_wallet2_api_c.dll"
@@ -190,7 +302,7 @@ elif [ -n "$android" ]; then
   # Monero's dependency build: the NDK itself, downloaded from its publisher
   # and checked by hash, then Boost, OpenSSL, ZeroMQ, Unbound and the rest,
   # compiled for Android from sources checked the same way.
-  make -C "$depends" HOST="$host" -j"$jobs"
+  make -C "$depends" HOST="$host" -j"$jobs" ${depends_options[@]+"${depends_options[@]}"}
 
   # monero_c's build files ask the linker for the C++ library by the name
   # newer NDKs give it. In this one it is in two files under other names;
@@ -212,24 +324,51 @@ elif [ -n "$android" ]; then
   library="libmonero_wallet2_api_c.so"
   daemon=""
 else
+  # For Linux the library is linked against the system's own Boost,
+  # OpenSSL, ZeroMQ, Unbound and the rest, as shared libraries that are no
+  # part of what is built: it runs where those are installed in the
+  # versions of the machine that built it, and is the same library only
+  # on a machine with the same ones. Monero's dependency build, which the
+  # other two builds use, does not build on a current distribution for
+  # the distribution itself: its Boost is from 2018 and does not compile
+  # against a C library of today. Tried on Ubuntu 24.04 in November 2026.
+  #
+  # One of them is built here and not the system's: Polyseed, as a shared
+  # library of its own beside the wallet library. The linker's habit is
+  # to write the folder it was built in into whatever needs it, as the
+  # place to look for it, and that folder is nowhere outside this build.
+  # So the place written is "where this file is" instead, and Polyseed is
+  # put next to the wallet library and goes wherever that goes.
   build="$work/build"
   out="$work/out"
+  # The word is quoted once more for the shell that runs the linker, which
+  # would take it for a variable of its own, and an empty one.
   cmake -S monero_libwallet2_api_c -B "$build" -G Ninja \
     -DMONERO_FLAVOR=monero -DHOST_ABI=x86_64-linux-gnu -DOUTPUT_MODE=SHARED \
     -DCMAKE_BUILD_TYPE=Release -DUSE_DEVICE_TREZOR=OFF -DBUILD_TESTS=OFF \
-    -DMANUAL_SUBMODULES=1 -DBUILD_DOCUMENTATION=OFF
+    -DMANUAL_SUBMODULES=1 -DBUILD_DOCUMENTATION=OFF \
+    -DCMAKE_SKIP_BUILD_RPATH=ON \
+    -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-rpath,'\$ORIGIN'" \
+    -DCMAKE_EXE_LINKER_FLAGS="-Wl,-rpath,'\$ORIGIN'"
   cmake --build "$build" -j"$jobs"
+  beside=("$build/monero_build/external/polyseed/libpolyseed.so.2")
   library="libmonero_wallet2_api_c.so"
   daemon="monerod"
 fi
 
 mkdir -p "$out"
 cp "$build/$library" "$out/"
+# What the library needs next to it, under the name it asks for.
+for file in ${beside[@]+"${beside[@]}"}; do
+  cp -L "$file" "$out/"
+done
 # Lets check.sh tell a library built from an older patch set from this one.
 echo "$patch_set" > "$out/veil-patches.sha256"
 if [ -n "$with_daemon" ]; then
   cmake --build "$build" --target daemon -j"$jobs"
   cp "$build/bin/$daemon" "$out/"
 fi
-echo "built: $out"
+echo "built: $shown${out#"$work"}"
 ls -l "$out"
+# What to hold against another machine's build of the same checkout.
+(cd "$out" && sha256sum "$library" ${beside[@]+"${beside[@]##*/}"})

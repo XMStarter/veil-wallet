@@ -93,7 +93,7 @@ keeps one and the test that would fail if it did not. "Private chain" and
 | Nothing is sent without a review, and zero never means everything. | `prepare_send` builds, `commit` sends; `SendAmount::Everything` is the only way to send all. | `sending_is_refused_before_anything_is_built`; private chain: `receives_reviews_sends_and_survives_a_lost_answer`. |
 | A payment is made once. | A send whose outcome is unknown is written to disk at once, blocks other sends, and is looked for after every synchronisation (`veil_core/src/session.rs`). | Private chain: `lost_connections_lose_no_funds_and_hide_no_send`, `receives_reviews_sends_and_survives_a_lost_answer`; `a_send_left_unknown_by_an_earlier_session_is_taken_up_again`. |
 | A killed process or a damaged file does not cost the wallet. | Keys in a file of their own; a data file that cannot be read is set aside and the wallet opens from its keys. | `a_wallet_survives_being_killed_while_it_saves`, `a_wallet_whose_data_file_is_damaged_opens_from_its_keys`. |
-| A wallet is open in one place. | `<wallet>.lock`, held with the system's file lock (`veil_wallet/src/wallet.rs`). | `a_wallet_that_is_open_already_is_not_opened_twice_and_not_touched`. |
+| A wallet is open in one place. | `<wallet>.lock`, held with the system's file lock (`veil_wallet/src/wallet.rs`). A lock that is taken is asked for again for half a second before the wallet is refused, because one this program has just let go can count as taken while it starts another program. | `a_wallet_that_is_open_already_is_not_opened_twice_and_not_touched`, `a_mark_let_go_is_free_while_other_programs_are_being_started`. |
 | Nothing of a wallet lies outside its folder. | Patch `monero/0005`; the address file the library writes is removed. | `a_wallet_leaves_nothing_outside_its_folder`, `the_wallets_address_is_not_left_as_text_next_to_it`. |
 | A recovery phrase and a password are not written to a log or an error. | `SeedPhrase` hides itself in `Debug`; no part of the core writes a log at all. | `made_up_phrases_are_counted_and_never_shown`, `made_up_start_requests_are_read_or_refused`. |
 | A locked wallet is closed. | Locking closes the session: the wallet is saved and closed, Tor stopped (`app/lib/app.dart`, `veil_core::Session::close`). | `app/test/wallet_flow_test.dart`, `settings_test.dart`, on a wallet that only pretends. |
@@ -276,10 +276,16 @@ network. They are refused in hosted CI, for the reason given in
 `docs/development.md`, "Hosted CI and the hosting account", and whoever
 runs them should read that first.
 
-What can be built the same twice: the transport program, which came out
-byte for byte the same from two folders. For the wallet library, the core
-and the app this has not been tried. Nothing is signed with a key that
-means anything.
+What can be built the same twice: `native/twice.sh` builds a part of a
+package in two folders that have nothing in common and compares the two
+byte for byte. On one machine the core, the transport program, the wallet
+library and the app come out the same that way, a package for Android but
+for its signature; `docs/development.md`, "The same build twice", has
+each part, what had to be done for it, and what that does not show.
+Nobody has built any of it on a second machine and compared, the wallet
+library for Linux is the same only where the distribution's libraries
+are, and the app for Windows is not compared at all. Nothing is signed
+with a key that means anything.
 
 ## Known to be weak
 

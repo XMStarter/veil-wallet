@@ -15,6 +15,12 @@ cmake_policy(SET CMP0063 NEW)
 
 # Load bundled libraries from the lib/ directory relative to the binary.
 set(CMAKE_INSTALL_RPATH "$ORIGIN/lib")
+# Linked with that from the start. Left to itself, the build links the
+# program with the folder it is built in as the place to look for its
+# libraries and writes the line above over it afterwards, in the room the
+# folder's name took: the program then differed with the length of the
+# name of the folder it was built in (native/twice.sh showed it).
+set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 
 # Root filesystem for cross-building.
 if(FLUTTER_TARGET_PLATFORM_SYSROOT)

@@ -184,12 +184,30 @@ fn mark_in_use(path: &Path) -> Result<std::fs::File, Error> {
         .write(true)
         .open(&name)
         .map_err(failed)?;
-    match lock_now(&file) {
-        Ok(true) => Ok(file),
-        Ok(false) => Err(Error::WalletInUse),
-        Err(error) => Err(failed(error)),
+    // Asked again for a moment before the wallet is said to be in use. A
+    // lock of this kind goes with the open file, and a program that is
+    // being started holds every open file of the one that starts it until
+    // it has become itself. So a mark this program has just let go can
+    // still count as taken, for as long as it takes to start a program:
+    // well under a thousandth of a second, as a rule. A wallet that is
+    // really open elsewhere is still refused, half a second later. (The
+    // library's own lock on the keys file is of another kind, which
+    // belongs to the program and to nothing it starts.)
+    let asked = std::time::Instant::now();
+    loop {
+        match lock_now(&file) {
+            Ok(true) => return Ok(file),
+            Ok(false) if asked.elapsed() < MARK_FREE_WITHIN => {
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            Ok(false) => return Err(Error::WalletInUse),
+            Err(error) => return Err(failed(error)),
+        }
     }
 }
+
+/// How long a mark that is taken is asked for again; see `mark_in_use`.
+const MARK_FREE_WITHIN: Duration = Duration::from_millis(500);
 
 /// Takes the lock on `file` if nobody has it, without waiting. `false`
 /// means that somebody has. The lock goes with the open file: it is let go
@@ -1681,6 +1699,55 @@ pub fn is_onion_host(host: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A mark that was let go can be taken again at once, also while the
+    /// program is starting other programs. A lock of this kind goes with
+    /// the open file and not with the number a program knows it by, and a
+    /// program that is being started holds every open file of the one
+    /// that starts it for a moment, until it has become itself. Let go in
+    /// that moment, the mark still counted as taken, and a wallet closed
+    /// and opened again right away was "open elsewhere": seen once, in a
+    /// test, while another test started a program.
+    #[cfg(unix)]
+    #[test]
+    fn a_mark_let_go_is_free_while_other_programs_are_being_started() {
+        let dir = std::env::temp_dir().join(format!("veil-mark-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let wallet = dir.join("w");
+
+        let done = std::sync::Arc::new(AtomicBool::new(false));
+        let starters: Vec<_> = (0..3)
+            .map(|_| {
+                let done = done.clone();
+                std::thread::spawn(move || {
+                    while !done.load(Ordering::SeqCst) {
+                        // Any program that is there; whether it runs does
+                        // not matter, only that it is started.
+                        let _ = std::process::Command::new("true").status();
+                    }
+                })
+            })
+            .collect();
+
+        let mut refused = None;
+        for round in 0..2000 {
+            let mark = match mark_in_use(&wallet) {
+                Ok(mark) => mark,
+                Err(error) => {
+                    refused = Some((round, error));
+                    break;
+                }
+            };
+            drop(mark);
+        }
+        done.store(true, Ordering::SeqCst);
+        for starter in starters {
+            starter.join().unwrap();
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(refused.is_none(), "{refused:?}");
+    }
 
     #[test]
     fn address_indices_are_read_from_the_librarys_braces() {

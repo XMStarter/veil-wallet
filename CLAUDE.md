@@ -84,7 +84,11 @@ that cannot lose the user's funds.
     network's.
   - `wallet_lib`: pinned build script for the wallet library, Veil's
     patches to it, and the bindings generator. After changing a patch, run
-    `build.sh` again and regenerate the bindings. `--android` builds it
+    `build.sh` again and regenerate the bindings. It builds at one path
+    on every machine, `/srv`, in a view of the folders it makes for
+    itself, so that the library does not differ with the folder it was
+    built in; when the way it builds changes, say so in `built-how.txt`,
+    and every work folder is built again from nothing. `--android` builds it
     for Android on 64-bit ARM from a source tree of its own, with a patch
     only that build has (`patches/android`); the README says why.
   - `transports`: pinned build script for the transport program the app
@@ -120,6 +124,13 @@ that cannot lose the user's funds.
     `offline` lints and builds for Android and runs nothing, and `app`
     builds the app as an APK with the core, the wallet library and the
     transport program inside.
+  - `twice.sh`: builds a part of a package twice, in two folders that
+    have nothing in common, and says whether the two came out the same
+    byte for byte: the core, the transport program, the wallet library,
+    the app. It starts nothing it has built. An optimised build of the
+    core goes through `release_build` in `check.sh`, which keeps this
+    machine's folders out of it; build the core for an app no other way.
+    `docs/development.md`, "The same build twice".
   - `accept.sh`: the owner's acceptance run in one command, step after
     step: the latest commits, `check.sh` as Linux and as Windows programs,
     the logs to send, then the app. It starts a daemon, so it is not for
@@ -1329,6 +1340,68 @@ systems, and steps 6.1 and 6.4 with the fix were merged on the owner's
 word. Left of step 6: the same build twice (6.2), signed packages
 (6.3), F-Droid (6.5) and the release itself (6.6). The `tor` level has
 not run with the list of five nodes.
+Step 6.2, the same build twice, is written. `native/twice.sh` builds a
+part of a package twice, in two folders that have nothing in common and
+with a home for cargo each, and compares the two byte for byte. In a
+cloud session, each pair built one after the other on one machine:
+the core differed in 19.6 of 24.3 million bytes, for the paths of the
+528 source files that can report an error, most of them under cargo's
+folder in the home of whoever builds; every optimised build of the core
+now names those folders the same to the compiler (`release_build` in
+`check.sh`), and the core for Linux and for Android comes out the same.
+The transport program came out the same, as before, and the same as the
+file in the packages the owner has. The wallet library had the folder
+it was built in written into it some 770 times, and the compiler Monero
+brings for Android has no option against that, so its script now builds
+at one path on every machine, `/srv`, in a view of the folders it makes
+for itself (a mount namespace, for an ordinary user through a user
+namespace; tried as an ordinary user only as far as the first
+download). With the paths the same, the library for Android still
+differed in eight bytes, the name of the commit monero_c makes of its
+patches, which had the time of the build in it; those commits have one
+date now. The library for Windows then differed in six, the time of
+linking in its first bytes and a sum that follows from it; the linker is
+told to leave the time out, after which the two were linked again and
+were the same; they were not built from nothing a second time. For
+Linux, Monero's dependency build was tried, so that the library would
+need nothing of the system's: its Boost of 2018 does not compile on
+Ubuntu 24.04. So the library for Linux stays linked against the
+system's libraries, is the same only where those are, and a package for
+Linux is still not complete in itself. It was the same in two builds on
+the one machine. Found on the way: it looked for Polyseed in the folder
+it had been built in, which worked only because that folder was still
+there; Polyseed now lies beside it (`libpolyseed.so.2`), is looked for
+there, and goes into the app's bundle with it. The app for Android: all
+80 files of the package the same, given the same native parts; the
+packages differ in their signatures and nowhere else, which the script
+checks by where the signature lies. The app for Linux differed in its
+own program, 483 bytes that came from the length of the folder's name
+(the place to look for libraries was written over the build folder's
+afterwards); it is linked with the final place from the start, and all
+25 files are the same. Not compared: the app for Windows, which hosted
+CI builds, and anything on a second machine. A work folder of the
+wallet library built the old way is emptied and built again from
+nothing, which `check.sh` notices by `wallet_lib/built-how.txt`: the
+owner has to run `./check.sh setup` and `--windows setup` again and
+allow the new DLL and `monerod.exe` in the antivirus. The first offline
+run of this step failed in one test of `veil_wallet`, not for anything
+of the step: a wallet closed and opened again at once was "in use". The
+mark that keeps a wallet from being opened twice is a lock that goes
+with the open file, and a program that is being started holds the open
+files of the one that starts it for a moment; another test was starting
+a program just then. A new test starts programs while a mark is taken
+and let go two thousand times and failed within the first hundred
+every time; the mark is now asked for again for half a second before
+a wallet is refused. It had not been seen before in any run.
+Tried in a cloud session with all of that: the `offline` level, the
+lint for Windows, and `./check.sh --android offline`; they pass. What
+that session built, on Ubuntu 24.04 with its gcc 13.3.0 and its
+cross compiler for Windows of the same release, for another machine's
+builds of the same commit to be held against (the first sixteen
+characters of each SHA-256, which `build.sh` now prints): the wallet
+library for Android `e41051ed8baf5e38`, for Windows `c066ba144ef8129b`,
+for Linux `f5bbe2c8fc8bb5a3` with Polyseed `93c8dd53fb487964`, and the
+transport program `ba57d65aba48a697`.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

@@ -19,8 +19,48 @@ then Veil's, and builds the library. It takes about half an hour.
 native/wallet_lib/build.sh ~/veil-wallet-lib --with-daemon
 ```
 
-This is the development and test build. It links against the system's
-libraries. Release builds will use monero_c's reproducible toolchain.
+For Linux the library links against the system's own Boost, OpenSSL,
+ZeroMQ, Unbound, libsodium and the rest, as shared libraries that are no
+part of what is built. So it runs where those are installed, in the
+versions of the machine that built it, and it is the same library only on
+a machine with the same ones: a package for Linux is not complete in
+itself. Monero's dependency build, which the builds for Windows and for
+Android use, was tried for Linux as well, on Ubuntu 24.04: its Boost is
+from 2018 and does not compile against a C library of today. One library
+is built here and not the system's, Polyseed; it comes out as
+`libpolyseed.so.2` beside the wallet library, which looks for it where it
+itself is, and it goes wherever the wallet library goes.
+
+### Where it is built
+
+Whatever folder is named as the work folder, the build happens at one
+path, the same on every machine: `/srv`. The compilers write the paths of
+source files into what they build, some hundreds of them, and the
+dependency build writes the folder it installs into; under the work
+folder's own name the same sources gave another library in every folder.
+The compiler Monero brings for Android, of 2018, has no option to write
+another path in their place, so the path itself is made the same. The
+script starts itself again in a view of the machine's folders that is its
+own (a mount namespace), in which the work folder is what lies at `/srv`,
+and builds there. Outside that view nothing changes: `/srv` stays what it
+was for every other program, and the files are written into the work
+folder by the user who runs the script. It takes a Linux that lets an
+ordinary user have such a view (user namespaces, as Ubuntu under WSL2
+does), or root.
+
+Two more things are the same for every build. monero_c commits the
+patches it applies to Monero, and Monero writes the first nine characters
+of its commit's name into the library; a commit's name comes from its
+date among other things, so the script gives those commits one fixed
+date. And a work folder that was built in another way than the script
+builds now is emptied and built again from nothing, for every system,
+with only the dependency build's downloads kept: `built-how.txt` names
+the way, and goes into the sum by which `check.sh` tells a library of
+this checkout from any other.
+
+`native/twice.sh` builds the library twice in two folders and compares
+the two; `docs/development.md`, "The same build twice", says what came
+out the same.
 
 ### For Windows
 

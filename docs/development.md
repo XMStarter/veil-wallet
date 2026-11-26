@@ -148,8 +148,17 @@ wallet library with the daemon, built from source into `~/veil-wallet-lib`
 Flutter, which brings Dart, into `~/veil-flutter`.
 Flutter is one pinned version, checked against its published checksum, and
 its tools are told not to report usage. Run it again when the
-patches in `native/wallet_lib/patches` change; it rebuilds only what
-changed, and the other levels say so when the library is out of date.
+patches in `native/wallet_lib/patches` change, or the way the library is
+built (`native/wallet_lib/built-how.txt`); the other levels say so when
+the library is out of date. The library is built at one path on every
+machine, `/srv`, in a view of the folders that the build makes for
+itself; `native/wallet_lib/README.md`, "Where it is built", says how and
+what that asks of the machine.
+
+`./check.sh core` and `./check.sh app` are no checks either: the first
+builds the core as an app carries it and nothing else, the second the
+app with its native parts, as `offline` does after its checks.
+`native/twice.sh` builds with them; see "The same build twice".
 
 `./check.sh daemons` is not a check of Veil. It starts the test daemon in
 pairs, many times, to find out why one may fail to come up, and shows how
@@ -515,3 +524,65 @@ asking for Microsoft's own installer, is decided at the release step.
   commit it was built from.
 - Android builds contain no Google services and target F-Droid as well as
   direct APK downloads.
+
+### The same build twice
+
+Whoever builds a release from its commit should get the files that were
+released. The first thing in the way of that is the place of a build:
+compilers and build tools write the folders they work in into what they
+make. `native/twice.sh` looks for exactly that. It builds a part of a
+package twice, from the files of the checkout as git knows them, in two
+folders that have nothing in common, another path, another depth and for
+cargo another home, and compares what comes out byte for byte:
+
+```bash
+cd native
+./twice.sh core core-android transport-android
+./twice.sh wallet wallet-windows wallet-android
+./twice.sh app apk
+```
+
+It starts nothing it has built. It takes long, since every part is
+compiled twice from nothing: the three wallet libraries about two hours
+together on four cores. The folders are made in `~/veil-twice`
+(`VEIL_TWICE_DIR`) and kept, for a look at what differs.
+
+| Part | What made two builds differ | What is done about it | Two builds now |
+|---|---|---|---|
+| The core, for Linux and for Android | The path of every source file that can report an error, 528 of them, most under cargo's folder in the home of whoever builds. Two builds differed in 19.6 of 24.3 million bytes, and in size. | Every optimised build of the core names those folders `/cargo`, `/veil/native` and `/veil/target` to the compiler (`release_build` in `check.sh`). | The same |
+| The transport program for Android | Nothing: it is built without paths and without the build's own mark (`transports/build.sh`). | | The same, and the same as the file in the packages built before this step |
+| The wallet library, for Android | The paths of some 770 source files, and the folder Monero's dependency build installs into. Then, with the paths the same, eight bytes: the name of the commit monero_c makes of its patches, which had the time of the build in it. | It is built at one path on every machine, and those commits have one date (`wallet_lib/README.md`, "Where it is built"). | The same |
+| The wallet library, for Windows | The same two things, and then six bytes: the time of linking, which a program for Windows has a place for in its first bytes, and a sum over the file that follows from it. | The same, and the linker is told to leave the time out. | The same, after both were linked again without the time; they were not built from nothing a second time |
+| The wallet library, for Linux | The same two things, and one more that was no difference but a fault: it looked for Polyseed in the folder it was built in. | The same; Polyseed lies beside the library and is looked for there. | The same, both files |
+| The app for Android | Nothing in the 80 files of the package, given the same core, wallet library and transport program. The package as a whole differs in its signature, which has chance in it. | `twice.sh` finds where the signature lies in a package and holds everything else to being the same. | The same but for the signature |
+| The app for Linux | One file of the bundle, the program itself, in 483 bytes: it was linked with the folder it was built in as the place to look for its libraries, and the final place was written over that afterwards, in the room the folder's name had taken. | It is linked with the final place from the start (`app/linux/CMakeLists.txt`). | The same, all 25 files of the bundle |
+
+All of that is from a cloud session, on 26 November 2026, with the two
+builds of a part made one after the other on one machine.
+
+What it does not show, and what is known to stand in the way of the same
+files on another machine:
+
+- **Another machine.** The two builds share the machine's compilers.
+  Rust is pinned to a version, Go and both Android NDKs by checksum, and
+  Flutter by checksum; the C and C++ compilers for Linux and the cross
+  compiler for Windows are the distribution's, whatever version it has
+  that day. Nobody has built any part on a second machine and compared.
+- **The wallet library for Linux** is linked against the distribution's
+  Boost, OpenSSL and the rest, so it is the same only where those are the
+  same, and a package for Linux needs them installed. Monero's dependency
+  build does not compile for a current Linux
+  (`wallet_lib/README.md`). A package for Linux that is complete in
+  itself is not there yet.
+- **The app for Windows** is built by hosted CI with Microsoft's compiler
+  and is not compared with anything.
+- **What is downloaded already built**: Flutter's engine, the Android
+  libraries Gradle fetches, and the compilers themselves. They are pinned
+  or checked by the tools that fetch them, not built here.
+- **The commit a build names** is given to the app's build on the command
+  line. The folders `twice.sh` builds in are no checkouts, so its two
+  apps name none; a release is built from a checkout without changes and
+  names its commit.
+- **A signature** is made with a key, and no two are alike. What a
+  download is compared with is the package without it; the release step
+  says how.

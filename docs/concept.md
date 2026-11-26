@@ -489,6 +489,15 @@ The owner decided these when the release step began.
   work side by side. Building Monero's dependencies with the current
   compiler would mean maintaining that build ourselves, which has not
   been tried.
+- **A package for Linux.** The wallet library for Linux is linked against
+  the distribution's own Boost, OpenSSL and the rest, so the app for
+  Linux runs where those are installed in the versions of the machine
+  that built it, and is the same build only there. Monero's dependency
+  build, which makes the libraries for Windows and for Android complete
+  in themselves, does not compile for a current Linux. A release for
+  Linux needs an answer: a package for one distribution, built on it; a
+  build of Monero's dependencies kept up by ourselves; or no package for
+  Linux at first. See `docs/development.md`, "The same build twice".
 - **Antivirus on Windows.** An antivirus on the test machine reported the
   wallet library as a potentially unwanted application, a "coin miner", the
   first time a program opened it, and it has to be allowed by hand. The
