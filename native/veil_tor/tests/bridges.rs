@@ -73,17 +73,22 @@ fn lines(variable: &str, builtin: &[&str]) -> Vec<String> {
 }
 
 fn start(name: &str, bridges: Bridges) -> (PathBuf, TorService) {
-    // Every test checks this first; again here for a test added later.
-    veil_test_guard::refuse_in_hosted_ci("connecting to the Tor network");
     let root = std::env::temp_dir().join(format!("veil-tor-bridges-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
-    let service = TorService::start(TorConfig {
+    let service = start_in(&root, bridges);
+    (root, service)
+}
+
+/// Starts Tor on the files in `root`, whatever an earlier Tor left there.
+fn start_in(root: &std::path::Path, bridges: Bridges) -> TorService {
+    // Every test checks this first; again here for a test added later.
+    veil_test_guard::refuse_in_hosted_ci("connecting to the Tor network");
+    TorService::start(TorConfig {
         state_dir: root.join("state"),
         cache_dir: root.join("cache"),
         bridges,
     })
-    .expect("service starts");
-    (root, service)
+    .expect("service starts")
 }
 
 fn wait_until_ready(service: &TorService) {
@@ -200,6 +205,51 @@ fn snowflake_carries_tor() {
         }],
     };
     bootstrap_and_reach_an_onion_service("snowflake", bridges);
+}
+
+/// The way it went wrong on a phone: Tor on the same files through obfs4,
+/// then through Snowflake, then through obfs4 again. Arti keeps the
+/// bridges it has used in its state and does not take one back that was
+/// out of the configuration in between (`src/state.rs`), so the third Tor
+/// was left with the bridges that had never answered.
+#[test]
+#[ignore = "needs the Tor network, an obfs4 program and a Snowflake program"]
+fn bridges_that_are_set_again_carry_tor_again() {
+    veil_test_guard::refuse_in_hosted_ci("connecting to the Tor network");
+    let obfs4 = || Bridges {
+        lines: lines("VEIL_TEST_OBFS4_BRIDGES", BUILTIN_OBFS4),
+        transports: vec![TransportProgram {
+            protocols: vec!["obfs4".into()],
+            path: installed(&["lyrebird", "obfs4proxy"]),
+            arguments: Vec::new(),
+        }],
+    };
+    let snowflake = Bridges {
+        lines: lines("VEIL_TEST_SNOWFLAKE_BRIDGES", BUILTIN_SNOWFLAKE),
+        transports: vec![TransportProgram {
+            protocols: vec!["snowflake".into()],
+            path: installed(&["snowflake-client", "lyrebird"]),
+            arguments: Vec::new(),
+        }],
+    };
+
+    let root = std::env::temp_dir().join(format!("veil-tor-bridges-again-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    for (through, bridges) in [
+        ("obfs4", obfs4()),
+        ("Snowflake", snowflake),
+        ("obfs4 again", obfs4()),
+    ] {
+        println!("through {through}");
+        let service = start_in(&root, bridges);
+        wait_until_ready(&service);
+        assert!(
+            an_onion_service_answers(service.socks_port(Purpose::Sync)),
+            "no onion service answered through {through}"
+        );
+        service.stop();
+    }
+    let _ = std::fs::remove_dir_all(root);
 }
 
 /// With a bridge set, Tor has no other way in. On this machine a direct

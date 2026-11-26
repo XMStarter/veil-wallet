@@ -62,7 +62,9 @@ that cannot lose the user's funds.
   - `veil_tor`: embedded Tor client (Arti) with onion-only loopback SOCKS
     listeners and a C interface. It reads the loss of its network from
     the connections it is asked for (`State::Lost`); its README says how,
-    and what that cannot tell.
+    and what that cannot tell. With bridges it keeps Tor's state in a
+    folder of its own that starts empty when the bridges change
+    (`state.rs`), because Arti does not take a bridge back.
   - `veil_wallet`: wallet operations over the Monero wallet library. Its
     README lists library behaviours the crate guards against; read it
     before changing `wallet.rs`.
@@ -1080,6 +1082,34 @@ its start is in the part that did not arrive, and it keeps a log of its
 own only when told to. A third such APK tells it to (`-enableLogging
 -logLevel DEBUG`), shows the end of that log first, and leaves out the
 line Arti repeats for every circuit it cannot build.
+What that one showed, in a text that arrived whole: the transport
+program is started from the package, says "accepting connections" within
+a fifth of a second, and Arti takes it up; so starting it on the phone
+was never the fault. And Arti loads five bridges from its state, two of
+them ones that had worked, and takes one as usable: the one bridge it had
+never learned more about than its line, `146.57.248.225:22`, which does
+not answer from the phone. The other four it does not try at all. Read
+in Arti's code, and then shown on it: a bridge that is taken out of the
+configuration is marked as no longer listed; put back, it loses the mark
+only if Arti had never read its description, because with the
+description once read Arti wants it again first, and asks only for the
+descriptions of bridges without the mark (`tor-guardmgr` 0.48,
+`Guard::update_from_universe`). A test added to a copy of that crate
+(`native/veil_tor/upstream/tor-guardmgr-bridge-put-back.patch`) says it
+in two lines: never described, put back, usable; described, put back,
+not usable. That fits everything the phone did: obfs4 and then Snowflake
+worked at step 4.6; obfs4 set again left only the bridge that had never
+worked; Snowflake set again left none; the older APK failed on the same
+files; without bridges everything worked; and the desktop's tests, which
+start from empty folders, passed. Whether it is all of the cause the
+phone has still to show. No report of it was found, and none was made to
+the Tor Project. Veil goes around it: with bridges Tor keeps its state in
+a folder of its own (`<state_dir>/bridged`, `veil_tor/src/state.rs`),
+beside a note of the bridge lines it belongs to, and the folder starts
+empty when the lines are others, in whatever order. Three offline tests
+hold that; `bridges_that_are_set_again_carry_tor_again` walks the phone's
+way, obfs4, Snowflake, obfs4 on the same files, at the `bridges` level
+and has not run.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

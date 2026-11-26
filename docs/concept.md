@@ -238,6 +238,12 @@ if, at build time, Arti cannot run bridges on Android.
   a wallet opened through bridges says that Tor cannot get through the
   bridges that are set, and that one may not be answering, before it
   names the device's own connection.
+- **Other bridges, and Tor starts from nothing with them.** Tor
+  remembers which of its bridges worked, and the Tor library does not
+  take a bridge back that was out of the settings in between: it went on
+  avoiding the bridges that had worked. So what Tor remembers of bridges
+  is kept for one set of bridges and dropped when the set changes. What
+  it remembers without bridges is kept apart and stays.
 - **Bridges are within reach before Tor starts.** Making a wallet,
   restoring one and opening one all start Tor, so the screens they begin
   on lead to the bridges: on a network that blocks Tor there would

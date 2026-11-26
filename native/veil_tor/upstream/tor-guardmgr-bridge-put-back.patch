@@ -1,0 +1,44 @@
+--- a/src/guard.rs
++++ b/src/guard.rs
+@@ -1450,4 +1450,41 @@
+         assert!(!g.ready_for_usage(&dir_usage, inst + sec * 10));
+         assert!(!g.ready_for_usage(&data_usage, inst + sec * 10));
+     }
++
++    /// A bridge that is taken out of the configuration and put back.
++    #[cfg(feature = "bridge-client")]
++    #[test]
++    fn veil_bridge_taken_away_and_put_back() {
++        use crate::bridge::{BridgeConfig, BridgeSet};
++        use std::sync::Arc;
++        use tor_llcrypto::pk::rsa::RsaIdentity;
++
++        let bridge: BridgeConfig = "192.0.2.7:443 0123456789ABCDEF0123456789ABCDEF01234567"
++            .parse()
++            .unwrap();
++        let rsa = RsaIdentity::from_hex("0123456789ABCDEF0123456789ABCDEF01234567").unwrap();
++        let with = BridgeSet::new(Arc::from(vec![bridge]), None);
++        let without = BridgeSet::new(Arc::from(Vec::<BridgeConfig>::new()), None);
++        let now = SystemTime::get();
++        let addr: SocketAddr = "192.0.2.7:443".parse().unwrap();
++
++        // As a guard is before its descriptor was ever seen: the identity
++        // of the bridge line only.
++        let only_rsa = GuardId(RelayIds::builder().rsa_identity(rsa).build().unwrap());
++        let mut never_described = Guard::new(only_rsa, vec![addr], None, now);
++        // As it is once its descriptor was seen: both identities.
++        let mut described = Guard::new(GuardId::new([7; 32].into(), rsa), vec![addr], None, now);
++
++        for guard in [&mut never_described, &mut described] {
++            guard.update_from_universe(&with);
++            assert!(guard.usable(), "configured: usable");
++            guard.update_from_universe(&without);
++            assert!(!guard.usable(), "taken out of the configuration: not usable");
++            guard.update_from_universe(&with);
++        }
++        println!("never described, put back: usable={}", never_described.usable());
++        println!("described, put back: usable={}", described.usable());
++        assert!(never_described.usable());
++        assert!(described.usable(), "a bridge put back is not usable again");
++    }
+ }

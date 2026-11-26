@@ -228,6 +228,7 @@ in the app's own storage.
 | `stagenet/wallet.lock` | Nothing; marks an open wallet | Yes, and it says only that |
 | `settings.json` | Language, theme, auto-lock, bridge lines | Yes. Bridge lines are handed out one person at a time. |
 | `tor/state`, `tor/cache` | Arti's files: its guards, the network's directory | Yes. They show that Tor is used and through which first relays, not what for. Made private to the user on Unix. |
+| `tor/state/bridged`, `tor/state/bridged.lines` | Arti's state while bridges are set, and the bridge lines that state belongs to (`veil_tor/src/state.rs`) | Yes. The lines are the ones in `settings.json`, and Arti's state names the same bridges. Emptied when the bridges change. |
 | Android only: the app's preferences | The password, encrypted for a fingerprint | Not without the phone's secure hardware and a recognised finger or face |
 
 That these files exist shows that Veil is installed and a wallet was
@@ -302,6 +303,14 @@ Each of these is known to the project and not put right.
 - **With bridges, a bridge that does not answer** is read as the network
   being lost, although another bridge may carry the next connection. The
   app's words allow for it; the state itself cannot tell the two apart.
+- **Arti does not take a bridge back that was out of its configuration
+  in between**, if it had once read that bridge's description
+  (`tor-guardmgr` 0.48, `Guard::update_from_universe`). Not patched and
+  not reported to the Tor Project by us. Veil goes around it: Tor's state
+  with bridges is kept for one set of bridges and starts empty with
+  another (`veil_tor/src/state.rs`, with offline tests of the folder; the
+  way of the fault itself is walked only at the `bridges` level, on the
+  real network).
 - **The listeners take any program on the machine**, as said above.
 - **Dart and Kotlin strings cannot be wiped**, so a password and a phrase
   stay in the app's memory until it is freed and reused.

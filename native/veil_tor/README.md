@@ -106,11 +106,38 @@ let bridges = Bridges {
   package the older `obfs4proxy` and `snowflake-client`.
 - **Bridge lines stay out of logs.** They are handed out one person at a
   time; debug output and error messages do not repeat them.
+- **What Tor remembers of bridges is good for those bridges only.** Arti
+  keeps the bridges it has used in its state, and a bridge that worked,
+  was taken out of the configuration and is put back is not taken up
+  again: Arti marks it as no longer listed, wants its description before
+  it takes the mark off, and asks for the description only of bridges
+  without the mark. That lasts the twenty days it keeps such an entry.
+  So with bridges the state is kept in a folder of its own,
+  `<state_dir>/bridged`, beside a note of the lines it belongs to
+  (`bridged.lines`), and the folder starts empty whenever the lines are
+  others than the last time, in whatever order they are written. What
+  Tor remembers without bridges stays where it was and is not touched.
+  `src/state.rs` has it. The cost: after a change of bridges Tor no
+  longer knows which of them worked before, and tries them anew.
 
 Tried on Linux with the bridges built into Tor Browser: Tor was ready in
 about a quarter of a minute through obfs4 and through Snowflake, and with a
 bridge that does not exist it stayed unconnected. A wallet's first sync
 through obfs4 took about three and a half times as long as a direct one.
+
+What Arti does with a bridge that is put back was found on a phone, where
+obfs4, then Snowflake, then obfs4 again left Tor with one bridge, one that
+had never answered. It is shown on Arti's own code:
+`upstream/tor-guardmgr-bridge-put-back.patch` adds a test to
+`tor-guardmgr` 0.48 that takes a bridge out of the configuration and puts
+it back, and the bridge is usable again when only its line was known and
+not when its description had been read. In a copy of that crate's source,
+`patch -p1` and `cargo test --features bridge-client,pt-client --lib
+veil_bridge`: the test fails on its last line while Arti is as it is, and
+a release in which it passes is one where the folder of its own is no
+longer needed. Nothing in a build or a check applies the patch.
+`bridges_that_are_set_again_carry_tor_again` walks the phone's way on the
+real network, at the `bridges` level.
 
 ## For the rest of Veil
 

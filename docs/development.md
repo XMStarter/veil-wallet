@@ -63,7 +63,7 @@ machine. The log of that run is the evidence that the step is done.
 | `regtest` | The wallet on a private chain, alone and behind a stand-in for Tor, with and without lost connections. Starts a Monero daemon. | The owner's machine |
 | `tor` | The tests that start the real Tor client, a connection to an onion service, and a new wallet synchronising with a public node. | The owner's machine |
 | `stagenet` | The command-line tool: a new wallet synchronises with a public stagenet node through Tor. | The owner's machine |
-| `bridges` | Tor through obfs4 and Snowflake bridges, a bridge that does not exist, and the tool synchronising through bridges. | The owner's machine |
+| `bridges` | Tor through obfs4 and Snowflake bridges, through obfs4 again on the same files after Snowflake, a bridge that does not exist, and the tool synchronising through bridges. | The owner's machine |
 | `leaks` | The Rust tests of `offline` once more, with every network call of theirs recorded: none may name an address outside the machine. Needs the wallet library and `strace`; Linux only. | Any Linux machine with the wallet library |
 | `leaks-chain` | The same for the tests of `regtest`. Starts a Monero daemon, whose own calls are left out. | The owner's machine |
 | `fuzz` | The tests on made-up input once more, each for a minute and from a seed of this run's own. Uses the wallet library when it has been built. | Any machine; not hosted CI |

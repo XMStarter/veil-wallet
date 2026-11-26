@@ -29,6 +29,7 @@ mod service;
 mod socks;
 #[cfg(feature = "stand-in")]
 mod stand_in;
+mod state;
 
 pub use bridges::{Bridges, TransportProgram};
 pub use service::{Purpose, State, Status, TorConfig, TorError, TorService};
