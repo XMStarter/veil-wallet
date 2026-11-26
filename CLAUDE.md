@@ -1017,6 +1017,24 @@ reach its network through the bridges that are set and that one may not
 be answering, on Home and on Send; without bridges the words are as
 before. Not known: whether the message goes away by itself there within
 a minute or two, as it should when the next connection gets through.
+The owner then said that bridges had worked before the last change and
+do not now, and, given an APK with the app as it was before the bridges
+change (the app of commit `2e11c9d` on the same native parts), that it
+does not work with that one either. So the change of the app is not the
+cause. What "does not work" looked like, how long it was waited, and
+which bridges were set was not said. Looked at in a cloud session: no
+code on the way of Tor or of bridges has changed since the APK on which
+bridges worked at step 4.6 (`ecc8c94`) but for the last dot of an onion
+name being taken off, and the transport program in the new APKs is the
+same file byte for byte. And one of the four obfs4 bridges the tests and
+the owner use, `212.83.43.95:443`, is no longer among those the Tor
+Project serves (`bridges.torproject.org/moat/circumvention/builtin`,
+read on 26 November 2026); the other three and both Snowflake bridges
+still are. Whether the three answer from the owner's network is not
+known, and nothing in a cloud session can tell: the `bridges` level on
+the owner's machine can, with the same lines and the same code. The
+list in `native/veil_tor/tests/bridges.rs` is left as it is until that
+run has been seen, so that it tries what the phone tried.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
