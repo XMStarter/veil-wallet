@@ -1277,6 +1277,22 @@ not more than a hundred days behind, and every node of the list asked
 where it is, failing when fewer than two answer or one is more than ten
 blocks behind the furthest. Neither has run. Nothing here has ever
 received or sent a payment on the main network.
+On commit `312903b` the owner's run passed at the `offline`, `regtest`
+and `tor` levels as Linux and as Windows programs. What the `tor` level
+showed on the main network, with an empty wallet: a wallet made that day
+begins to scan 21,481 blocks before the end of the chain, a little under
+thirty days, and the same to within three blocks half an hour later as
+a Windows program; it synchronised its last ten blocks in 14 seconds as
+a Linux program and in 243 as a Windows one. Of the six public nodes,
+three answered in the first run and five in the second, all at the same
+height each time. plowsof, HashVault and SupportXMR answered both
+times. Rucknium and the node beginning `xmrnodei` did not answer within
+twenty seconds the first time and answered within six the second. The
+node beginning `moneronk` was said to be unreachable both times, within
+four seconds, which is how a service that is not there shows. So a
+wallet can count on three of the six and often on five, and one of the
+six may be gone; the list is left as it is until the owner says which
+nodes a release carries.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
