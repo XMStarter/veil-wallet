@@ -391,7 +391,9 @@ class FakeBackend implements WalletBackend {
     }
   }
 
-  /// What the next send that is confirmed ends as.
+  /// What the next send that is confirmed ends as. [SendPhase.sending]
+  /// leaves it on its way, as the core does until a node has answered:
+  /// the transaction that was under review, named as it was there.
   SendPhase sendEndsAs = SendPhase.sent;
 
   /// What the wallet charges for a transaction.
@@ -460,8 +462,17 @@ class FakeBackend implements WalletBackend {
   @override
   void confirmSend() {
     calls.add('confirm send');
+    final reviewed = state.value?.send;
     report(
       send: switch (sendEndsAs) {
+        SendPhase.sending => SendStatus(
+          SendPhase.sending,
+          to: reviewed?.to,
+          amount: reviewed?.amount,
+          fee: reviewed?.fee,
+          total: reviewed?.total,
+          sourceAddresses: reviewed?.sourceAddresses,
+        ),
         SendPhase.sent => SendStatus(SendPhase.sent, txids: ['a' * 64]),
         SendPhase.outcomeUnknown => SendStatus(
           SendPhase.outcomeUnknown,

@@ -1000,6 +1000,26 @@ mod on_a_private_chain {
         }
     }
 
+    /// Waits for a send that was just confirmed to end. Whenever the
+    /// state is caught on the way, with the transaction being handed to
+    /// the node, it has to say what it said under review, since that is
+    /// what a screen shows meanwhile; `caught` counts those times.
+    fn after_confirming(session: &Session, reviewed: &SendState, caught: &mut u32) -> SessionState {
+        let state = wait(session, |state| {
+            !matches!(state.send, SendState::Review { .. })
+        });
+        if matches!(state.send, SendState::Sending { .. }) {
+            assert_eq!(state.send, reviewed.clone().confirmed());
+            *caught += 1;
+        }
+        wait(session, |state| {
+            !matches!(
+                state.send,
+                SendState::Review { .. } | SendState::Sending { .. }
+            )
+        })
+    }
+
     /// When a file was last written, and its size; `None` in the moment
     /// in which it is being replaced.
     fn written(path: &std::path::Path) -> Option<(std::time::SystemTime, u64)> {
@@ -1294,7 +1314,10 @@ mod on_a_private_chain {
         session.confirm_send();
         session.cancel_send();
         let state = wait(&session, |state| {
-            !matches!(state.send, SendState::Review { .. } | SendState::Sending)
+            !matches!(
+                state.send,
+                SendState::Review { .. } | SendState::Sending { .. }
+            )
         });
         let SendState::Sent { txids } = state.send.clone() else {
             panic!("the transaction was not sent: {:?}", state.send);
@@ -1340,6 +1363,7 @@ mod on_a_private_chain {
         let state = wait(&session, |state| {
             matches!(state.send, SendState::Review { .. } | SendState::Failed(_))
         });
+        let reviewed = state.send.clone();
         let SendState::Review {
             fee: second_fee, ..
         } = state.send
@@ -1352,10 +1376,10 @@ mod on_a_private_chain {
             MID_TRANSACTION,
             AfterCut::NodeReachable,
         );
+        // How often the state was caught with a transaction on its way.
+        let mut caught_sending = 0;
         session.confirm_send();
-        let state = wait(&session, |state| {
-            !matches!(state.send, SendState::Review { .. } | SendState::Sending)
-        });
+        let state = after_confirming(&session, &reviewed, &mut caught_sending);
         let SendState::OutcomeUnknown {
             txids: lost,
             settled,
@@ -1418,6 +1442,7 @@ mod on_a_private_chain {
             "the transaction was not built: {:?}",
             state.send
         );
+        let reviewed = state.send.clone();
         stand_in.cut_once(
             BROADCAST_HOST,
             BROADCAST_PORT,
@@ -1425,9 +1450,7 @@ mod on_a_private_chain {
             AfterCut::NodeReachable,
         );
         session.confirm_send();
-        let state = wait(&session, |state| {
-            !matches!(state.send, SendState::Review { .. } | SendState::Sending)
-        });
+        let state = after_confirming(&session, &reviewed, &mut caught_sending);
         let SendState::OutcomeUnknown { txids: never, .. } = state.send.clone() else {
             panic!("the send was not reported as unknown: {:?}", state.send);
         };
@@ -1491,6 +1514,7 @@ mod on_a_private_chain {
         let state = wait(&session, |state| {
             matches!(state.send, SendState::Review { .. } | SendState::Failed(_))
         });
+        let reviewed = state.send.clone();
         let SendState::Review { fee: third_fee, .. } = state.send else {
             panic!("the transaction was not built: {:?}", state.send);
         };
@@ -1503,9 +1527,7 @@ mod on_a_private_chain {
         stand_in.unroute(BROADCAST_HOST, BROADCAST_PORT);
         stand_in.clear_requests();
         session.confirm_send();
-        let state = wait(&session, |state| {
-            !matches!(state.send, SendState::Review { .. } | SendState::Sending)
-        });
+        let state = after_confirming(&session, &reviewed, &mut caught_sending);
         assert!(
             matches!(state.send, SendState::Sent { .. }),
             "the transaction was not sent: {:?}",
@@ -1589,11 +1611,10 @@ mod on_a_private_chain {
             "the transaction was not built: {:?}",
             state.send
         );
+        let reviewed = state.send.clone();
         stand_in.set_network(false);
         session.confirm_send();
-        let state = wait(&session, |state| {
-            !matches!(state.send, SendState::Review { .. } | SendState::Sending)
-        });
+        let state = after_confirming(&session, &reviewed, &mut caught_sending);
         let SendState::Failed(problem) = &state.send else {
             panic!(
                 "with no network the send was not a failure: {:?}",
@@ -1604,6 +1625,13 @@ mod on_a_private_chain {
         assert_eq!(state.tor.state, State::Lost, "{state:#?}");
         assert_eq!(outgoing(&state), 3);
         session.clear_send();
+        // Four payments were confirmed since the count began, and each
+        // time the state was caught on the way it named the payment.
+        // Never caught at all, that would have shown nothing.
+        assert!(
+            caught_sending > 0,
+            "no confirmed payment was ever seen on its way"
+        );
 
         // The network is back. Nobody tells the wallet: the next
         // synchronisation gets through, Tor is ready again with it, and

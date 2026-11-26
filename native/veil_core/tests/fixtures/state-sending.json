@@ -1,0 +1,74 @@
+{
+  "balance": {
+    "locked": "1.845678901234",
+    "total": "12.345678901234",
+    "unlocked": "10.50"
+  },
+  "history": [
+    {
+      "address_indices": [
+        1,
+        2
+      ],
+      "amount": "12.50",
+      "block_height": 2256000,
+      "confirmations": 644,
+      "direction": "in",
+      "failed": false,
+      "fee": "0.00",
+      "pending": false,
+      "timestamp": 1795400000,
+      "txid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "address_indices": [],
+      "amount": "0.15",
+      "block_height": 0,
+      "confirmations": 0,
+      "direction": "out",
+      "failed": false,
+      "fee": "0.00003066",
+      "pending": true,
+      "timestamp": 1795404547,
+      "txid": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  ],
+  "last_problem": null,
+  "node": "2gzyxa5ihm7nsggfxnu52rck2vv4rvmdlkiu3zzui5du4xyclen53wid.onion:38089",
+  "not_saved": null,
+  "own_nodes": [
+    "2gzyxa5ihm7nsggfxnu52rck2vv4rvmdlkiu3zzui5du4xyclen53wid.onion:38089",
+    "duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion:38089"
+  ],
+  "phase": {
+    "name": "ready"
+  },
+  "rebuilt_from_keys": false,
+  "receive_address": {
+    "address": "73a4nWuvkYoYoksGurDjKZQcZkmaxLaKbbeiKzHnMmqKivrCzq5Q2JtJG1UZNZFqLPbQ3MiXCk2Q5bdwdUNSr7X9QrPubkn",
+    "index": 3
+  },
+  "revision": 43,
+  "send": {
+    "amount": "1.50",
+    "fee": "0.00003066",
+    "name": "sending",
+    "source_addresses": [
+      1,
+      3
+    ],
+    "to": "73a4nWuvkYoYoksGurDjKZQcZkmaxLaKbbeiKzHnMmqKivrCzq5Q2JtJG1UZNZFqLPbQ3MiXCk2Q5bdwdUNSr7X9QrPubkn",
+    "total": "1.50003066"
+  },
+  "sync": {
+    "name": "running",
+    "node_height": 2256644,
+    "wallet_height": 2250000
+  },
+  "syncs_ended": 3,
+  "tor": {
+    "message": null,
+    "percent": 100,
+    "state": "ready"
+  }
+}

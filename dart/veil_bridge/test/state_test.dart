@@ -66,6 +66,19 @@ void main() {
     expect(state.send.sourceAddresses, [1, 3]);
   });
 
+  test('a payment on its way still says what is being paid', () {
+    final review = fixture('state-busy.json').send;
+    final state = fixture('state-sending.json');
+    expect(state.send.phase, SendPhase.sending);
+    expect(state.send.to, review.to);
+    expect(state.send.to, hasLength(95));
+    expect(state.send.amount, '1.50');
+    expect(state.send.fee, '0.00003066');
+    expect(state.send.total, '1.50003066');
+    expect(state.send.sourceAddresses, [1, 3]);
+    expect(state.lastProblem, isNull);
+  });
+
   test('a state where things went wrong says what and why', () {
     final state = fixture('state-troubled.json');
     expect(state.phase, Phase.failed);

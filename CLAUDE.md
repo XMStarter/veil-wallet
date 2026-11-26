@@ -1295,6 +1295,26 @@ six may be gone; the list is left as it is until the owner says which
 nodes a release carries. The owner said it: the node beginning
 `moneronk` is taken off and the other five stay. That is in
 `docs/concept.md` under "Decided for the release" now.
+With the app for the main network built from that commit, `1a3b22a`,
+the owner reported from the phone that everything works with real
+money, and one fault, with a picture: after Send payment was pressed,
+the screen that confirms a payment stood there with "Sending…" and
+nothing in its four lines, no address, no amount, no fee, no total.
+So a payment has been made through Veil on the main network; how much,
+whether one was received as well, and how long the first
+synchronisation took was not said. The fault was the core's: its state
+named a payment only while it was under review, and from the
+confirmation until a node had answered it said "sending" and nothing
+else, while the screen draws what the state says. On stagenet and on a
+private chain that moment is too short to see; the app's own test of it
+handed the screen a state with everything in it, which the core never
+gave. Now `SendState::Sending` carries what `Review` carried
+(`SendState::confirmed`), through the C interface too
+(`tests/fixtures/state-sending.json`). Offline tests hold the change of
+the state, the fixture on both sides, and the screen on a wallet that
+pretends the way the core now behaves; the scenario on a private chain
+checks the state whenever it catches a payment on its way and fails if
+it never does in four payments, and has not run.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

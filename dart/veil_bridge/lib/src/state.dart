@@ -207,7 +207,8 @@ class SendStatus {
 
   final SendPhase phase;
 
-  /// The transaction under review: where it goes, how much, and the fee.
+  /// The transaction under review, and the same while it is being sent
+  /// ([SendPhase.sending]): where it goes, how much, and the fee.
   final String? to;
   final String? amount;
   final String? fee;
@@ -216,8 +217,8 @@ class SendStatus {
   final String? total;
 
   /// The wallet's own addresses, by index, whose coins the transaction
-  /// under review spends. More than one means coins from different
-  /// addresses are spent together.
+  /// under review or being sent spends. More than one means coins from
+  /// different addresses are spent together.
   final List<int>? sourceAddresses;
 
   /// The transactions that were sent, when [phase] is [SendPhase.sent], or

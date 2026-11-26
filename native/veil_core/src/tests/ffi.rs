@@ -251,9 +251,10 @@ fn commands_are_read_or_refused_with_a_reason() {
     }
 }
 
-/// A state with something in every field, one where things went wrong,
-/// and one of an open wallet whose Tor has lost its network.
-fn sample_states() -> [(&'static str, SessionState); 3] {
+/// A state with something in every field, the same wallet a moment later
+/// with its payment confirmed and on its way, one where things went
+/// wrong, and one of an open wallet whose Tor has lost its network.
+fn sample_states() -> [(&'static str, SessionState); 4] {
     let problem = |kind, detail: &str| Problem {
         kind,
         detail: detail.to_owned(),
@@ -390,11 +391,70 @@ fn sample_states() -> [(&'static str, SessionState); 3] {
         not_saved: None,
         last_problem: None,
     };
+    let sending = SessionState {
+        revision: 43,
+        send: busy.send.clone().confirmed(),
+        last_problem: None,
+        ..busy.clone()
+    };
     [
         ("state-busy.json", busy),
+        ("state-sending.json", sending),
         ("state-troubled.json", troubled),
         ("state-lost.json", lost),
     ]
+}
+
+/// A payment that is on its way says what it said under review: where
+/// to, how much, the fee, the total, and whose coins. The screen with
+/// those lines stays up until the node has answered, and it draws what
+/// the state says. Found in the app on the main network, where that wait
+/// is long enough to see four empty lines.
+#[test]
+fn a_payment_on_its_way_still_says_what_is_being_paid() {
+    let [(_, busy), (_, sending), ..] = sample_states();
+    let SendState::Review {
+        to,
+        amount,
+        fee,
+        total,
+        source_addresses,
+    } = busy.send.clone()
+    else {
+        panic!("the sample is not under review: {:?}", busy.send);
+    };
+    assert_eq!(
+        sending.send,
+        SendState::Sending {
+            to,
+            amount,
+            fee,
+            total,
+            source_addresses,
+        }
+    );
+    let under_review = state_json(&busy)["send"].clone();
+    let on_its_way = state_json(&sending)["send"].clone();
+    assert_eq!(on_its_way["name"], "sending");
+    for field in ["to", "amount", "fee", "total", "source_addresses"] {
+        assert!(!under_review[field].is_null(), "{field}");
+        assert_eq!(on_its_way[field], under_review[field], "{field}");
+    }
+
+    // Confirming is about a transaction under review and nothing else.
+    for other in [
+        SendState::Idle,
+        SendState::Preparing,
+        SendState::Sent {
+            txids: vec!["a".repeat(64)],
+        },
+        SendState::OutcomeUnknown {
+            txids: vec!["a".repeat(64)],
+            settled: true,
+        },
+    ] {
+        assert_eq!(other.clone().confirmed(), other);
+    }
 }
 
 /// The files in `tests/fixtures` are the state as it crosses the

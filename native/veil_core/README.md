@@ -38,9 +38,14 @@ let session = Session::start(config, WalletSource::Open, password);
 // phase, Tor, synchronisation, balance, receive address, history, send.
 session.sync();
 session.prepare_send(&to, amount); // state.send becomes Review { fee, .. }
-session.confirm_send();            // or cancel_send()
+session.confirm_send();            // Sending { the same }; or cancel_send()
 session.clear_send();              // once the user has seen how it went
 ```
+
+While a confirmed transaction is being handed to a node, the state
+still says where it goes, how much, the fee and the total, as it did
+under review: the screen with those lines stays up until a node has
+answered, which over Tor can take a while.
 
 Commands return at once and their outcome appears in the state, which
 carries a revision number that goes up with every change. Problems are

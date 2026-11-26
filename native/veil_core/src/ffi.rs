@@ -320,7 +320,20 @@ pub(crate) fn state_json(state: &SessionState) -> Value {
             "total": total.to_string(),
             "source_addresses": source_addresses,
         }),
-        SendState::Sending => json!({ "name": "sending" }),
+        SendState::Sending {
+            to,
+            amount,
+            fee,
+            total,
+            source_addresses,
+        } => json!({
+            "name": "sending",
+            "to": to,
+            "amount": amount.to_string(),
+            "fee": fee.to_string(),
+            "total": total.to_string(),
+            "source_addresses": source_addresses,
+        }),
         SendState::Sent { txids } => json!({ "name": "sent", "txids": txids }),
         SendState::OutcomeUnknown { txids, settled } => json!({
             "name": "outcome_unknown",
