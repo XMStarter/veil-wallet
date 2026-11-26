@@ -129,7 +129,8 @@ impl Numbers {
 /// The seed, how many cases, and for how long, as the environment says.
 struct Plan {
     seed: u64,
-    cases: u64,
+    /// How many cases, when the environment names a number.
+    cases: Option<u64>,
     until: Option<Instant>,
 }
 
@@ -143,11 +144,7 @@ impl Plan {
         let seconds = number("VEIL_FUZZ_SECONDS");
         Plan {
             seed: number("VEIL_FUZZ_SEED").unwrap_or(DEFAULT_SEED),
-            cases: match seconds {
-                // With a time to run for, the time ends the run.
-                Some(_) => u64::MAX,
-                None => number("VEIL_FUZZ_CASES").unwrap_or(DEFAULT_CASES),
-            },
+            cases: number("VEIL_FUZZ_CASES"),
             until: seconds.map(|seconds| Instant::now() + Duration::from_secs(seconds)),
         }
     }
@@ -155,11 +152,15 @@ impl Plan {
 
 impl Plan {
     /// Whether case number `case` is still to be run, for a test that
-    /// wants `at_most` cases when no time is set.
+    /// wants `at_most` cases when nothing else is said. A time to run for
+    /// ends the run when it is up. A number of cases that was asked for
+    /// is run in full, whatever the test wants: that is how a failure
+    /// far into a long run is brought back.
     fn goes_on(&self, case: u64, at_most: u64) -> bool {
-        match self.until {
-            Some(until) => Instant::now() < until,
-            None => case < self.cases.min(at_most),
+        match (self.until, self.cases) {
+            (Some(until), _) => Instant::now() < until,
+            (None, Some(cases)) => case < cases,
+            (None, None) => case < DEFAULT_CASES.min(at_most),
         }
     }
 }
@@ -424,9 +425,23 @@ mod tests {
     /// tests: `check.sh fuzz` runs these too.
     const PLAN: Plan = Plan {
         seed: DEFAULT_SEED,
-        cases: DEFAULT_CASES,
+        cases: None,
         until: None,
     };
+
+    #[test]
+    fn a_number_of_cases_asked_for_is_run_whatever_the_test_wants() {
+        let asked = Plan {
+            cases: Some(450),
+            ..PLAN
+        };
+        let seen = RefCell::new(0);
+        bytes_as(&asked, "asked", &[b"x"], 200, |_| *seen.borrow_mut() += 1);
+        assert_eq!(seen.into_inner(), 450);
+        let seen = RefCell::new(0);
+        texts_as(&asked, "asked", &["x"], 200, |_| *seen.borrow_mut() += 1);
+        assert_eq!(seen.into_inner(), 450);
+    }
 
     #[test]
     fn the_same_seed_gives_the_same_inputs() {

@@ -902,8 +902,28 @@ tests passed, and one of the app's failed on its ninety-five-thousandth
 input for a mistake of the test's own: its second reading of an address
 took the spaces off differently from the reader, which takes one
 character more off the ends than out of the middle (U+0085). With the
-test corrected the app's tests passed from the same seed. Not run: any
-of it as Windows programs, and the `fuzz` level at its full minute.
+test corrected the app's tests passed from the same seed. On commit
+`4a9ce46` the owner's run passed at the `offline`, `regtest` and `fuzz`
+levels as Linux programs, the `fuzz` level at its full minute a test,
+the app's four included, and at the `offline` and `regtest` levels as
+Windows programs. The `fuzz` level as Windows programs failed in one
+test, the one of Tor's listener, at its 13,628th input, and not for the
+input: the test's own connection to the listener was refused by Windows
+with "only one usage of each socket address" (error 10048). The reading
+that fits the number: every case is a connection of the test's own and
+often a second where Tor is asked, Windows keeps the port of a closed
+connection aside for two minutes and has about sixteen thousand to
+give, and the test had used them up; it was not seen on the machine.
+The listener had answered every input before that. The test now makes
+no more than forty connections a second after its first four hundred
+cases; with that it passes in a cloud session, the input it had stopped
+on included, which shows nothing about Windows. Bringing that input back
+showed a fault of the tool's own: the failure's message names a seed and
+a number of cases to run again with, and a test with a limit of its own
+ran only up to its limit, so the run "passed" without reaching the
+input. A number of cases that is asked for is run in full now. The other twelve Rust
+tests passed there as Windows programs for their minute, the node that
+answers with made-up bytes and the wallet library's two among them.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

@@ -445,9 +445,27 @@ mod tests {
         ];
         let samples: Vec<&[u8]> = samples.iter().map(Vec::as_slice).collect();
 
-        veil_test_guard::fuzz::bytes("socks", &samples, 400, |bytes| {
+        // Every case is a connection of this test's own, and one more
+        // where Tor is asked, and a system keeps the port of a closed
+        // connection aside for a while: two minutes on Windows, which has
+        // some sixteen thousand of them to give. Run for a minute as fast
+        // as it would go, this test used them up there and could not
+        // connect any more. After its first cases it therefore makes no
+        // more than forty connections a second.
+        const UNPACED: u64 = 400;
+        const PACE: Duration = Duration::from_millis(25);
+        let case = std::cell::Cell::new(0u64);
+        let last = std::cell::Cell::new(std::time::Instant::now());
+
+        veil_test_guard::fuzz::bytes("socks", &samples, UNPACED, |bytes| {
+            if case.replace(case.get() + 1) >= UNPACED {
+                std::thread::sleep(PACE.saturating_sub(last.get().elapsed()));
+            }
+            last.set(std::time::Instant::now());
             runtime.block_on(async {
-                let mut stream = TcpStream::connect(harness.socks).await.unwrap();
+                let mut stream = TcpStream::connect(harness.socks)
+                    .await
+                    .expect("the test's own connection to the listener");
                 // The listener may hang up before everything is written.
                 let _ = stream.write_all(bytes).await;
                 let _ = stream.shutdown().await;

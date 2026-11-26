@@ -106,7 +106,12 @@ tests, the ones with `made_up` in their names, for a minute each from a
 seed taken from the clock, and writes the seed into the log. A failure
 names the seed, the number of the input and the input; the test run by
 itself with `VEIL_FUZZ_SEED` and `VEIL_FUZZ_CASES` as the message gives
-them fails on it again. `VEIL_FUZZ_SECONDS` sets another time.
+them fails on it again: a number of cases that is asked for is run in
+full, past the limit a costly test sets itself. `VEIL_FUZZ_SECONDS` sets
+another time. The test of Tor's listener makes no more than forty
+connections a second after its first four hundred: every case is a
+connection, and a system gives the port of a closed one out again only
+after a while, so a minute at full speed used up all that Windows has.
 
 What this is not: fuzzing guided by coverage, where a tool watches which
 code an input reaches and steers towards the rest. For readers of this

@@ -124,10 +124,10 @@ class _Case {
 Iterable<_Case> _cases(String name, List<String> samples, int? atMost) sync* {
   final seed = _number('VEIL_FUZZ_SEED') ?? _defaultSeed;
   final seconds = _number('VEIL_FUZZ_SECONDS');
-  final cases = min(
-    _number('VEIL_FUZZ_CASES') ?? _defaultCases,
-    atMost ?? 1 << 62,
-  );
+  // A number that was asked for is run in full, whatever the test wants:
+  // that is how a failure far into a long run is brought back.
+  final cases =
+      _number('VEIL_FUZZ_CASES') ?? min(_defaultCases, atMost ?? _defaultCases);
   final until = seconds == null
       ? null
       : DateTime.now().add(Duration(seconds: seconds));
