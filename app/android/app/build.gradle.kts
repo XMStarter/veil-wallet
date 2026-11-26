@@ -1,7 +1,39 @@
+import java.util.Base64
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+// What the build was told with `--dart-define`. Flutter hands all of it to
+// Gradle as one property: the definitions, each in base64, with commas
+// between them.
+val dartDefines: Map<String, String> =
+    ((project.findProperty("dart-defines") as String?) ?: "")
+        .split(",")
+        .filter { it.isNotEmpty() }
+        .map { String(Base64.getDecoder().decode(it)) }
+        .filter { it.contains("=") }
+        .associate { it.substringBefore("=") to it.substringAfter("=") }
+
+// The network the app is built for, as the Dart side reads it too
+// (lib/core/network.dart): stagenet where nothing was said.
+val veilNetwork: String = dartDefines["VEIL_NETWORK"] ?: "stagenet"
+
+// A build made here is for trying, signed with the key of the machine
+// that made it. It is an app of its own, by a name of its own, so that it
+// can be on a phone beside the released Veil and can never be taken for
+// it or installed in its place: Android knows an app by its identifier,
+// and removing an app removes its wallet. The app that carries the plain
+// identifier and the plain name is the one the release step builds and
+// signs with the key for releases.
+val (veilIdSuffix, veilLabel) = when (veilNetwork) {
+    "stagenet" -> ".stagenet" to "Veil stagenet"
+    "mainnet" -> ".preview" to "Veil preview"
+    else -> throw GradleException(
+        "VEIL_NETWORK is '$veilNetwork'; the app is built for mainnet or for stagenet"
+    )
 }
 
 android {
@@ -16,10 +48,13 @@ android {
 
     defaultConfig {
         // The name Android knows the app by. It cannot change once people
-        // have the app: another name is another app. It is taken from the
-        // project's place on GitHub and is to be settled before a release;
-        // see "Open decisions" in docs/concept.md.
+        // have the app: another name is another app. The owner settled on
+        // this one (docs/concept.md, "Decided for the release"); a build
+        // for trying adds to it, as said above.
         applicationId = "io.github.xmstarter.veil"
+        applicationIdSuffix = veilIdSuffix
+        // The name under the icon, which the manifest takes from here.
+        manifestPlaceholders["appName"] = veilLabel
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION

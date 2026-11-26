@@ -372,5 +372,6 @@
       }
     }
   },
-  "aboutTextsMissing": "The licence texts of this part are not in this package. A package of Veil has to carry them; this one is not as it should be."
+  "aboutTextsMissing": "The licence texts of this part are not in this package. A package of Veil has to carry them; this one is not as it should be.",
+  "startMainnetNotice": "This wallet holds real money. Nobody outside the project has audited Veil. Do not keep more in it than you can afford to lose."
 }

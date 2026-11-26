@@ -11,9 +11,15 @@ import 'state.dart';
 /// Where a session's wallet comes from.
 enum WalletSource { create, open, restore }
 
+/// Which Monero network a wallet is on: the main one, where the coins are
+/// real money, or stagenet, where they are worth nothing. A session is
+/// always told which; there is no default.
+enum WalletNetwork { mainnet, stagenet }
+
 /// What a session is started with.
 class SessionConfig {
   const SessionConfig({
+    required this.network,
     required this.walletLibrary,
     required this.walletPath,
     required this.torStateDir,
@@ -26,6 +32,9 @@ class SessionConfig {
     this.syncEvery,
   });
 
+  /// The network the wallet is on.
+  final WalletNetwork network;
+
   /// The Monero wallet library to load.
   final String walletLibrary;
 
@@ -37,7 +46,7 @@ class SessionConfig {
   final String torCacheDir;
 
   /// The user's own nodes, as `host.onion:port`, in the order to try them.
-  /// Empty: the public stagenet nodes, in an order nobody can predict.
+  /// Empty: the public nodes of [network], in an order nobody can predict.
   final List<String> nodes;
 
   /// Bridge lines to reach Tor through, one bridge each. Empty: Tor is
@@ -58,8 +67,7 @@ class SessionConfig {
   final Duration? syncEvery;
 
   Map<String, Object?> toJson() => {
-    // Until the release steps the app works on stagenet only.
-    'network': 'stagenet',
+    'network': network.name,
     'source': source.name,
     'wallet_library': walletLibrary,
     'wallet_path': walletPath,

@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:veil/core/backend.dart';
 import 'package:veil/core/notices.dart';
 import 'package:veil/l10n/app_localizations.dart';
 import 'package:veil/screens/about_screen.dart';
@@ -200,7 +201,14 @@ void main() {
           '$_divider\n'
           'Library 1.0\n\nThe second text.\n',
     });
-    await _show(tester, AboutScreen(onAndroid: true, bundle: files));
+    await _show(
+      tester,
+      AboutScreen(
+        onAndroid: true,
+        network: WalletNetwork.stagenet,
+        bundle: files,
+      ),
+    );
     // The app for Android says what else is in its package.
     expect(
       find.textContaining(
@@ -228,7 +236,14 @@ void main() {
   testWidgets('a package without a part\'s texts says that it is not right', (
     tester,
   ) async {
-    await _show(tester, AboutScreen(onAndroid: false, bundle: _Files({})));
+    await _show(
+      tester,
+      AboutScreen(
+        onAndroid: false,
+        network: WalletNetwork.stagenet,
+        bundle: _Files({}),
+      ),
+    );
     await openLine(tester, 'Packages in the core');
     expect(find.textContaining('are not in this package'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -239,6 +254,7 @@ void main() {
       tester,
       AboutScreen(
         onAndroid: false,
+        network: WalletNetwork.mainnet,
         bundle: _Files({'assets/licences/veil.txt': '\n'}),
       ),
     );
@@ -255,7 +271,11 @@ void main() {
     });
     await _show(
       tester,
-      AboutScreen(onAndroid: true, bundle: files),
+      AboutScreen(
+        onAndroid: true,
+        network: WalletNetwork.stagenet,
+        bundle: files,
+      ),
       language: 'ru',
     );
     expect(find.text('О VEIL'), findsOneWidget);

@@ -93,6 +93,14 @@ runtime.
    of a wallet has the same line. If the settings file could not be read,
    a screen with a warning and two buttons comes before either: set
    bridges, or go on without.
+   Above the buttons the app says which network it is for. Built for
+   stagenet: that this is the test network and that it does not work with
+   real funds, which is also said under the balance on Home and where
+   the wallet is opened. Built for the main network: that the wallet
+   holds real money, that nobody outside the project has audited Veil,
+   and not to keep more in it than one can afford to lose, marked with
+   the crimson line; it is said here, where a wallet begins, and under
+   About Veil, and not under every balance.
 2. **Recovery phrase.** Sixteen numbered words, a warning, and a
    confirmation button. Followed by a check of three words.
 3. **Home.** Balance (tap to hide, which hides every amount on the

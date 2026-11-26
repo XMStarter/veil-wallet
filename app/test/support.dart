@@ -156,7 +156,14 @@ class FakeDevice extends ThisDevice {
 
 /// A wallet that only pretends: no core, no files, no Tor.
 class FakeBackend implements WalletBackend {
-  FakeBackend({this.hasWallet = false, this.confirmed = false});
+  FakeBackend({
+    this.hasWallet = false,
+    this.confirmed = false,
+    this.network = WalletNetwork.stagenet,
+  });
+
+  @override
+  final WalletNetwork network;
 
   @override
   final FakeDevice device = FakeDevice();

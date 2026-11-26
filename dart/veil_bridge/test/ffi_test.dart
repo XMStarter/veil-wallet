@@ -35,6 +35,7 @@ void main() {
     List<String> nodes = const [],
     String? walletLibrary,
   }) => SessionConfig(
+    network: WalletNetwork.stagenet,
     walletLibrary: walletLibrary ?? 'no-such-library',
     walletPath: '${dir.path}/wallet',
     torStateDir: '${dir.path}/tor-state',
@@ -58,6 +59,7 @@ void main() {
     expect(
       () => core.start(
         SessionConfig(
+          network: WalletNetwork.stagenet,
           walletLibrary: 'a',
           walletPath: 'b',
           torStateDir: 'c',
@@ -103,6 +105,7 @@ void main() {
     }
     // A start with bridges that are not bridges is refused the same way.
     final withBridges = SessionConfig(
+      network: WalletNetwork.stagenet,
       walletLibrary: 'a',
       walletPath: 'b',
       torStateDir: 'c',

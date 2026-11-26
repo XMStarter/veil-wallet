@@ -12,6 +12,12 @@ How Veil is written, reviewed, tested, and released.
 - **No secrets in the repository.** Signing keys, passwords, and real wallet
   files never get committed.
 - **No real funds in tests.** Tests use a local chain or the Monero stagenet.
+  The one test that goes to the main network makes a new, empty wallet
+  there and sends nothing.
+- **An app holds real money only when it was built to.** The network is
+  said when the app is built (`VEIL_NETWORK=mainnet` in front of
+  `check.sh`); a build that is told nothing is for stagenet, and so are
+  the tests.
 - **No way around Tor in an app.** Tests have two: a wallet that goes
   straight to a daemon on the machine (the `regtest` feature) and
   listeners that lead to local ports instead of into Tor (`stand-in`).
@@ -61,7 +67,7 @@ machine. The log of that run is the evidence that the step is done.
 |---|---|---|
 | `offline` | Format, lint, and every test that needs no network, the reliability tests against stand-ins among them. Uses the wallet library when it has been built. With Flutter installed it also runs the tests of the Dart side and of the app, and builds the app. | Anywhere, hosted CI included |
 | `regtest` | The wallet on a private chain, alone and behind a stand-in for Tor, with and without lost connections. Starts a Monero daemon. | The owner's machine |
-| `tor` | The tests that start the real Tor client, a connection to an onion service, and a new wallet synchronising with a public node. | The owner's machine |
+| `tor` | The tests that start the real Tor client, a connection to an onion service, and, on the main network with an empty wallet and no funds: a new wallet synchronising with one of the public nodes an app is built with, where such a wallet begins to scan, and every one of those nodes asked where it is and whether it agrees with the others. | The owner's machine |
 | `stagenet` | The command-line tool: a new wallet synchronises with a public stagenet node through Tor. | The owner's machine |
 | `bridges` | Tor through obfs4 and Snowflake bridges, through obfs4 again on the same files after Snowflake, a bridge that does not exist, and the tool synchronising through bridges. | The owner's machine |
 | `leaks` | The Rust tests of `offline` once more, with every network call of theirs recorded: none may name an address outside the machine. Needs the wallet library and `strace`; Linux only. | Any Linux machine with the wallet library |
@@ -253,6 +259,20 @@ each download is checked. Copy it to a phone with a 64-bit ARM
 processor and Android 7 or later, and open it there; Android asks once
 whether apps may be installed from where the file was opened. The app is
 a real wallet on stagenet and connects to Tor.
+
+`VEIL_NETWORK=mainnet ./check.sh --android app` builds it for the main
+network instead, where the coins are real money. Either way it is a
+build for trying, and Android is told so: the app for stagenet is
+`io.github.xmstarter.veil.stagenet`, "Veil stagenet", and the one for
+the main network `io.github.xmstarter.veil.preview`, "Veil preview". The
+plain identifier and the plain name belong to the app the release step
+builds and signs. So a build for trying sits on a phone beside the
+released app and beside the other one, each with its own files, and
+cannot be installed over either: removing an app removes its wallet, and
+nobody should have to remove the app with their money in it to try a
+new build. The same variable in front of `./check.sh offline` decides
+which network the app for Linux at the end of that level is for; its
+wallets lie in a folder for each network.
 
 The file is signed with a key Android's tools make on the machine that
 builds it. That is enough to install it on one's own phone; a second

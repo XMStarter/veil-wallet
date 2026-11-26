@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../core/backend.dart';
 import '../core/notices.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/theme.dart';
 import '../theme/type.dart';
+import '../widgets/network_notice.dart';
 import '../widgets/notice.dart';
 import '../widgets/veil_button.dart';
 import '../widgets/veil_screen.dart';
@@ -13,11 +15,19 @@ import 'navigation.dart';
 /// package is built from. Those texts have to go wherever the package
 /// goes; here they can also be read.
 class AboutScreen extends StatelessWidget {
-  const AboutScreen({super.key, required this.onAndroid, this.bundle});
+  const AboutScreen({
+    super.key,
+    required this.onAndroid,
+    required this.network,
+    this.bundle,
+  });
 
   /// Whether this is the app for Android, whose package has parts no
   /// other has.
   final bool onAndroid;
+
+  /// The network this app was built for.
+  final WalletNetwork network;
 
   /// Where the texts are read from, if not from the app's own package.
   final AssetBundle? bundle;
@@ -49,6 +59,8 @@ class AboutScreen extends StatelessWidget {
               ? text.aboutBuild(veilVersion)
               : text.aboutBuildFrom(veilVersion, veilCommit),
         ),
+        const SizedBox(height: 8),
+        NetworkNotice(network, whereAWalletBegins: true),
         const SizedBox(height: 8),
         Notice(text.aboutSource(veilSource)),
         const SizedBox(height: 8),

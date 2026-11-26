@@ -7,7 +7,9 @@ use std::time::{Duration, Instant};
 
 use serde_json::Value;
 use veil_tor::{StandIn, State, Status, Transport};
-use veil_wallet::{Amount, Balance, Direction, ReceiveAddress, SendAmount, SyncProgress, Transfer};
+use veil_wallet::{
+    Amount, Balance, Direction, Network, ReceiveAddress, SendAmount, SyncProgress, Transfer,
+};
 
 use super::{TempDir, BROADCAST_HOST, PASSWORD, SYNC_HOST};
 use crate::ffi::{
@@ -83,12 +85,49 @@ fn a_start_request_is_read_or_refused_with_a_reason() {
         vec![OnionNode::new(SYNC_HOST, 38081).unwrap()]
     );
 
-    // Only stagenet, for now.
-    let mainnet = change("network", "mainnet".into());
+    // The network is one of two, by name, and is never left out: what
+    // is asked for decides whether the wallet holds real money.
+    let (stagenet, _) = parse_start(&config_json(&dir, "create"), None).unwrap();
+    assert_eq!(stagenet.network, Network::Stagenet);
+    let (mainnet, _) = parse_start(&change("network", "mainnet".into()), None).unwrap();
+    assert_eq!(mainnet.network, Network::Mainnet);
+    // The user's own nodes are used on either network, as named.
+    assert_eq!(mainnet.nodes, stagenet.nodes);
+    for other in ["testnet", "Mainnet", "main", "", " mainnet"] {
+        assert_eq!(
+            kind_of(parse_start(&change("network", other.into()), None)),
+            Some(ProblemKind::BadRequest),
+            "{other:?}"
+        );
+    }
     assert_eq!(
-        kind_of(parse_start(&mainnet, None)),
+        kind_of(parse_start(&change("network", Value::Null), None)),
         Some(ProblemKind::BadRequest)
     );
+    let mut unnamed: Value = serde_json::from_str(&config_json(&dir, "create")).unwrap();
+    unnamed.as_object_mut().unwrap().remove("network");
+    assert_eq!(
+        kind_of(parse_start(&unnamed.to_string(), None)),
+        Some(ProblemKind::BadRequest)
+    );
+    // Without nodes of the user's own, each network has its public ones,
+    // and neither is given a node of the other.
+    let mut public = Vec::new();
+    for network in ["mainnet", "stagenet"] {
+        let mut request: Value = serde_json::from_str(&change("network", network.into())).unwrap();
+        request.as_object_mut().unwrap().remove("nodes");
+        let (config, _) = parse_start(&request.to_string(), None).unwrap();
+        let mut nodes: Vec<String> = config.nodes.iter().map(|node| node.to_string()).collect();
+        nodes.sort();
+        let mut expected: Vec<String> = crate::public_nodes(config.network)
+            .iter()
+            .map(|node| node.to_string())
+            .collect();
+        expected.sort();
+        assert_eq!(nodes, expected, "{network}");
+        public.push(nodes);
+    }
+    assert!(public[0].iter().all(|node| !public[1].contains(node)));
     // A node is an onion service.
     let clearnet = change("nodes", serde_json::json!(["node.example.com:38089"]));
     assert_eq!(
@@ -809,6 +848,11 @@ fn made_up_start_requests_are_read_or_refused() {
             Ok((config, source)) => {
                 assert!(config.nodes.iter().all(is_an_onion_node));
                 assert!(!config.nodes.is_empty(), "a session with no node to ask");
+                // Never the third network, and never one by default.
+                assert!(matches!(
+                    config.network,
+                    Network::Mainnet | Network::Stagenet
+                ));
                 assert_ne!(config.sync_every, Some(Duration::ZERO));
                 // Bridges that were asked for are there, with what they
                 // need, or the request was refused.

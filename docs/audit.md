@@ -6,9 +6,11 @@ and whom it does not, where input from outside comes in, how to build it
 and run its checks, and what is known to be weak or untried. It points
 into the code and the other documents instead of repeating them.
 
-Veil is not released. It works on stagenet only, and its app is signed
-with a debug key. Nothing here has been examined by anybody outside the
-project.
+Veil is not released. Its app is built for stagenet unless the build
+says the main network, the command-line tool knows stagenet only, and
+the app is signed with a debug key. The owner has decided that the first
+release is for the main network, without an audit before it. Nothing
+here has been examined by anybody outside the project.
 
 The numbers in this document were counted at the commit that last changed
 it; the command is given next to each, so that they can be counted again.
@@ -84,6 +86,7 @@ keeps one and the test that would fail if it did not. "Private chain" and
 | Bridges that cannot be read are not taken for no bridges. | `app/lib/core/settings.dart`: a settings file that is there and cannot be read, or whose bridges cannot, gives settings marked `lost`; `app/lib/app.dart` then shows `SettingsLostScreen` in place of every screen that starts Tor. | `a made-up settings file costs settings and nothing else`; `app/test/bridges_before_test.dart`. |
 | A node is an onion service. | `veil_core/src/node.rs`, `OnionNode`; `veil_wallet::is_onion_host`. | `made_up_nodes_are_onion_services_with_a_port_or_refused`, `only_onion_nodes_are_accepted`. |
 | Synchronising and sending use different circuits, and different nodes where another answers. | Two listeners (`Purpose::Sync`, `Purpose::Broadcast`), the second with a circuit of its own for every connection (`service.rs`, `TorConnector::new`). | Private chain: `synchronises_through_one_listener_and_sends_through_the_other`. That the circuits differ inside Tor is Arti's `isolated_client` and is not tested. |
+| An app holds real money only when it was built to. | The network is said when the app is built and is stagenet where nothing is said (`app/lib/core/network.dart`, `native/check.sh`: `VEIL_NETWORK`); the wallet of each network has a folder of its own (`app/lib/core/paths.dart`); a start request names the network and the core has no default (`veil_core/src/ffi.rs`, `parse_start`), with public nodes for each network apart (`veil_core/src/public_nodes.rs`). On Android a build for trying is another app than the released one (`app/android/app/build.gradle.kts`). | `an app that was told nothing is for stagenet`, `each network has a folder of its own for its wallet`, `a_start_request_is_read_or_refused_with_a_reason`, `made_up_start_requests_are_read_or_refused`, `no_node_is_on_both_networks`. That an APK carries the identifier its network gives it was read off two builds by hand, not by a test. |
 | A test-only way around Tor cannot be in an app. | The `regtest` feature of `veil_wallet` and the `stand-in` feature of `veil_tor` do not compile in an optimised build (`compile_error!` in each `lib.rs`). | `check.sh`, `no_test_features_in_a_release`, after every build of the core for an app. |
 | Every payment arrives at a fresh address, and never more unused ones in a row than a restore would find. | `veil_wallet`, `receive_address`, `MAX_UNUSED_ADDRESSES`. | `receive_address_stays_the_same_until_it_is_used`, `extra_addresses_are_capped`; private chain: `a_restore_finds_payments_past_long_runs_of_unused_addresses`. |
 | An amount is the amount written. | `veil_wallet/src/amount.rs`: integers only. | `made_up_amounts_are_read_exactly_or_refused`, against a second reading with wider numbers. |
@@ -224,9 +227,9 @@ in the app's own storage.
 
 | File | Holds | Readable without the password |
 |---|---|---|
-| `stagenet/wallet.keys` | The keys | No: encrypted by the library |
-| `stagenet/wallet` | The wallet's view of the chain, the user's own nodes, a send whose outcome is unknown | No: encrypted by the library |
-| `stagenet/wallet.lock` | Nothing; marks an open wallet | Yes, and it says only that |
+| `mainnet/wallet.keys`, `stagenet/wallet.keys` | The keys, in the folder of the network the app was built for | No: encrypted by the library |
+| `mainnet/wallet`, `stagenet/wallet` | The wallet's view of the chain, the user's own nodes, a send whose outcome is unknown | No: encrypted by the library |
+| `mainnet/wallet.lock`, `stagenet/wallet.lock` | Nothing; marks an open wallet | Yes, and it says only that |
 | `settings.json` | Language, theme, auto-lock, bridge lines | Yes. Bridge lines are handed out one person at a time. |
 | `tor/state`, `tor/cache` | Arti's files: its guards, the network's directory | Yes. They show that Tor is used and through which first relays, not what for. Made private to the user on Unix. |
 | `tor/state/bridged`, `tor/state/bridged.lines` | Arti's state while bridges are set, and the bridge lines that state belongs to (`veil_tor/src/state.rs`) | Yes. The lines are the ones in `settings.json`, and Arti's state names the same bridges. Emptied when the bridges change. |
@@ -324,8 +327,12 @@ Each of these is known to the project and not put right.
 
 ## Never tried
 
-- Anything on the main network: the app and the tool are stagenet only,
-  and the list of nodes for the main network does not exist.
+- Money on the main network. A new, empty wallet has synchronised with
+  public nodes there in the owner's runs, and that is all: no payment
+  was ever received or sent on it by anything here. The public nodes an
+  app for the main network goes to are a list from monero.fail that
+  nobody of this project has vetted (`veil_core/src/public_nodes.rs`,
+  `docs/concept.md`, "Open decisions").
 - A network that really blocks Tor. Bridges were seen to carry Tor from
   a network that does not block it. WebTunnel was not tried at all.
 - The Kotlin side beyond the owner's hand on one phone, a Samsung Galaxy

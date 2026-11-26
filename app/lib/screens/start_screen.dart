@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/backend.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/theme.dart';
-import '../widgets/notice.dart';
+import '../widgets/network_notice.dart';
 import '../widgets/veil_button.dart';
 import '../widgets/veil_column.dart';
 import 'create_screen.dart';
@@ -42,7 +42,7 @@ class StartScreen extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const Spacer(),
-            Notice(text.startStagenetNotice),
+            NetworkNotice(backend.network, whereAWalletBegins: true),
             const SizedBox(height: VeilSizes.screenPadding),
             VeilButton(
               label: text.startCreate,

@@ -114,6 +114,7 @@ void main() {
 
   test('a configuration is written the way the core reads it', () {
     const config = SessionConfig(
+      network: WalletNetwork.stagenet,
       walletLibrary: '/lib/wallet.so',
       walletPath: '/data/wallet',
       torStateDir: '/data/tor/state',
@@ -135,7 +136,19 @@ void main() {
       'restore_height': 1234567,
       'sync_every_seconds': 120,
     });
+    // The network is said as the core reads it, and is what was asked
+    // for: nothing here chooses the main network by itself.
+    const real = SessionConfig(
+      network: WalletNetwork.mainnet,
+      walletLibrary: 'a',
+      walletPath: 'b',
+      torStateDir: 'c',
+      torCacheDir: 'd',
+      source: WalletSource.open,
+    );
+    expect(real.toJson()['network'], 'mainnet');
     const plain = SessionConfig(
+      network: WalletNetwork.stagenet,
       walletLibrary: 'a',
       walletPath: 'b',
       torStateDir: 'c',

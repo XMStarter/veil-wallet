@@ -40,8 +40,13 @@ if, at build time, Arti cannot run bridges on Android.
 - **Fail closed.** The app has no direct internet connection. If Tor is not
   running, the wallet does not work. It never falls back to a direct
   connection.
-- **Onion nodes only.** The app ships with a list of vetted `.onion` Monero
-  nodes and picks one at random on each start. If that node stops answering
+- **Onion nodes only.** The app ships with a list of public `.onion`
+  Monero nodes, each run by somebody else, and picks one at random on
+  each start. Nobody of this project has looked at how they are run; the
+  list for the main network is the owner's to settle (see "Open
+  decisions"), and the owner's run asks every node on it whether it is
+  there and whether it agrees with the others about where the chain
+  ends. If that node stops answering
   in the middle of a synchronisation, another one from the list continues
   it, and is the one asked first from then on: a node that is down is not
   tried again every minute. The user can set their own node, which is the most private option.
@@ -377,10 +382,18 @@ run where is set out in [development.md](development.md).
    3. *Signed packages.* A key for releases, which no machine but the
       owner's ever holds, a script that signs with it there, and what a
       user compares a download with.
-   4. *The main network.* Until here the app and the tool know stagenet
-      only. The main network needs its list of nodes and a way of
-      building for it that no test can take by accident. The first
-      release is for it.
+   4. *The main network.* Until here the app and the tool knew stagenet
+      only. Which network an app is for is said when it is built and
+      nowhere else: a build that is told nothing is for stagenet, so no
+      app holds real money by an oversight, and the tests are built that
+      way. A wallet of each network has a folder of its own. The core is
+      told the network with every wallet it opens and has a list of
+      public nodes for each. An app for the main network says, where a
+      wallet is made or brought back, that the money is real and that
+      nobody outside has audited Veil. On Android a build made for
+      trying is an app of its own beside the released one, so that it
+      can never be installed in its place. The command-line tool stays
+      on stagenet. The first release is for the main network.
    5. *F-Droid.* Its description of the app and its recipe, which builds
       everything from source on F-Droid's machines.
    6. *The release.* A version, what it says about itself, where it is
@@ -443,6 +456,18 @@ The owner decided these when the release step began.
   machine by a script; hosted CI is never given the key.
 
 ## Open decisions
+
+- **Which public nodes a release goes out with.** A wallet without a
+  node of the user's own goes to public ones. For the main network the
+  app has six from the public list at monero.fail, each run by somebody
+  else: plowsof, Rucknium, HashVault, SupportXMR, and two whose
+  operators we do not know. A node cannot take funds. It can hold a
+  transaction back, show a wallet a chain that is not the real one, and
+  see when a wallet behind Tor is in use; the node a payment is handed
+  to sees that payment. Nobody of this project knows the people who run
+  these or has looked at how they do. The owner decides which of them a
+  release carries, and whether any others. `./check.sh tor` asks each
+  whether it is there and whether it agrees with the rest.
 
 - **Recovery phrase format.** Polyseed (16 words) is planned for new wallets.
   The alternative is the classic 25-word phrase, which every Monero wallet

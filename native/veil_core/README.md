@@ -140,7 +140,10 @@ never calculates with them. A request that cannot be read is refused with a
 problem of the kind `bad_request`; a comma in an amount is a decimal
 separator, as people type it.
 
-Only `stagenet` is accepted as a network. Bridges are given at the start as
+The network is named in every start request, `mainnet` or `stagenet`,
+and a request without it or with any other name opens nothing: whether a
+wallet holds real money is what the app was built to say there, never a
+default. Bridges are given at the start as
 a list of bridge lines; the programs their transports need are looked for
 in the folder the request names as `transport_dir`, if the app brings any
 along, and then among those installed on the machine
@@ -152,8 +155,10 @@ The user's own nodes are set with `set_nodes` and kept in the wallet's data
 file, so a later session uses them without being told; the state's
 `own_nodes` shows them.
 Nodes are the user's own, tried in the order given; without any, the
-public stagenet nodes in `src/public_nodes.rs` are used, in an order nobody
-can predict.
+public nodes of the wallet's network in `src/public_nodes.rs` are used, in
+an order nobody can predict. That file has a list for each network and
+says where each comes from; `../check.sh tor` asks every node of the one
+for the main network where it is.
 
 The state as it crosses the interface is pinned by `tests/fixtures/*.json`.
 The core's tests compare what they produce with those files, and the Dart

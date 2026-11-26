@@ -204,6 +204,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       AboutScreen(
                         onAndroid:
                             defaultTargetPlatform == TargetPlatform.android,
+                        network: backend.network,
                       ),
                     ),
                   ),

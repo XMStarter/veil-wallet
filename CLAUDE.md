@@ -78,7 +78,10 @@ that cannot lose the user's funds.
     those tests run only where the wallet library is built, so not in
     hosted CI.
   - `veil_cli`: `veil`, the command-line wallet on stagenet. Stagenet
-    only; do not add another network to it.
+    only; do not add another network to it. The app is built for
+    stagenet too unless `VEIL_NETWORK=mainnet` stands in front of
+    `check.sh`; no test, script or default may make it the main
+    network's.
   - `wallet_lib`: pinned build script for the wallet library, Veil's
     patches to it, and the bindings generator. After changing a patch, run
     `build.sh` again and regenerate the bindings. `--android` builds it
@@ -1233,8 +1236,47 @@ ended the script without a word. Tried in a cloud session on folders
 with one tree only: with the tree for Linux and Windows the file is
 checked, with the one for Android alone it is left and said to be,
 since only the build for Windows downloads every archive the file is
-written from. Not seen yet: that check on the owner's machine, and the
-About screen on the phone.
+written from. The owner then ran the check alone on commit `1c9c092`:
+the wallet library's file was held against the source there and its
+sixteen parts are as kept; the transport program's is left alone on
+that machine, where the program was never built. And the owner reported
+that on the phone everything works, the APK being the one built from
+`fd944d6`; which lines of About were opened was not said. With that,
+step 6.1 has passed the owner's run on both systems and on the phone.
+Step 6.4, the main network, was taken up next by the owner's word,
+before the two parts between. The wallet code never knew one network
+from another, and the tests on a private chain have always made wallets
+of the main network's kind; what knew stagenet only was the request a
+session is started with, the list of public nodes, the app's folder for
+its wallet, and its words. Now a start request names the network,
+`mainnet` or `stagenet`, with no default, and the core has a list of
+public nodes for each (`veil_core::public_nodes`, `candidates`). The app
+is built for one network: `--dart-define=VEIL_NETWORK=mainnet`, which
+`check.sh` passes when `VEIL_NETWORK=mainnet` stands in front of it, and
+stagenet where nothing is said, tests included
+(`app/lib/core/network.dart`). Each network's wallet has a folder of its
+own (`<data>/mainnet`, `<data>/stagenet`). An app for the main network
+says on its first screen and under About that the money is real and
+that nobody outside has audited Veil; one for stagenet says what it
+always said. On Android a build for trying is an app of its own,
+`io.github.xmstarter.veil.stagenet` or `.preview` with a name to match,
+so that it stands beside the released app and can never be installed
+over it; the plain identifier is for the build the release step signs.
+Both were built in a cloud session and their identifiers read back. The
+app the owner has on the phone from earlier steps carries the plain
+identifier and stagenet coins; it stays as it is until it is removed.
+`veil_cli` stays on stagenet. The public nodes for the main network are
+the six the `tor` level has used since step 1.2, from monero.fail, each
+of another operator; nobody vetted them, monero.fail could not be read
+from a cloud session to see whether they are still listed, and which of
+them a release carries is the owner's to say (`docs/concept.md`, "Open
+decisions"). The `tor` level now goes by the app's own list and has two
+new things, both with an empty wallet and no funds: where a wallet made
+today begins to scan, which has to lie behind the end of the chain and
+not more than a hundred days behind, and every node of the list asked
+where it is, failing when fewer than two answer or one is more than ten
+blocks behind the furthest. Neither has run. Nothing here has ever
+received or sent a payment on the main network.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

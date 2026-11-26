@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/backend.dart';
 import '../l10n/app_localizations.dart';
+import '../widgets/network_notice.dart';
 import '../widgets/notice.dart';
 import '../widgets/veil_button.dart';
 import '../widgets/veil_field.dart';
@@ -272,8 +273,10 @@ class _UnlockScreenState extends State<UnlockScreen> {
           const SizedBox(height: 16),
           Notice(text.unlockBridgesNotice, warning: true),
         ],
-        const SizedBox(height: 16),
-        Notice(text.startStagenetNotice),
+        if (widget.backend.network == WalletNetwork.stagenet) ...[
+          const SizedBox(height: 16),
+          NetworkNotice(widget.backend.network),
+        ],
       ],
     );
   }
