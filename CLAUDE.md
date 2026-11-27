@@ -1687,9 +1687,18 @@ these notes changed and nothing else. At the `tor` level all five public
 nodes answered both times, at one height each time, and the node of
 plowsof once did not within twenty seconds as the first node a new
 wallet asked, as Windows programs, and the wallet went on to the next.
-Still to do, in the order of "Making a release": the signature, the
-comparison, the phone, where bridges are to be tried again because the
-transport program is a new file, and the publication.
+The owner signed that package with the key for releases and sent the
+signed file. Held against the unsigned package in a cloud session, it
+is the same but for the signature, and it is signed by the recorded
+key; its checksum is
+`3a03aee92cc67644a430ad748fa7da4cb3bb9ac46e65d55593fe6363c0e2ab55`. The
+owner reported that on the phone everything works with it and that
+bridges are fine; which bridges, and what else was tried, was not said.
+A cloud session may not create a release on GitHub (the request is
+refused for this kind of session), so the owner makes the release page
+by hand from a text prepared here: tag `v0.1.0` on `981c6a6`, the signed
+file attached. Still to do: that publication, and the entry in
+`docs/releases.md` after it.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
