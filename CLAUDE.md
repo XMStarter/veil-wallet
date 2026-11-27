@@ -1697,8 +1697,20 @@ bridges are fine; which bridges, and what else was tried, was not said.
 A cloud session may not create a release on GitHub (the request is
 refused for this kind of session), so the owner makes the release page
 by hand from a text prepared here: tag `v0.1.0` on `981c6a6`, the signed
-file attached. Still to do: that publication, and the entry in
-`docs/releases.md` after it.
+file attached. The owner published it on 27 November 2026: Veil 0.1.0
+for Android, <https://github.com/XMStarter/veil-wallet/releases/tag/v0.1.0>.
+Read back from GitHub: the tag `v0.1.0` stands on `981c6a6`, the file
+on the page has the checksum of the signed package, and the page's text
+is the one prepared. `docs/releases.md` has the entry, with how each
+step of the order was met. That completes step 6.6 for Android and,
+with F-Droid left out, step 6 of the build plan but for a release for
+Windows, which the owner has put off without a date. A release cannot
+be taken back; a fault in 0.1.0 is put right by a 0.1.1, whose number
+after the `+` in `app/pubspec.yaml` has to be higher than 1. Open, and
+nobody's task yet: an audit from outside, somebody who knows licences,
+a release for Windows and a package for Linux that is complete in
+itself, the damaged heap seen twice as Windows programs, and the bridge
+in the tests' list that the Tor Project no longer serves.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

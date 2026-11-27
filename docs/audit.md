@@ -6,11 +6,13 @@ and whom it does not, where input from outside comes in, how to build it
 and run its checks, and what is known to be weak or untried. It points
 into the code and the other documents instead of repeating them.
 
-Veil is not released. Its app is built for stagenet unless the build
-says the main network, the command-line tool knows stagenet only, and
-the app is signed with a debug key. The owner has decided that the first
-release is for the main network, without an audit before it. Nothing
-here has been examined by anybody outside the project.
+Veil has one release, 0.1.0, for Android and for the main network
+([releases.md](releases.md)), signed with the key for releases. It went
+out without an audit before it, by the owner's decision. Every other
+build of the app is for stagenet unless the build says the main
+network, and is signed with a debug key; the command-line tool knows
+stagenet only. Nothing here has been examined by anybody outside the
+project.
 
 The numbers in this document were counted at the commit that last changed
 it; the command is given next to each, so that they can be counted again.
