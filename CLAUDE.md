@@ -1584,6 +1584,15 @@ was: the package was built by a cloud session and by nobody else, since
 the owner's machine has not built for Android; before a release is
 published, somebody other than that session builds the commit and the
 checksums of the unsigned packages are held against each other.
+Hosted CI passed on both systems, the test of the comparison running on
+Windows itself there for the first time, and step 6.3 was merged on the
+owner's word. Left of step 6: F-Droid (6.5) and the release itself
+(6.6). The owner was told what each takes: the submission to F-Droid is
+a merge request on GitLab that a cloud session cannot make, so it is
+prepared here and made by the owner; and a release for Windows could be
+built by hosted CI for the main network, started by hand, if the owner
+takes that nobody can build it a second time to compare. Which systems
+the first release is for is the owner's to say and has not been said.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
