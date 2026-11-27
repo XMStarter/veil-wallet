@@ -59,6 +59,16 @@ jobs:
         run: VEIL_NETWORK=mainnet bash check.sh --android release
       - name: Its checksum
         run: sha256sum target/packages/*-unsigned.apk
+      # And the checksum of each file in it, so that a build that came out
+      # differently from another says in which part, without anybody
+      # downloading anything. The first run of this workflow differed from
+      # a cloud session's build in two parts and was told apart that way.
+      - name: The checksum of each file in it
+        run: |
+          mkdir "$RUNNER_TEMP/package"
+          unzip -q target/packages/*-unsigned.apk -d "$RUNNER_TEMP/package"
+          cd "$RUNNER_TEMP/package"
+          find . -type f | LC_ALL=C sort | xargs -d '\n' sha256sum
       # Kept with this run as a file to download, for a look at what
       # differs when the checksums do. It is not signed and no phone
       # installs it. It stays on GitHub for fourteen days.

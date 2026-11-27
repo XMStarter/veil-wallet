@@ -679,9 +679,10 @@ entry in [releases.md](releases.md).
    other; the two unsigned packages have one checksum. One of the two is
    hosted CI: the owner starts the workflow `release` by hand on the
    commit (the repository's Actions page, "Run workflow", on `main`),
-   and its last step prints the checksum. A package only one machine has
-   built is signed on that machine's word alone, and a release that was
-   made so says so.
+   and the run prints the checksum of the package and of each file in
+   it, so that two builds that differ say in which part. A package only
+   one machine has built is signed on that machine's word alone, and a
+   release that was made so says so.
 4. **The signature.** `./release.sh sign` on the owner's machine, which
    looks at its own result before it keeps it.
 5. **The signed package, held against the unsigned one** by somebody who
@@ -726,7 +727,7 @@ together on four cores. The folders are made in `~/veil-twice`
 | Part | What made two builds differ | What is done about it | Two builds now |
 |---|---|---|---|
 | The core, for Linux and for Android | The path of every source file that can report an error, 528 of them, most under cargo's folder in the home of whoever builds. Two builds differed in 19.6 of 24.3 million bytes, and in size. | Every optimised build of the core names those folders `/cargo`, `/veil/native` and `/veil/target` to the compiler (`release_build` in `check.sh`). | The same |
-| The transport program for Android | Nothing: it is built without paths and without the build's own mark (`transports/build.sh`). | | The same, and the same as the file in the packages built before this step |
+| The transport program for Android | On one machine nothing: it is built without paths (`transports/build.sh`). A machine that keeps the NDK in another folder showed sixty bytes: two marks Go writes into a program, made from the command the C compiler is called by among other things. | It is built without those marks (`-buildid=`). | The same, with the compiler under two different paths. It is no longer the file in the packages built before 27 November 2026, which had the marks |
 | The wallet library, for Android | The paths of some 770 source files, and the folder Monero's dependency build installs into. Then, with the paths the same, eight bytes: the name of the commit monero_c makes of its patches, which had the time of the build in it. | It is built at one path on every machine, and those commits have one date (`wallet_lib/README.md`, "Where it is built"). | The same |
 | The wallet library, for Windows | The same two things, and then six bytes: the time of linking, which a program for Windows has a place for in its first bytes, and a sum over the file that follows from it. And one that only a second machine could show: the name of Monero's commit, which differed with the builder's settings for git. | The same; the linker is told to leave the time out; and the build reads none of the machine's settings for git. | The same, after both were linked again without the time; and the same as the file a second machine built from nothing |
 | The wallet library, for Linux | The same two things, and one more that was no difference but a fault: it looked for Polyseed in the folder it was built in. And one that only a second machine could show: it was compiled for the processor of the machine that built it. | The same; Polyseed lies beside the library and is looked for there; and the build is told to compile for no processor in particular, as the other two are. | The same, both files |
@@ -769,6 +770,28 @@ the library for Linux (`2815398e3e401946…`) and Polyseed
 (`93c8dd53fb487964…`). For Linux that says that the two machines had the
 same packages of Ubuntu 24.04 that day, and no more than that.
 
+A third machine built the release for Android on 27 November 2026:
+hosted CI, the first time the workflow `release` ran, on the pull request
+that brought it. Of the 80 files of its package, 77 were the cloud
+session's byte for byte, the core among them, which no second machine had
+built before. One of the three that were not is the app's own code, which
+names the commit it was built from, and the two machines built different
+commits, as a pull request's run does. The other two were real
+differences, and neither had anything to do with the code:
+
+- **The wallet library** differed in fifteen thousand bytes of tables and
+  in where everything after them lies. GitHub's machines have `flex`
+  installed and the cloud session had not. unbound, which Monero's
+  dependency build compiles, comes with the reader of its settings file
+  written out and with the description it was made from, and where it
+  finds flex it makes that file anew. The build now says that there is no
+  flex (`LEX=:` in `wallet_lib/build.sh`), so the file that came with the
+  source is compiled everywhere. With flex installed in the cloud session
+  and that setting, the library built from nothing is the one built
+  without flex (`ffdf870ca1abd41e…`).
+- **The transport program** differed in sixty bytes: the two marks named
+  in the table.
+
 What it does not show, and what is known to stand in the way of the same
 files on another machine:
 
@@ -776,8 +799,12 @@ files on another machine:
   Rust is pinned to a version, Go and both Android NDKs by checksum, and
   Flutter by checksum; the C and C++ compilers for Linux and the cross
   compiler for Windows are the distribution's, whatever version it has
-  that day. One second machine has built the wallet library, as told
-  above; no other part has been built on one and compared.
+  that day. One second machine has built the wallet library, and hosted
+  CI the package for Android, as told above. What a machine has installed
+  besides can matter as well, as flex did: the build tools Monero's
+  dependency build takes from the machine (autoconf, cmake, make, perl,
+  python) are the distribution's or the machine's own and are not
+  pinned.
 - **The wallet library for Linux** is linked against the distribution's
   Boost, OpenSSL and the rest, so it is the same only where those are the
   same, and a package for Linux needs them installed. Monero's dependency

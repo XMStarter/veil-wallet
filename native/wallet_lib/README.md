@@ -75,7 +75,15 @@ machine set to sign its commits signed the ones monero_c makes of its
 patches, which gave them another name, and so the library another nine
 characters. The script hands git a file of settings of its own, with
 nothing in it but what the machine's settings say about reaching the
-network.
+network. And another: whether the machine has `flex`. unbound, which
+Monero's dependency build compiles for Windows and for Android, comes
+with the reader of its settings file written out and makes it anew
+where it finds flex, with other tables in it; hosted CI's machines have
+flex, and their library for Android differed from a cloud session's for
+that. The script says that there is none (`LEX=:`), which is what a
+machine without flex finds for itself, so a library built before on such
+a machine is the one built now and `built-how.txt` does not change for
+it.
 
 `native/twice.sh` builds the library twice in two folders and compares
 the two; `docs/development.md`, "The same build twice", says what came

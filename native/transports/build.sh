@@ -59,7 +59,7 @@ work="$(cd "$work" && pwd)"
 out="$work/out/android/arm64-v8a"
 built="$out/liblyrebird.so"
 stamp="$out/veil-transport.txt"
-wanted="lyrebird $lyrebird_commit go $go_version api $android_api"
+wanted="lyrebird $lyrebird_commit go $go_version api $android_api, without Go's mark of the build"
 if [ -f "$built" ] && [ "$(cat "$stamp" 2>/dev/null)" = "$wanted" ]; then
   echo "transport program: built in $out"
   exit 0
@@ -116,8 +116,15 @@ export GOOS=android GOARCH=arm64 CGO_ENABLED=1 CC="$cc"
 #   app's libraries.
 # -trimpath, -buildvcs=false: nothing of this machine's folders or of the
 #   state of the checkout goes into the program.
+# -buildid=: Go writes a mark into a program that it makes from, among
+#   other things, the command the C compiler is called by, which is a
+#   path under the home of whoever builds; and a second mark for other
+#   tools, made from the first. Two machines that kept the NDK in
+#   different folders built the same program but for those two marks,
+#   sixty bytes: seen between a cloud session and hosted CI. Without the
+#   first mark there is no second, and nothing reads either on a phone.
 (cd "$source" && go build -trimpath -buildvcs=false \
-  -ldflags="-s -w -checklinkname=0 -X main.lyrebirdVersion=$lyrebird_version -extldflags=-Wl,-z,max-page-size=16384" \
+  -ldflags="-buildid= -s -w -checklinkname=0 -X main.lyrebirdVersion=$lyrebird_version -extldflags=-Wl,-z,max-page-size=16384" \
   -o "$built" ./cmd/lyrebird)
 
 cp "$source/LICENSE" "$out/lyrebird-LICENSE.txt"

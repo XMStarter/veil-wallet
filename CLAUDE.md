@@ -1643,6 +1643,33 @@ built from the commit this makes on `main`, not from `11e4a6d`, and the
 owner's run is made again on that commit. The unsigned package of
 `11e4a6d` that a cloud session built and sent (`5003838b2e6f7f8f`) is
 therefore not the release and is not to be signed.
+The workflow ran for the first time on that pull request and passed, in
+sixteen minutes, with the build's view of the folders working on
+GitHub's machine. Its package was not the cloud session's. A cloud
+session then built the commit that run had built, the pull request's
+merge with `main`, and of the 80 files of the two packages 78 were the
+same byte for byte, the core and the app's own code among them; no
+machine but a cloud session had built either before. The two that
+differed, and why, each read from the two files and from the run's log:
+the wallet library, in fifteen thousand bytes of tables and in where
+everything after them lies, because GitHub's machines have `flex` and
+unbound's build, inside Monero's dependency build, makes the reader of
+its settings file anew where it finds flex; and the transport program,
+in sixty bytes, two marks Go makes from the command the C compiler is
+called by, which is a path under the builder's home. `wallet_lib/build.sh`
+now says that there is no flex (`LEX=:`), and with flex installed in a
+cloud session the library built from nothing that way is the one built
+without it (`ffdf870ca1abd41e`); `built-how.txt` is not changed for it,
+since a library built on a machine without flex is the same library,
+and the owner's has none, or the library for Windows would not have
+been the same file there. `transports/build.sh` builds without the
+marks (`-buildid=`), which makes the transport program another file
+than the one in every package so far (`d86de391d03a7d16` where it was
+`ba57d65aba48a697`), the same code without two notes; it came out the
+same with the compiler under two different paths. That file has not
+been on a phone. The workflow now prints the checksum of each file in
+the package. Whether hosted CI's package is the cloud session's with
+the two changes has not been seen.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

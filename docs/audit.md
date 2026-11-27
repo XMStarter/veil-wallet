@@ -287,8 +287,13 @@ the same file there as in a cloud session, byte for byte, for Windows
 and for Linux, once the build stopped reading the builder's settings
 for git and stopped compiling for the builder's processor. For Linux
 that holds only where the distribution's libraries are the same, as
-they were on those two machines that day. The app for Windows is not
-compared at all.
+they were on those two machines that day. A third machine, hosted CI,
+has built the package for Android: its core was the cloud session's
+byte for byte, and its wallet library and transport program were not,
+for a tool the one machine had and the other had not and for the folder
+a compiler was kept in. Both are closed in the build scripts
+(`docs/development.md`, "The same build twice"). The app for Windows is
+not compared at all.
 
 A release for Android is signed on the owner's machine with a key that
 no other machine holds (`native/release.sh`; `docs/development.md`,
