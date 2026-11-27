@@ -1668,8 +1668,49 @@ than the one in every package so far (`d86de391d03a7d16` where it was
 `ba57d65aba48a697`), the same code without two notes; it came out the
 same with the compiler under two different paths. That file has not
 been on a phone. The workflow now prints the checksum of each file in
-the package. Whether hosted CI's package is the cloud session's with
-the two changes has not been seen.
+the package. With the two changes the workflow ran again on the pull
+request, and its package is the cloud session's of the same commit,
+byte for byte (`76b606f689196bc4`), all 80 files, the wallet library
+`ffdf870ca1abd41e` on GitHub's machine too. That is the first package
+of Veil built by two machines that have nothing to do with each other
+and found the same. Hosted CI passed on both systems, and the pull
+request was merged on the owner's word, given beforehand for the case
+that every check passed. The commit that made on `main`, `981c6a6`, is
+the one the release is to be built from; a cloud session's unsigned
+package of it has the checksum
+`623396eccc7056ffe01498a0cca968b6775c0796b7965b849f3e7059e3f4b47b`.
+The owner started the workflow `release` on `main`, and hosted CI's
+package of `981c6a6` has that checksum, all 80 files the same. The
+owner's run passed at the `offline`, `regtest` and `tor` levels as Linux
+and as Windows programs, on commit `4da75aa`, which is `981c6a6` with
+these notes changed and nothing else. At the `tor` level all five public
+nodes answered both times, at one height each time, and the node of
+plowsof once did not within twenty seconds as the first node a new
+wallet asked, as Windows programs, and the wallet went on to the next.
+The owner signed that package with the key for releases and sent the
+signed file. Held against the unsigned package in a cloud session, it
+is the same but for the signature, and it is signed by the recorded
+key; its checksum is
+`3a03aee92cc67644a430ad748fa7da4cb3bb9ac46e65d55593fe6363c0e2ab55`. The
+owner reported that on the phone everything works with it and that
+bridges are fine; which bridges, and what else was tried, was not said.
+A cloud session may not create a release on GitHub (the request is
+refused for this kind of session), so the owner makes the release page
+by hand from a text prepared here: tag `v0.1.0` on `981c6a6`, the signed
+file attached. The owner published it on 27 November 2026: Veil 0.1.0
+for Android, <https://github.com/XMStarter/veil-wallet/releases/tag/v0.1.0>.
+Read back from GitHub: the tag `v0.1.0` stands on `981c6a6`, the file
+on the page has the checksum of the signed package, and the page's text
+is the one prepared. `docs/releases.md` has the entry, with how each
+step of the order was met. That completes step 6.6 for Android and,
+with F-Droid left out, step 6 of the build plan but for a release for
+Windows, which the owner has put off without a date. A release cannot
+be taken back; a fault in 0.1.0 is put right by a 0.1.1, whose number
+after the `+` in `app/pubspec.yaml` has to be higher than 1. Open, and
+nobody's task yet: an audit from outside, somebody who knows licences,
+a release for Windows and a package for Linux that is complete in
+itself, the damaged heap seen twice as Windows programs, and the bridge
+in the tests' list that the Tor Project no longer serves.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

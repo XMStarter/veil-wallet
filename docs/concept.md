@@ -399,7 +399,9 @@ run where is set out in [development.md](development.md).
       the owner's decision: a release is a file to download.
    6. *The release.* A version, what it says about itself, where it is
       downloaded from, and where a finding about its security is sent.
-      For Android first, then for Windows.
+      For Android first, then for Windows. Version 0.1.0 for Android
+      was released on 27 November 2026 ([releases.md](releases.md)); a
+      release for Windows is put off.
 
 ## Known limitations
 
