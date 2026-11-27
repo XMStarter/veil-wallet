@@ -241,41 +241,10 @@ part_app() {
     same_tree app "the app for Linux" veil/app/build/linux/x64/release/bundle
 }
 
-# A number of `$3` bytes read at byte `$2` of the file `$1`, counted from 0.
-number_at() {
-  od -An -tu"$3" -j"$2" -N"$3" "$1" | tr -d ' '
-}
-
-# Where the signature of the package `$1` lies in it: the first byte of it
-# and the first after it, counted from 0. A package is an archive with a
-# list of its files at the end, and what it was signed with is a block of
-# bytes right in front of that list. Fails if this is no package signed
-# that way.
-signature_of() {
-  local apk="$1" size list block
-  size="$(stat -c %s "$apk")"
-  # The last 22 bytes say where the list begins, in an archive without a
-  # comment, which is what the build makes.
-  [ "$(number_at "$apk" $((size - 22)) 4)" = 101010256 ] || return 1
-  list="$(number_at "$apk" $((size - 6)) 4)"
-  [ "$(dd if="$apk" bs=1 skip=$((list - 16)) count=16 2>/dev/null)" = "APK Sig Block 42" ] || return 1
-  block="$(number_at "$apk" $((list - 24)) 8)"
-  echo "$((list - block - 8)) $list"
-}
-
-# Whether the two packages differ in their signatures and nowhere else.
-same_but_for_the_signature() {
-  local one="$1" two="$2" where first last
-  where="$(signature_of "$one")" || return 1
-  [ "$where" = "$(signature_of "$two")" ] || return 1
-  # cmp counts from 1.
-  first="$(cmp -l "$one" "$two" | head -n 1 | awk '{ print $1 }')"
-  last="$(cmp -l "$one" "$two" | tail -n 1 | awk '{ print $1 }')"
-  [ -n "$first" ] || return 1
-  # shellcheck disable=SC2086
-  set -- $where
-  [ "$first" -gt "$1" ] && [ "$last" -le "$2" ]
-}
+# Whether two packages differ in their signatures and nowhere else:
+# signature.sh, which release.sh reads too.
+# shellcheck source=native/signature.sh
+. "$here/signature.sh"
 
 # The package is signed where it is built, here with the key Android's
 # tools make for trying things, and a signature is not the same twice:

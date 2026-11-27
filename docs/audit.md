@@ -288,7 +288,15 @@ and for Linux, once the build stopped reading the builder's settings
 for git and stopped compiling for the builder's processor. For Linux
 that holds only where the distribution's libraries are the same, as
 they were on those two machines that day. The app for Windows is not
-compared at all. Nothing is signed with a key that means anything.
+compared at all.
+
+A release for Android is signed on the owner's machine with a key that
+no other machine holds (`native/release.sh`; `docs/development.md`,
+"Signed packages"), and what is signed is a package anybody can build
+from the commit and compare, signature apart. The checksum of that
+key's certificate is in `native/release-key.sha256` once the key
+exists; until then nothing is signed with a key that means anything.
+Nothing signs a package for the desktop.
 
 ## Known to be weak
 

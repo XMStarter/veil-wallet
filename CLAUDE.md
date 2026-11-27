@@ -123,7 +123,21 @@ that cannot lose the user's funds.
     SDK, the wallet library and the transport program for Android,
     `offline` lints and builds for Android and runs nothing, and `app`
     builds the app as an APK with the core, the wallet library and the
-    transport program inside.
+    transport program inside. `release`, which wants
+    `VEIL_NETWORK=mainnet` in front and a checkout without changes,
+    builds the app under its plain identifier and name and leaves the
+    package without a signature.
+  - `release.sh`: makes the key for releases and signs with it, on the
+    owner's machine only, and says for anybody whether two packages
+    for Android are the same but for their signatures and who signed
+    them. The key is a file outside the checkout; its password is typed
+    and kept nowhere. Never make, ask for, or handle the real key or its
+    password in a cloud session; a throwaway key in a scratch folder
+    (`VEIL_RELEASE_KEY`, `VEIL_RELEASE_DIR`) is how the script is tried
+    there. `signature.sh` finds where a signature lies in a package and
+    is read by it and by `twice.sh`; `signature-test.sh` tests that on
+    made-up archives in the `offline` level. `docs/development.md`,
+    "Signed packages".
   - `twice.sh`: builds a part of a package twice, in two folders that
     have nothing in common, and says whether the two came out the same
     byte for byte: the core, the transport program, the wallet library,
@@ -1511,6 +1525,44 @@ two machines: the core, the transport program, the apps. Hosted CI
 passed on both systems, and step 6.2 was merged on the owner's word.
 Left of step 6: signed packages (6.3), F-Droid (6.5) and the release
 itself (6.6).
+Step 6.3, signed packages, is written. A release for Android is built
+in one place and signed in another. `VEIL_NETWORK=mainnet ./check.sh
+--android release` builds the app under its plain identifier,
+`io.github.xmstarter.veil`, and its plain name, from a checkout without
+changes, and leaves `target/packages/veil-<version>-<commit>-unsigned.apk`:
+the package with the signature of the building machine's own key taken
+off again, which is the same file for everybody who builds the commit
+and which no phone installs. `native/release.sh` is for the owner's
+machine: `key` makes the key for releases once, a file outside the
+checkout (4096-bit RSA in a PKCS12 file, `~/veil-release-key`) with a
+password that is typed and kept nowhere, and prints the checksum of its
+certificate; `sign` refuses anything that is not a release, has
+Android's `apksigner` sign (schemes 2 and 3, as Android verifies since
+version 7), and keeps the result only if the signature holds, the key
+is the one `native/release-key.sha256` names, and the package is the
+one it was given but for the signature. `compare` and `who` are for
+anybody: whether two packages are the same but for their signatures,
+and who signed one. The tools are Ubuntu's own packages (`apksigner`,
+`aapt`), so nothing has to come from Google's servers, which did not
+serve the owner's machine once. Seen on the way: the signing tool puts
+up to 4095 empty bytes after a package's last file, which the
+comparison allows for and nothing else; and the tool of 2025 in
+Android's kit moves the files of a package about unless told not to
+(`--alignment-preserved`), which the one of 2021 that Ubuntu packages
+neither does nor knows, so the script says it where the tool knows it
+and looks at the result either way. Tried in a cloud session with a
+throwaway key in a scratch folder: making a key, its refusals (a short
+password, two that differ, a key that is there already), signing, a
+wrong password, a package that is a build for trying, a key that is not
+the recorded one, and the comparisons; the release package built twice
+from one commit was the same file; signed with either tool the result
+verifies and is the same but for the signature. Not done, and not to be
+done in a cloud session: the real key. Not seen: a signed package on a
+phone. The app the owner has on the phone from the earliest steps
+carries the plain identifier with a cloud session's key and stagenet
+coins; Android will not take the release over it, so it has to be
+removed first. Nothing signs a package for the desktop, and what a
+first release has for the desktop is an open decision in the concept.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

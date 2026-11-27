@@ -298,7 +298,8 @@ The file is signed with a key Android's tools make on the machine that
 builds it. That is enough to install it on one's own phone; a second
 machine has another key, and Android refuses an update signed with a
 different key until the app is removed, which removes its wallet too. A
-key for releases belongs to the release step.
+release is built and signed another way: "Signed packages", under
+"Releases".
 
 ### The app on Windows
 
@@ -529,12 +530,104 @@ asking for Microsoft's own installer, is decided at the release step.
 - Release artifacts are signed. The signing keys stay on the maintainer's
   machine and are used there. Hosted CI is never given one: it compiles
   and runs offline tests, and what it builds is for trying, not for
-  handing on.
+  handing on. See "Signed packages" below.
 - A package carries the licence texts of everything it is built from
   (`app/assets/licences`, see "Licence texts" below) and says which
   commit it was built from.
 - Android builds contain no Google services and target F-Droid as well as
   direct APK downloads.
+
+### Signed packages
+
+A release of the app for Android is built in one place and signed in
+another, and the two meet in a file.
+
+```bash
+cd native
+VEIL_NETWORK=mainnet ./check.sh --android release
+```
+
+builds the app as a release carries it: under its plain identifier,
+`io.github.xmstarter.veil`, and its plain name, for the main network,
+which has to be said as for any build for it. It refuses a checkout with
+changes that are in no commit, since a release names the commit it was
+built from. What it leaves is
+`target/packages/veil-<version>-<commit>-unsigned.apk`, and its
+checksum. That file is the package with no signature in it. The app's
+build signs whatever it makes with the building machine's own key, and
+the command takes that signature off again, so the file is the same for
+everybody who builds that commit, and no phone installs it: under the
+app's own name and with some machine's key it would sit in the released
+app's place.
+
+```bash
+./release.sh key
+./release.sh sign target/packages/veil-<version>-<commit>-unsigned.apk
+```
+
+are for the owner's machine. The first is run once. It makes the key for
+releases, a file outside the checkout (`~/veil-release-key`,
+`VEIL_RELEASE_KEY`) locked with a password that is typed in and kept
+nowhere, and prints the checksum of the key's certificate, which is what
+a release is known by and goes into `native/release-key.sha256`. Android
+takes an update of an app only from the key the app was first signed
+with: whoever has the file and the password can hand out a Veil that
+every phone takes as an update, and whoever loses either can never
+update Veil again. So the file is copied to something that is not
+connected to anything, and it is given to no other machine, hosted CI
+least of all. The second signs: it refuses a package that is not a
+release, asks for the password, has Android's own tool sign
+(`apksigner`, in the way Android has verified since version 7), and then
+looks at what came out before it keeps it: that the signature holds,
+that it is the key the repository names, and that the signed package is
+the one it was given but for the signature. The result is
+`~/veil-release/veil-<version>.apk`.
+
+The package may be built on another machine than the one that signs it.
+What the owner signs is then whatever that machine built, so the owner
+builds the same commit too, or has somebody who is not that machine do
+it, and holds the checksums of the two unsigned packages against each
+other first.
+
+Both scripts use the distribution's packages and need nothing from
+Google: `sudo apt install apksigner aapt`.
+
+#### What a download is compared with
+
+Two things, the second for whoever wants to trust nobody.
+
+Who signed it:
+
+```bash
+./release.sh who veil-<version>.apk
+```
+
+says what the package calls itself, its checksum, and the checksum of
+its signer's certificate, and whether that is the key for releases this
+repository names (`native/release-key.sha256`). Android's own
+`apksigner verify --print-certs` says the same without this repository.
+A phone that has Veil does this by itself at every update; it is the
+first installation that nobody checks but the person installing.
+
+What is in it:
+
+```bash
+VEIL_NETWORK=mainnet ./check.sh --android release
+./release.sh compare veil-<version>.apk target/packages/veil-<version>-<commit>-unsigned.apk
+```
+
+builds the commit the release names and holds the download against it. A
+signature lies between a package's files and the list of them and
+changes neither, so the two are the same byte for byte in their files
+and in their list (`native/signature.sh` says where each part lies;
+`signature-test.sh` tests it on archives made up for it, in the
+`offline` level). The signing tool adds up to 4095 empty bytes after the
+last file, which is allowed for and nothing else is.
+
+What this does not give: packages for the desktop. Nothing signs the app
+for Windows or for Linux, and neither is built in a way a release could
+be made of (`docs/concept.md`, "Open decisions"). And the key itself is
+only as good as the machine it lies on and the password it has.
 
 ### The same build twice
 
@@ -628,6 +721,6 @@ files on another machine:
   line. The folders `twice.sh` builds in are no checkouts, so its two
   apps name none; a release is built from a checkout without changes and
   names its commit.
-- **A signature** is made with a key, and no two are alike. What a
-  download is compared with is the package without it; the release step
-  says how.
+- **A signature** is made with a key, and no two keys are alike. What a
+  download is compared with is the package without it: "Signed
+  packages" below.
