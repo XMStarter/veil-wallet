@@ -1679,11 +1679,17 @@ that every check passed. The commit that made on `main`, `981c6a6`, is
 the one the release is to be built from; a cloud session's unsigned
 package of it has the checksum
 `623396eccc7056ffe01498a0cca968b6775c0796b7965b849f3e7059e3f4b47b`.
-Still to do on that commit, in the order of "Making a release": the
-owner's run with the `tor` level, the workflow `release` started by the
-owner on `main` and its checksum held against that one, the signature,
-the comparison, the phone, where bridges are to be tried again because
-the transport program is a new file, and the publication.
+The owner started the workflow `release` on `main`, and hosted CI's
+package of `981c6a6` has that checksum, all 80 files the same. The
+owner's run passed at the `offline`, `regtest` and `tor` levels as Linux
+and as Windows programs, on commit `4da75aa`, which is `981c6a6` with
+these notes changed and nothing else. At the `tor` level all five public
+nodes answered both times, at one height each time, and the node of
+plowsof once did not within twenty seconds as the first node a new
+wallet asked, as Windows programs, and the wallet went on to the next.
+Still to do, in the order of "Making a release": the signature, the
+comparison, the phone, where bridges are to be tried again because the
+transport program is a new file, and the publication.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
