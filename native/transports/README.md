@@ -29,8 +29,12 @@ has not been run, then puts the result into the package.
 | The C compiler | the Android NDK that `check.sh` pins |
 
 Built twice in a cloud session, in different folders, it came out the
-same byte for byte. Nobody has compared it with a build on another
-machine.
+same byte for byte. Hosted CI's build of 27 November 2026 was the same
+but for sixty bytes: two marks Go writes into a program, the first made
+from the command the C compiler is called by, which is a path under the
+home of whoever builds, and the second from the first. The program is
+built without them now (`-buildid=`), and comes out the same with the
+compiler under two different paths. Nothing on a phone reads either.
 
 ## Why it is built the way it is
 

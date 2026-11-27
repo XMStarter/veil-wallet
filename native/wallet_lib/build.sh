@@ -178,6 +178,22 @@ export GIT_AUTHOR_DATE="2000-01-01T00:00:00+00:00" GIT_COMMITTER_DATE="2000-01-0
 # to change what is built; they are closed because they are cheap to close.
 export LC_ALL=C TZ=UTC CCACHE_DISABLE=1
 
+# A fourth thing does change what is built: whether the machine has flex.
+# Monero's dependency build compiles unbound, whose source comes with the
+# reader of its settings file already written out (util/configlexer.c)
+# and with the description that file was made from. Where the machine
+# has flex, unbound's build makes the file anew with it, and what flex
+# writes there is not what came with the source: the library for Android
+# built by hosted CI, whose machines have flex, differed from the one
+# built in a cloud session, which had none, in fifteen thousand bytes of
+# tables and in where everything after them lies. So the build is told
+# that there is no flex,
+# in the words a machine without one finds for itself (autoconf's ":"),
+# and the file that came with the source is the one compiled, everywhere.
+# A library built before this on a machine without flex is the library
+# this builds, which is why built-how.txt does not name it.
+export LEX=:
+
 # And git's own settings on this machine, which decide what a commit made
 # here is. A machine set to sign its commits made signed ones of
 # monero_c's patches, a signature is part of what a commit's name comes

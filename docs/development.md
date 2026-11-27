@@ -395,9 +395,18 @@ experience.
   the compiler the core is built for Android with: from its publisher,
   checked against its checksum.
 - Keeping what a job has built with its run, as a file to download from
-  the run's page: the app built for Windows, with the core next to it. It
-  stays on GitHub, for whoever may see the repository, for fourteen days.
-  The wallet library is never in it: hosted CI does not build it.
+  the run's page: the app built for Windows, with the core next to it,
+  which has no wallet library in it; and the unsigned release for Android
+  of the workflow below, which has. They stay on GitHub, for whoever may
+  see the repository, for fourteen days.
+- In the one workflow that builds a release for Android a second time
+  (`release.yml`, started by hand): compiling the wallet library and the
+  transport program for Android from their sources, with what that
+  takes downloaded from its publishers and checked against checksums
+  kept in this repository: the Android SDK, the older release of the NDK
+  that Monero's dependency build pins, the sources that build asks for,
+  and Go. The owner allowed this for the release of November 2026; see
+  below.
 
 **Never in a workflow, on GitHub's runners or on a self-hosted one**
 
@@ -411,18 +420,31 @@ experience.
   the build.
 
 Building the wallet library from the Monero sources is compilation and the
-terms allow it, but it is a half-hour job on mining-related code. It stays
-out of hosted CI until the owner decides otherwise.
+terms allow it, but it is a job of some ten minutes on mining-related
+code, and it stayed out of hosted CI until the owner decided otherwise.
+The owner did, for one purpose: a release for Android is built a second
+time on a machine that is nobody's, and the wallet library is in that
+package. So `release.yml` builds the library for Android, when it is
+started by hand for a release or when a pull request changes that file,
+and never otherwise. The workflow that runs on every pull request,
+`native.yml`, still builds no wallet library, and neither builds one for
+a desktop, which would build a daemon with it. Whether GitHub's abuse
+detection minds is not known; the Monero project builds its own code
+there.
 
 **Workflow files**
 
 - Triggers are `pull_request` and `workflow_dispatch` only. No `push`, no
   `schedule`.
-- A job runs `check.sh offline` and no other level, for the system it
-  runs on and with `--android`, which builds for Android and runs nothing.
-  Before them it may run `check.sh flutter` and `check.sh --android ndk`,
-  which install the pinned Flutter and the pinned Android NDK and do
-  nothing else.
+- A job of `native.yml` runs `check.sh offline` and no other level, for
+  the system it runs on and with `--android`, which builds for Android
+  and runs nothing. Before them it may run `check.sh flutter` and
+  `check.sh --android ndk`, which install the pinned Flutter and the
+  pinned Android NDK and do nothing else.
+- The job of `release.yml` runs `check.sh --android setup` and, with
+  `VEIL_NETWORK=mainnet` in front, `check.sh --android release`, and no
+  other level. `check.sh` refuses every other level on a CI runner,
+  `setup` without `--android` among them.
 - Actions are pinned to commit hashes and runner images to a version.
 - `permissions` stays at `contents: read`.
 
@@ -642,17 +664,23 @@ A release for Android, in the order it is made. Each step has to hold
 before the next is taken, and what a step showed goes into the release's
 entry in [releases.md](releases.md).
 
-1. **The commit.** A commit on `main`, with hosted CI passed on the pull
-   request that brought it there. The version is the one in
-   `app/pubspec.yaml`; its number after the `+` is what Android compares
-   to tell an update from what is installed, and it never goes down.
+1. **The commit.** A commit on `main`, with hosted CI passed on the code
+   as it is in that commit: a pull request that changes documents only
+   starts no CI, and the code is then the one an earlier pull request
+   passed with. The version is the one in `app/pubspec.yaml`; its number
+   after the `+` is what Android compares to tell an update from what is
+   installed, and it never goes down.
 2. **The owner's run on that commit**, as Linux and as Windows programs:
    `./accept.sh --no-app offline regtest tor`. The `tor` level asks each
    public node of the main network an app goes to whether it is there
    and whether it agrees with the rest.
 3. **The package, built twice.** `VEIL_NETWORK=mainnet ./check.sh
    --android release` on two machines that have nothing to do with each
-   other; the two unsigned packages have one checksum. A package only
+   other; the two unsigned packages have one checksum. One of the two is
+   hosted CI: the owner starts the workflow `release` by hand on the
+   commit (the repository's Actions page, "Run workflow", on `main`),
+   and the run prints the checksum of the package and of each file in
+   it, so that two builds that differ say in which part. A package only
    one machine has built is signed on that machine's word alone, and a
    release that was made so says so.
 4. **The signature.** `./release.sh sign` on the owner's machine, which
@@ -699,7 +727,7 @@ together on four cores. The folders are made in `~/veil-twice`
 | Part | What made two builds differ | What is done about it | Two builds now |
 |---|---|---|---|
 | The core, for Linux and for Android | The path of every source file that can report an error, 528 of them, most under cargo's folder in the home of whoever builds. Two builds differed in 19.6 of 24.3 million bytes, and in size. | Every optimised build of the core names those folders `/cargo`, `/veil/native` and `/veil/target` to the compiler (`release_build` in `check.sh`). | The same |
-| The transport program for Android | Nothing: it is built without paths and without the build's own mark (`transports/build.sh`). | | The same, and the same as the file in the packages built before this step |
+| The transport program for Android | On one machine nothing: it is built without paths (`transports/build.sh`). A machine that keeps the NDK in another folder showed sixty bytes: two marks Go writes into a program, made from the command the C compiler is called by among other things. | It is built without those marks (`-buildid=`). | The same, with the compiler under two different paths. It is no longer the file in the packages built before 27 November 2026, which had the marks |
 | The wallet library, for Android | The paths of some 770 source files, and the folder Monero's dependency build installs into. Then, with the paths the same, eight bytes: the name of the commit monero_c makes of its patches, which had the time of the build in it. | It is built at one path on every machine, and those commits have one date (`wallet_lib/README.md`, "Where it is built"). | The same |
 | The wallet library, for Windows | The same two things, and then six bytes: the time of linking, which a program for Windows has a place for in its first bytes, and a sum over the file that follows from it. And one that only a second machine could show: the name of Monero's commit, which differed with the builder's settings for git. | The same; the linker is told to leave the time out; and the build reads none of the machine's settings for git. | The same, after both were linked again without the time; and the same as the file a second machine built from nothing |
 | The wallet library, for Linux | The same two things, and one more that was no difference but a fault: it looked for Polyseed in the folder it was built in. And one that only a second machine could show: it was compiled for the processor of the machine that built it. | The same; Polyseed lies beside the library and is looked for there; and the build is told to compile for no processor in particular, as the other two are. | The same, both files |
@@ -742,6 +770,28 @@ the library for Linux (`2815398e3e401946…`) and Polyseed
 (`93c8dd53fb487964…`). For Linux that says that the two machines had the
 same packages of Ubuntu 24.04 that day, and no more than that.
 
+A third machine built the release for Android on 27 November 2026:
+hosted CI, the first time the workflow `release` ran, on the pull request
+that brought it. Of the 80 files of its package, 77 were the cloud
+session's byte for byte, the core among them, which no second machine had
+built before. One of the three that were not is the app's own code, which
+names the commit it was built from, and the two machines built different
+commits, as a pull request's run does. The other two were real
+differences, and neither had anything to do with the code:
+
+- **The wallet library** differed in fifteen thousand bytes of tables and
+  in where everything after them lies. GitHub's machines have `flex`
+  installed and the cloud session had not. unbound, which Monero's
+  dependency build compiles, comes with the reader of its settings file
+  written out and with the description it was made from, and where it
+  finds flex it makes that file anew. The build now says that there is no
+  flex (`LEX=:` in `wallet_lib/build.sh`), so the file that came with the
+  source is compiled everywhere. With flex installed in the cloud session
+  and that setting, the library built from nothing is the one built
+  without flex (`ffdf870ca1abd41e…`).
+- **The transport program** differed in sixty bytes: the two marks named
+  in the table.
+
 What it does not show, and what is known to stand in the way of the same
 files on another machine:
 
@@ -749,8 +799,12 @@ files on another machine:
   Rust is pinned to a version, Go and both Android NDKs by checksum, and
   Flutter by checksum; the C and C++ compilers for Linux and the cross
   compiler for Windows are the distribution's, whatever version it has
-  that day. One second machine has built the wallet library, as told
-  above; no other part has been built on one and compared.
+  that day. One second machine has built the wallet library, and hosted
+  CI the package for Android, as told above. What a machine has installed
+  besides can matter as well, as flex did: the build tools Monero's
+  dependency build takes from the machine (autoconf, cmake, make, perl,
+  python) are the distribution's or the machine's own and are not
+  pinned.
 - **The wallet library for Linux** is linked against the distribution's
   Boost, OpenSSL and the rest, so it is the same only where those are the
   same, and a package for Linux needs them installed. Monero's dependency

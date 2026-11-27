@@ -182,9 +182,14 @@ that cannot lose the user's funds.
   with which checksums; an entry is written after its release.
   `SECURITY.md` at the top says where a finding goes.
 - `.github/workflows`: hosted CI, builds and offline tests only. Pin
-  actions to commit hashes. It installs Flutter with `check.sh flutter`,
-  not with an action. The Windows job keeps the app it built as the
-  artifact `veil-windows`; the owner has to allow a new action in the
+  actions to commit hashes. `native.yml` runs on pull requests that
+  change code; it installs Flutter with `check.sh flutter`, not with an
+  action, and its Windows job keeps the app it built as the artifact
+  `veil-windows`. `release.yml` is started by hand, by the owner, on the
+  commit a release is built from: it builds the unsigned release for
+  Android a second time and prints its checksum, which means compiling
+  the wallet library for Android there, and that the owner allowed for
+  this and for nothing else. The owner has to allow a new action in the
   repository's settings before a workflow may use it.
 
 Before committing, in `native/`: `./check.sh offline` (format, lint, and
@@ -1611,6 +1616,60 @@ itself, so the release installs over it. Not done: every step of that
 order. Open before publishing, each the owner's: who builds the package
 besides a cloud session, and whether somebody who knows licences is
 asked first, which the owner had decided to do before a release.
+Those documents were merged on the owner's word, and the owner switched
+the private report on. No CI ran for that pull request, as none does for
+a change of documents only; its code is the code of step 6.3, which CI
+had passed. On the commit that made, `11e4a6d`, the owner's run passed
+at the `offline`, `regtest` and `tor` levels as Linux and as Windows
+programs. The `tor` level ran with the list of five nodes for the first
+time: as Linux programs four of the five answered, all at one height,
+and the node of plowsof did not within twenty seconds, twice; as Windows
+programs all five did. A wallet made that day begins to scan 21,530
+blocks before the end of the chain. The owner then decided three things.
+The release goes out as it is, without anybody who knows licences having
+looked, and says so. It is for Android only; Windows is put off, with no
+date, and the documents say that. And the release is built a second time
+on GitHub: the owner asked whether that gets the account banned, was
+told that nobody can promise it does not, that the terms allow
+compiling, that the Monero project builds there, and that the earlier
+suspension followed a connection to Tor, and chose it. So
+`.github/workflows/release.yml` is new: started by hand, or by a pull
+request that changes that file, it runs `./check.sh --android setup` and
+`VEIL_NETWORK=mainnet ./check.sh --android release` on GitHub's Ubuntu
+and prints the checksum of the unsigned package; `check.sh` lets those
+two levels run on a CI runner with `--android` and refuses them without.
+Nothing of it has run yet. Because `check.sh` changes, the release is
+built from the commit this makes on `main`, not from `11e4a6d`, and the
+owner's run is made again on that commit. The unsigned package of
+`11e4a6d` that a cloud session built and sent (`5003838b2e6f7f8f`) is
+therefore not the release and is not to be signed.
+The workflow ran for the first time on that pull request and passed, in
+sixteen minutes, with the build's view of the folders working on
+GitHub's machine. Its package was not the cloud session's. A cloud
+session then built the commit that run had built, the pull request's
+merge with `main`, and of the 80 files of the two packages 78 were the
+same byte for byte, the core and the app's own code among them; no
+machine but a cloud session had built either before. The two that
+differed, and why, each read from the two files and from the run's log:
+the wallet library, in fifteen thousand bytes of tables and in where
+everything after them lies, because GitHub's machines have `flex` and
+unbound's build, inside Monero's dependency build, makes the reader of
+its settings file anew where it finds flex; and the transport program,
+in sixty bytes, two marks Go makes from the command the C compiler is
+called by, which is a path under the builder's home. `wallet_lib/build.sh`
+now says that there is no flex (`LEX=:`), and with flex installed in a
+cloud session the library built from nothing that way is the one built
+without it (`ffdf870ca1abd41e`); `built-how.txt` is not changed for it,
+since a library built on a machine without flex is the same library,
+and the owner's has none, or the library for Windows would not have
+been the same file there. `transports/build.sh` builds without the
+marks (`-buildid=`), which makes the transport program another file
+than the one in every package so far (`d86de391d03a7d16` where it was
+`ba57d65aba48a697`), the same code without two notes; it came out the
+same with the compiler under two different paths. That file has not
+been on a phone. The workflow now prints the checksum of each file in
+the package. Whether hosted CI's package is the cloud session's with
+the two changes has not been seen.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
