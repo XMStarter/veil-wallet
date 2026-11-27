@@ -1668,8 +1668,22 @@ than the one in every package so far (`d86de391d03a7d16` where it was
 `ba57d65aba48a697`), the same code without two notes; it came out the
 same with the compiler under two different paths. That file has not
 been on a phone. The workflow now prints the checksum of each file in
-the package. Whether hosted CI's package is the cloud session's with
-the two changes has not been seen.
+the package. With the two changes the workflow ran again on the pull
+request, and its package is the cloud session's of the same commit,
+byte for byte (`76b606f689196bc4`), all 80 files, the wallet library
+`ffdf870ca1abd41e` on GitHub's machine too. That is the first package
+of Veil built by two machines that have nothing to do with each other
+and found the same. Hosted CI passed on both systems, and the pull
+request was merged on the owner's word, given beforehand for the case
+that every check passed. The commit that made on `main`, `981c6a6`, is
+the one the release is to be built from; a cloud session's unsigned
+package of it has the checksum
+`623396eccc7056ffe01498a0cca968b6775c0796b7965b849f3e7059e3f4b47b`.
+Still to do on that commit, in the order of "Making a release": the
+owner's run with the `tor` level, the workflow `release` started by the
+owner on `main` and its checksum held against that one, the signature,
+the comparison, the phone, where bridges are to be tried again because
+the transport program is a new file, and the publication.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
