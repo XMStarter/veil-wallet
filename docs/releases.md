@@ -16,7 +16,8 @@ own checksums: they follow from the commit it is built from.
 ## 0.1.0
 
 Not released yet. The first release, for Android only, for the Monero
-main network.
+main network. There is no release for Windows or for Linux; those apps
+are built from source.
 
 What it is: a wallet that creates and restores (16 words, or a classic
 25-word phrase), receives on a new address for every payment, and sends,

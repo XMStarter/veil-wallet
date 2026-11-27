@@ -182,9 +182,14 @@ that cannot lose the user's funds.
   with which checksums; an entry is written after its release.
   `SECURITY.md` at the top says where a finding goes.
 - `.github/workflows`: hosted CI, builds and offline tests only. Pin
-  actions to commit hashes. It installs Flutter with `check.sh flutter`,
-  not with an action. The Windows job keeps the app it built as the
-  artifact `veil-windows`; the owner has to allow a new action in the
+  actions to commit hashes. `native.yml` runs on pull requests that
+  change code; it installs Flutter with `check.sh flutter`, not with an
+  action, and its Windows job keeps the app it built as the artifact
+  `veil-windows`. `release.yml` is started by hand, by the owner, on the
+  commit a release is built from: it builds the unsigned release for
+  Android a second time and prints its checksum, which means compiling
+  the wallet library for Android there, and that the owner allowed for
+  this and for nothing else. The owner has to allow a new action in the
   repository's settings before a workflow may use it.
 
 Before committing, in `native/`: `./check.sh offline` (format, lint, and
@@ -1611,6 +1616,33 @@ itself, so the release installs over it. Not done: every step of that
 order. Open before publishing, each the owner's: who builds the package
 besides a cloud session, and whether somebody who knows licences is
 asked first, which the owner had decided to do before a release.
+Those documents were merged on the owner's word, and the owner switched
+the private report on. No CI ran for that pull request, as none does for
+a change of documents only; its code is the code of step 6.3, which CI
+had passed. On the commit that made, `11e4a6d`, the owner's run passed
+at the `offline`, `regtest` and `tor` levels as Linux and as Windows
+programs. The `tor` level ran with the list of five nodes for the first
+time: as Linux programs four of the five answered, all at one height,
+and the node of plowsof did not within twenty seconds, twice; as Windows
+programs all five did. A wallet made that day begins to scan 21,530
+blocks before the end of the chain. The owner then decided three things.
+The release goes out as it is, without anybody who knows licences having
+looked, and says so. It is for Android only; Windows is put off, with no
+date, and the documents say that. And the release is built a second time
+on GitHub: the owner asked whether that gets the account banned, was
+told that nobody can promise it does not, that the terms allow
+compiling, that the Monero project builds there, and that the earlier
+suspension followed a connection to Tor, and chose it. So
+`.github/workflows/release.yml` is new: started by hand, or by a pull
+request that changes that file, it runs `./check.sh --android setup` and
+`VEIL_NETWORK=mainnet ./check.sh --android release` on GitHub's Ubuntu
+and prints the checksum of the unsigned package; `check.sh` lets those
+two levels run on a CI runner with `--android` and refuses them without.
+Nothing of it has run yet. Because `check.sh` changes, the release is
+built from the commit this makes on `main`, not from `11e4a6d`, and the
+owner's run is made again on that commit. The unsigned package of
+`11e4a6d` that a cloud session built and sent (`5003838b2e6f7f8f`) is
+therefore not the release and is not to be signed.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

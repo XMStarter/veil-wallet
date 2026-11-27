@@ -45,9 +45,10 @@
 # commit with nothing changed, and what it leaves is a package without a
 # signature, which no phone installs; release.sh signs it.
 #
-# `offline` runs anywhere, hosted CI included. Every other level refuses to
-# start in hosted CI: see docs/development.md, "Hosted CI and the hosting
-# account". They are for the owner's machine.
+# `offline` runs anywhere, hosted CI included, and so do `--android setup`
+# and `--android release`, which compile and start nothing. Every other
+# level refuses to start in hosted CI: see docs/development.md, "Hosted CI
+# and the hosting account". They are for the owner's machine.
 #
 # The wallet library is looked for in $VEIL_WALLET_LIB_DIR, by default
 # ~/veil-wallet-lib, which is where `setup` builds it.
@@ -1141,9 +1142,22 @@ for level in "$@"; do
     offline) ;;
     flutter) ;;
     ndk) ;;
-    regtest | tor | stagenet | bridges | daemons | setup | app | core | release | leaks | leaks-chain | fuzz)
+    setup | release)
+      # For Android these two compile and start nothing: the wallet library
+      # and the transport program from their sources, then the app as a
+      # release carries it. The owner allowed that much in hosted CI, for
+      # the one workflow that is started by hand to build a release a
+      # second time (.github/workflows/release.yml). For a desktop, setup
+      # builds a daemon as well, and that stays out.
+      if in_hosted_ci && [ "$android" != 1 ]; then
+        echo "refused: '$level' runs in hosted CI with --android only." >&2
+        echo "See docs/development.md, \"Hosted CI and the hosting account\"." >&2
+        exit 2
+      fi
+      ;;
+    regtest | tor | stagenet | bridges | daemons | app | core | leaks | leaks-chain | fuzz)
       if in_hosted_ci; then
-        echo "refused: '$level' does not run in hosted CI. Only 'offline' does." >&2
+        echo "refused: '$level' does not run in hosted CI." >&2
         echo "See docs/development.md, \"Hosted CI and the hosting account\"." >&2
         exit 2
       fi

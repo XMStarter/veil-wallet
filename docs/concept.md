@@ -438,8 +438,7 @@ The owner decided these when the release step began.
   repository with the script that builds lyrebird from the commit it
   pins. The same holds for the wallet library, part of which is under
   the GNU Lesser General Public License. Nobody who knows licences has
-  looked at how this is done; that is still to be asked before a
-  release.
+  looked at how this is done.
 - **The first release is for the main network.** Veil holds real money
   from its first release on, without an audit by anybody outside before
   it. What that means for whoever uses it is in the
@@ -464,12 +463,24 @@ The owner decided these when the release step began.
   the people who run these or has looked at how they do.
   `./check.sh tor` asks each whether it is there and whether it agrees
   with the rest; a node of the user's own replaces them all.
-- **The first release is for Android; Windows follows; F-Droid is left
-  out.** A release is a file on the repository's releases page. A
-  listing in F-Droid means a recipe of our own kept up on F-Droid's
-  terms and a review that takes weeks, and the owner does not want that
-  now. Nothing in how a release is built stands in the way of one later:
-  the package is the same for everybody who builds the commit.
+- **The first release is for Android only; Windows is put off; F-Droid
+  is left out.** A release is a file on the repository's releases page.
+  There is no release for Windows yet and no date for one: the app for
+  Windows is built from source, and what a release of it would take is
+  under "Open decisions", "Packages for the desktop". A listing in
+  F-Droid means a recipe of our own kept up on F-Droid's terms and a
+  review that takes weeks, and the owner does not want that now. Nothing
+  in how a release is built stands in the way of one later: the package
+  is the same for everybody who builds the commit.
+- **A release is built a second time by hosted CI**, started by hand, and
+  the two checksums are compared before anything is signed. That puts
+  the compiling of the wallet library for Android into hosted CI, where
+  it had been kept out since an account was suspended; the owner took
+  that risk for a second build by a machine that is nobody's.
+  `docs/development.md`, "Hosted CI and the hosting account".
+- **The first release goes out without anybody who knows licences having
+  looked at it.** The owner had meant to ask first and decided to release
+  as it is; a release says so.
 - **A finding about security goes through GitHub's private report** for
   the repository ([SECURITY.md](../SECURITY.md)), so that the owner
   publishes no address.

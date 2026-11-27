@@ -1,0 +1,71 @@
+name: release
+
+# Builds a release of the app for Android a second time, on a machine that
+# is nobody's, so that its checksum can be held against the build that is
+# about to be signed. It compiles and starts nothing: the wallet library
+# and the transport program from their sources, then the app as a release
+# carries it, without a signature. No key is here, and nothing is
+# published from here; the owner signs on the owner's machine
+# (native/release.sh) and publishes by hand.
+#
+# Started by hand only, on the commit a release is to be built from. It
+# also runs on a pull request that changes this file, so that a change to
+# it is tried before it is relied on. docs/development.md, "Hosted CI and
+# the hosting account", says what the owner allowed here and what stays
+# out: nothing connects to the Tor network, to a Monero node or to
+# anybody's node, and no daemon is built or started.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/release.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: native
+
+jobs:
+  android:
+    name: the release for Android, unsigned
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install the pinned toolchain
+        run: rustup show
+      # The wallet library is built at one path on every machine, in a view
+      # of the folders the build makes for itself, which an ordinary user
+      # gets through a user namespace. This image of Ubuntu keeps those from
+      # ordinary users; the setting is this runner's own and ends with it.
+      - name: Let the build have a view of the folders of its own
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+      # Everything the build is made with, each from its publisher and
+      # checked against a checksum kept in this repository: the two
+      # releases of the Android NDK, the Android SDK, Flutter, Go, and the
+      # sources Monero's own dependency build asks for. Then the wallet
+      # library and the transport program, compiled from source.
+      - name: The compilers, the wallet library and the transport program for Android
+        run: bash check.sh --android setup
+      # The app as a release carries it, and its checksum, which is what
+      # this run is for.
+      - name: The release, without a signature
+        run: VEIL_NETWORK=mainnet bash check.sh --android release
+      - name: Its checksum
+        run: sha256sum target/packages/*-unsigned.apk
+      # Kept with this run as a file to download, for a look at what
+      # differs when the checksums do. It is not signed and no phone
+      # installs it. It stays on GitHub for fourteen days.
+      - name: Keep the unsigned package
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: veil-android-unsigned
+          path: native/target/packages/*-unsigned.apk
+          if-no-files-found: error
+          retention-days: 14

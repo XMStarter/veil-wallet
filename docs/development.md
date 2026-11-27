@@ -395,9 +395,18 @@ experience.
   the compiler the core is built for Android with: from its publisher,
   checked against its checksum.
 - Keeping what a job has built with its run, as a file to download from
-  the run's page: the app built for Windows, with the core next to it. It
-  stays on GitHub, for whoever may see the repository, for fourteen days.
-  The wallet library is never in it: hosted CI does not build it.
+  the run's page: the app built for Windows, with the core next to it,
+  which has no wallet library in it; and the unsigned release for Android
+  of the workflow below, which has. They stay on GitHub, for whoever may
+  see the repository, for fourteen days.
+- In the one workflow that builds a release for Android a second time
+  (`release.yml`, started by hand): compiling the wallet library and the
+  transport program for Android from their sources, with what that
+  takes downloaded from its publishers and checked against checksums
+  kept in this repository: the Android SDK, the older release of the NDK
+  that Monero's dependency build pins, the sources that build asks for,
+  and Go. The owner allowed this for the release of November 2026; see
+  below.
 
 **Never in a workflow, on GitHub's runners or on a self-hosted one**
 
@@ -411,18 +420,31 @@ experience.
   the build.
 
 Building the wallet library from the Monero sources is compilation and the
-terms allow it, but it is a half-hour job on mining-related code. It stays
-out of hosted CI until the owner decides otherwise.
+terms allow it, but it is a job of some ten minutes on mining-related
+code, and it stayed out of hosted CI until the owner decided otherwise.
+The owner did, for one purpose: a release for Android is built a second
+time on a machine that is nobody's, and the wallet library is in that
+package. So `release.yml` builds the library for Android, when it is
+started by hand for a release or when a pull request changes that file,
+and never otherwise. The workflow that runs on every pull request,
+`native.yml`, still builds no wallet library, and neither builds one for
+a desktop, which would build a daemon with it. Whether GitHub's abuse
+detection minds is not known; the Monero project builds its own code
+there.
 
 **Workflow files**
 
 - Triggers are `pull_request` and `workflow_dispatch` only. No `push`, no
   `schedule`.
-- A job runs `check.sh offline` and no other level, for the system it
-  runs on and with `--android`, which builds for Android and runs nothing.
-  Before them it may run `check.sh flutter` and `check.sh --android ndk`,
-  which install the pinned Flutter and the pinned Android NDK and do
-  nothing else.
+- A job of `native.yml` runs `check.sh offline` and no other level, for
+  the system it runs on and with `--android`, which builds for Android
+  and runs nothing. Before them it may run `check.sh flutter` and
+  `check.sh --android ndk`, which install the pinned Flutter and the
+  pinned Android NDK and do nothing else.
+- The job of `release.yml` runs `check.sh --android setup` and, with
+  `VEIL_NETWORK=mainnet` in front, `check.sh --android release`, and no
+  other level. `check.sh` refuses every other level on a CI runner,
+  `setup` without `--android` among them.
 - Actions are pinned to commit hashes and runner images to a version.
 - `permissions` stays at `contents: read`.
 
@@ -642,19 +664,24 @@ A release for Android, in the order it is made. Each step has to hold
 before the next is taken, and what a step showed goes into the release's
 entry in [releases.md](releases.md).
 
-1. **The commit.** A commit on `main`, with hosted CI passed on the pull
-   request that brought it there. The version is the one in
-   `app/pubspec.yaml`; its number after the `+` is what Android compares
-   to tell an update from what is installed, and it never goes down.
+1. **The commit.** A commit on `main`, with hosted CI passed on the code
+   as it is in that commit: a pull request that changes documents only
+   starts no CI, and the code is then the one an earlier pull request
+   passed with. The version is the one in `app/pubspec.yaml`; its number
+   after the `+` is what Android compares to tell an update from what is
+   installed, and it never goes down.
 2. **The owner's run on that commit**, as Linux and as Windows programs:
    `./accept.sh --no-app offline regtest tor`. The `tor` level asks each
    public node of the main network an app goes to whether it is there
    and whether it agrees with the rest.
 3. **The package, built twice.** `VEIL_NETWORK=mainnet ./check.sh
    --android release` on two machines that have nothing to do with each
-   other; the two unsigned packages have one checksum. A package only
-   one machine has built is signed on that machine's word alone, and a
-   release that was made so says so.
+   other; the two unsigned packages have one checksum. One of the two is
+   hosted CI: the owner starts the workflow `release` by hand on the
+   commit (the repository's Actions page, "Run workflow", on `main`),
+   and its last step prints the checksum. A package only one machine has
+   built is signed on that machine's word alone, and a release that was
+   made so says so.
 4. **The signature.** `./release.sh sign` on the owner's machine, which
    looks at its own result before it keeps it.
 5. **The signed package, held against the unsigned one** by somebody who

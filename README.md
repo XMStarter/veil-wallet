@@ -11,8 +11,8 @@ fresh address.
 
 > **Status: first releases, not audited.** Veil for Android is released
 > for the Monero main network, where coins are real money; see
-> [Download](#download). The apps for Windows and Linux are built from
-> source for now. Veil creates, restores, synchronises, receives and
+> [Download](#download). There is no release for Windows or Linux yet:
+> those apps are built from source. Veil creates, restores, synchronises, receives and
 > sends through Tor, with bridges where Tor is blocked. Tests cover a
 > killed process, a damaged wallet file, and connections lost in the
 > middle of a synchronisation or a send. Nobody outside the project has

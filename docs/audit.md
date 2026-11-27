@@ -293,7 +293,9 @@ compared at all.
 A release for Android is signed on the owner's machine with a key that
 no other machine holds (`native/release.sh`; `docs/development.md`,
 "Signed packages"), and what is signed is a package anybody can build
-from the commit and compare, signature apart. The key exists; the
+from the commit and compare, signature apart. Hosted CI builds it a
+second time when the owner starts that by hand (`release.yml`), with no
+key anywhere near it. The key exists; the
 checksum of its certificate is in `native/release-key.sha256`. It lies
 on the owner's machine and on whatever the owner copied it to, and is
 as safe as those and as its password, which nothing here can check. No
