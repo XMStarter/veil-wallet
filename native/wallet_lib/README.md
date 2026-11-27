@@ -19,8 +19,67 @@ then Veil's, and builds the library. It takes about half an hour.
 native/wallet_lib/build.sh ~/veil-wallet-lib --with-daemon
 ```
 
-This is the development and test build. It links against the system's
-libraries. Release builds will use monero_c's reproducible toolchain.
+For Linux the library links against the system's own Boost, OpenSSL,
+ZeroMQ, Unbound, libsodium and the rest, as shared libraries that are no
+part of what is built. So it runs where those are installed, in the
+versions of the machine that built it, and it is the same library only on
+a machine with the same ones: a package for Linux is not complete in
+itself. Monero's dependency build, which the builds for Windows and for
+Android use, was tried for Linux as well, on Ubuntu 24.04: its Boost is
+from 2018 and does not compile against a C library of today. One library
+is built here and not the system's, Polyseed; it comes out as
+`libpolyseed.so.2` beside the wallet library, which looks for it where it
+itself is, and it goes wherever the wallet library goes.
+
+The build for Linux is told to compile for no processor in particular
+(`ARCH=default`). Left to itself Monero's build compiles for the
+processor of the machine it runs on, and RandomX inside it does the
+same: the library then differs from one build machine to the next, and
+on a processor older than the builder's it can end with an illegal
+instruction. That is how it was built here until a second machine's
+library was held against the first's. The builds for Windows and for
+Android never were: Monero's dependency build names no processor.
+
+### Where it is built
+
+Whatever folder is named as the work folder, the build happens at one
+path, the same on every machine: `/srv`. The compilers write the paths of
+source files into what they build, some hundreds of them, and the
+dependency build writes the folder it installs into; under the work
+folder's own name the same sources gave another library in every folder.
+The compiler Monero brings for Android, of 2018, has no option to write
+another path in their place, so the path itself is made the same. The
+script starts itself again in a view of the machine's folders that is its
+own (a mount namespace), in which the work folder is what lies at `/srv`,
+and builds there. Outside that view nothing changes: `/srv` stays what it
+was for every other program, and the files are written into the work
+folder by the user who runs the script. It takes a Linux that lets an
+ordinary user have such a view (user namespaces, as Ubuntu under WSL2
+does), or root.
+
+Two more things are the same for every build. monero_c commits the
+patches it applies to Monero, and Monero writes the first nine characters
+of its commit's name into the library; a commit's name comes from its
+date among other things, so the script gives those commits one fixed
+date. And a work folder that was built in another way than the script
+builds now is emptied and built again from nothing, for every system,
+with only the dependency build's downloads kept: `built-how.txt` names
+the way, and goes into the sum by which `check.sh` tells a library of
+this checkout from any other.
+
+The script also sets the language and the time zone it builds in (`C`,
+UTC) and switches off the store of earlier compilations that Monero's
+dependency build brings (ccache). None of these has been seen to change
+what is built. One more thing has: the machine's settings for git. A
+machine set to sign its commits signed the ones monero_c makes of its
+patches, which gave them another name, and so the library another nine
+characters. The script hands git a file of settings of its own, with
+nothing in it but what the machine's settings say about reaching the
+network.
+
+`native/twice.sh` builds the library twice in two folders and compares
+the two; `docs/development.md`, "The same build twice", says what came
+out the same.
 
 ### For Windows
 
@@ -105,7 +164,7 @@ is built a second time.
 | `monero/0001` and `monero_c/0001` | Expose the wallet's existing "allow mismatched daemon version" switch through the API | A private test chain activates every protocol version from its first block, which a wallet otherwise rejects. Tests need this to send and receive without real funds. The app never turns it on: the call exists only behind the `regtest` feature of `veil_wallet`. |
 | `monero/0002` | A direct call to refresh downloads blocks even when the library's background refresh thread was never started | Without it a direct refresh reports success and downloads nothing. Veil drives the wallet from one thread and does not use the background thread. |
 | `monero/0003` and `monero_c/0002` | A switch that keeps the library's background refresh thread idle | Building or sending a transaction switches that thread on, and it then synchronises on a timer through whichever node the wallet points at. While Veil sends through its broadcast node, that would be the broadcast node. `veil_wallet` turns the thread off for every wallet it opens. |
-| `monero/0004` | On Windows, the library reads the paths it is given as UTF-8 | Without it, Boost.Filesystem reads them in the system's legacy code page. A wallet in a folder whose name is not ASCII was then not recognised as existing, so a second one could have been created over it. Programs that call the library's `Wallet::init` get the same setting from there, together with a log file, which Veil does not want. |
+| `monero/0004` | On Windows, the library reads the paths it is given as UTF-8 | Without it, Boost.Filesystem reads them in the system's legacy code page. A wallet in a folder whose name is not ASCII was then not recognised as existing, so a second one could have been created over it. Programs that call the library's `Wallet::init` get the same setting from there, together with a log file, which Veil does not want. The patch also makes the library set itself up once, on its first call, however many threads make that call together. Its own check let every thread that came before the first had finished do it again, and this setting must not be made twice: Boost's place for the locale that paths are read with has no lock, and a locale put there is destroyed by the next while other threads read paths with it. That was in this patch as first written. A test program that used the library from many threads ended with a damaged heap on Windows, twice; whether this was why is not shown. |
 | `monero/0005` | Opening a wallet no longer sets up the library's "shared ring database" | The library made it outside the wallet's folder: under the user's home on Linux, and on Windows in a folder all users of the machine share. It stayed when the wallet was removed, and a damaged one ended the process when any wallet was opened. The wallet API has no call to put it elsewhere or to leave it out. [`veil_wallet`'s README](../veil_wallet/README.md) says what the database is for and what is given up without it. |
 | `android/bc-ur/0001`, for the Android build only | In a library monero_c adds to Monero for payment codes shown as pictures, three places name the element type of a vector instead of leaving it to the compiler | The compiler Monero's dependency build uses for Android cannot work it out. The meaning is the same for every compiler. Veil does not call this code; the library does not build without it. |
 

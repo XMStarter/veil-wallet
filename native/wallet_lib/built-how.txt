@@ -1,0 +1,1 @@
+at /srv, with the patches committed at a fixed date, for no processor in particular, with none of the machine's settings for git

@@ -1,5 +1,5 @@
 diff --git a/src/wallet/api/wallet_manager.cpp b/src/wallet/api/wallet_manager.cpp
-index c200f52..68d174d 100644
+index c200f52..a4b41c2 100644
 --- a/src/wallet/api/wallet_manager.cpp
 +++ b/src/wallet/api/wallet_manager.cpp
 @@ -39,6 +39,10 @@
@@ -13,10 +13,22 @@ index c200f52..68d174d 100644
  
  #undef MONERO_DEFAULT_LOG_CATEGORY
  #define MONERO_DEFAULT_LOG_CATEGORY "WalletAPI"
-@@ -421,6 +425,15 @@ WalletManager *WalletManagerFactory::getWalletManager()
-     static WalletManagerImpl * g_walletManager = nullptr;
+@@ -418,11 +422,24 @@ bool WalletManagerImpl::setProxy(const std::string &address)
+ WalletManager *WalletManagerFactory::getWalletManager()
+ {
  
-     if  (!g_walletManager) {
+-    static WalletManagerImpl * g_walletManager = nullptr;
+-
+-    if  (!g_walletManager) {
+-        g_walletManager = new WalletManagerImpl();
+-    }
++    // Made once, however many threads ask first at the same time: the
++    // compiler guards the making of a local static. The plain check that
++    // stood here let every thread that came before the first had finished
++    // do all of it again, and what is done here on Windows must not be done
++    // twice: each time puts a new locale in place of the one before, which
++    // is destroyed while other threads still convert paths with it.
++    static WalletManagerImpl * const g_walletManager = []() {
 +#ifdef WIN32
 +        // Paths arrive as UTF-8. Without this, Boost.Filesystem reads them in
 +        // the system's legacy code page, and a wallet in a folder whose name
@@ -26,6 +38,8 @@ index c200f52..68d174d 100644
 +        std::locale::global(boost::locale::generator().generate(""));
 +        boost::filesystem::path::imbue(std::locale());
 +#endif
-         g_walletManager = new WalletManagerImpl();
-     }
++        return new WalletManagerImpl();
++    }();
  
+     return g_walletManager;
+ }

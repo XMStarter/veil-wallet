@@ -95,13 +95,13 @@ Artifacts, veil-windows."
 Run ./check.sh --windows setup first."
   # A library built before Veil's patches changed still loads, and does
   # what a patch has since taken out of it. The build notes which set of
-  # patches it was made from.
+  # patches it was made from, and in which way it was built.
   local built wanted
   built="$(cat "$(dirname "$wallet_lib")/veil-patches.sha256" 2>/dev/null || true)"
-  wanted="$(cat "$here"/wallet_lib/patches/monero/*.patch "$here"/wallet_lib/patches/monero_c/*.patch |
-    sha256sum | cut -d' ' -f1)"
-  [ "$built" = "$wanted" ] || fail "the wallet library for Windows was built from older patches: $wallet_lib
-Run ./check.sh --windows setup again; it rebuilds only what changed."
+  wanted="$(cat "$here"/wallet_lib/patches/monero/*.patch "$here"/wallet_lib/patches/monero_c/*.patch \
+    "$here"/wallet_lib/built-how.txt | sha256sum | cut -d' ' -f1)"
+  [ "$built" = "$wanted" ] || fail "the wallet library for Windows was built from older patches, or in an older way: $wallet_lib
+Run ./check.sh --windows setup again."
 
   echo "the app as downloaded:  $zip"
   local dest="$home/Veil-app"

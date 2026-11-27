@@ -84,7 +84,11 @@ that cannot lose the user's funds.
     network's.
   - `wallet_lib`: pinned build script for the wallet library, Veil's
     patches to it, and the bindings generator. After changing a patch, run
-    `build.sh` again and regenerate the bindings. `--android` builds it
+    `build.sh` again and regenerate the bindings. It builds at one path
+    on every machine, `/srv`, in a view of the folders it makes for
+    itself, so that the library does not differ with the folder it was
+    built in; when the way it builds changes, say so in `built-how.txt`,
+    and every work folder is built again from nothing. `--android` builds it
     for Android on 64-bit ARM from a source tree of its own, with a patch
     only that build has (`patches/android`); the README says why.
   - `transports`: pinned build script for the transport program the app
@@ -120,6 +124,13 @@ that cannot lose the user's funds.
     `offline` lints and builds for Android and runs nothing, and `app`
     builds the app as an APK with the core, the wallet library and the
     transport program inside.
+  - `twice.sh`: builds a part of a package twice, in two folders that
+    have nothing in common, and says whether the two came out the same
+    byte for byte: the core, the transport program, the wallet library,
+    the app. It starts nothing it has built. An optimised build of the
+    core goes through `release_build` in `check.sh`, which keeps this
+    machine's folders out of it; build the core for an app no other way.
+    `docs/development.md`, "The same build twice".
   - `accept.sh`: the owner's acceptance run in one command, step after
     step: the latest commits, `check.sh` as Linux and as Windows programs,
     the logs to send, then the app. It starts a daemon, so it is not for
@@ -1324,7 +1335,180 @@ from that commit, the one for the main network and the one for
 stagenet, and reported that on the phone everything works; whether the
 lines were looked at while a payment was on its way was not said in so
 many words. With that, step 6.4 has passed the owner's run on both
-systems and on the phone, with real money.
+systems and on the phone, with real money. Hosted CI passed on both
+systems, and steps 6.1 and 6.4 with the fix were merged on the owner's
+word. Left of step 6: the same build twice (6.2), signed packages
+(6.3), F-Droid (6.5) and the release itself (6.6). The `tor` level has
+not run with the list of five nodes.
+Step 6.2, the same build twice, is written. `native/twice.sh` builds a
+part of a package twice, in two folders that have nothing in common and
+with a home for cargo each, and compares the two byte for byte. In a
+cloud session, each pair built one after the other on one machine:
+the core differed in 19.6 of 24.3 million bytes, for the paths of the
+528 source files that can report an error, most of them under cargo's
+folder in the home of whoever builds; every optimised build of the core
+now names those folders the same to the compiler (`release_build` in
+`check.sh`), and the core for Linux and for Android comes out the same.
+The transport program came out the same, as before, and the same as the
+file in the packages the owner has. The wallet library had the folder
+it was built in written into it some 770 times, and the compiler Monero
+brings for Android has no option against that, so its script now builds
+at one path on every machine, `/srv`, in a view of the folders it makes
+for itself (a mount namespace, for an ordinary user through a user
+namespace; tried as an ordinary user only as far as the first
+download). With the paths the same, the library for Android still
+differed in eight bytes, the name of the commit monero_c makes of its
+patches, which had the time of the build in it; those commits have one
+date now. The library for Windows then differed in six, the time of
+linking in its first bytes and a sum that follows from it; the linker is
+told to leave the time out, after which the two were linked again and
+were the same; they were not built from nothing a second time. For
+Linux, Monero's dependency build was tried, so that the library would
+need nothing of the system's: its Boost of 2018 does not compile on
+Ubuntu 24.04. So the library for Linux stays linked against the
+system's libraries, is the same only where those are, and a package for
+Linux is still not complete in itself. It was the same in two builds on
+the one machine. Found on the way: it looked for Polyseed in the folder
+it had been built in, which worked only because that folder was still
+there; Polyseed now lies beside it (`libpolyseed.so.2`), is looked for
+there, and goes into the app's bundle with it. The app for Android: all
+80 files of the package the same, given the same native parts; the
+packages differ in their signatures and nowhere else, which the script
+checks by where the signature lies. The app for Linux differed in its
+own program, 483 bytes that came from the length of the folder's name
+(the place to look for libraries was written over the build folder's
+afterwards); it is linked with the final place from the start, and all
+25 files are the same. Not compared: the app for Windows, which hosted
+CI builds, and anything on a second machine. A work folder of the
+wallet library built the old way is emptied and built again from
+nothing, which `check.sh` notices by `wallet_lib/built-how.txt`: the
+owner has to run `./check.sh setup` and `--windows setup` again and
+allow the new DLL and `monerod.exe` in the antivirus. The first offline
+run of this step failed in one test of `veil_wallet`, not for anything
+of the step: a wallet closed and opened again at once was "in use". The
+mark that keeps a wallet from being opened twice is a lock that goes
+with the open file, and a program that is being started holds the open
+files of the one that starts it for a moment; another test was starting
+a program just then. A new test starts programs while a mark is taken
+and let go two thousand times and failed within the first hundred
+every time; the mark is now asked for again for half a second before
+a wallet is refused. It had not been seen before in any run.
+Tried in a cloud session with all of that: the `offline` level, the
+lint for Windows, and `./check.sh --android offline`; they pass. What
+that session built, on Ubuntu 24.04 with its gcc 13.3.0 and its
+cross compiler for Windows of the same release, for another machine's
+builds of the same commit to be held against (the first sixteen
+characters of each SHA-256, which `build.sh` now prints): the wallet
+library for Android `e41051ed8baf5e38`, for Windows `c066ba144ef8129b`,
+for Linux `f5bbe2c8fc8bb5a3` with Polyseed `93c8dd53fb487964`, and the
+transport program `ba57d65aba48a697`.
+On that commit, `d39e09f`, the owner built the library again for Linux
+and for Windows, which was the first time anything of Veil was built on
+two machines and compared. The build's view of the folders worked there
+as an ordinary user, at the first try. The run passed at the `offline`
+and `regtest` levels as Linux programs and at the `regtest` level as
+Windows programs, and the owner reported that on the phone everything
+works with the two apps built from that commit. Two things did not come
+out as hoped. The sums: Polyseed for Linux was the same file on both
+machines; the library for Linux was not (`2864b08445cd6b99` there), and
+of another size; the library for Windows was of the same size, 32,185,791
+bytes, with another sum (`c8e9b13b1fdd76e2` there). For Linux the cause
+was in the owner's log: Monero's build compiles for the processor it
+runs on unless told otherwise (`-march=native`), and RandomX inside it
+does too. The cloud session's library had some 3,400 instructions of
+AVX-512 in it. That was a fault of a package for Linux and not only a
+difference: such a library can end with an illegal instruction on a
+processor older than its builder's. `build.sh` now says `ARCH=default`,
+as Monero's dependency build always did for Windows and Android; built
+that way in a cloud session the library has none of those instructions,
+the offline level passes with it, and two builds in two folders are the
+same (`db59d3709be0fed0`). The script also fixes the language and the
+time zone of a build and switches off the compiler cache Monero's
+dependency build brings, none of which was seen to matter: of 1,678
+compilations of the two Android builds two had come from that cache.
+For Windows the owner sent the file, and the two differed in sixteen
+bytes of thirty-two million: the nine characters of the name of
+Monero's commit, in two places, and the sum over the file. The cloud
+session's machine is set to sign its commits, so the commits the build
+makes of monero_c's patches were signed there and had another name. The
+build now reads none of the machine's settings for git but those for
+the network (`GIT_CONFIG_GLOBAL`), makes the owner's commit
+(`1429b158a`), and the library for Windows built from nothing in a cloud
+session is the owner's file byte for byte, `c8e9b13b1fdd76e2`. That is
+the first part of a package seen to be the same on two machines, with
+Polyseed.
+The other thing: the `offline` level as Windows programs failed, the
+test program of `veil_core` ended with status 116 after its first
+eleven tests, for the second time (the first was at step 4.2, at the
+`regtest` level). The same tests with the `regtest` feature passed
+minutes later in the same run, all sixty-four. The diagnosis written
+after the first time did not run: it was called at the `regtest` level
+only, and at the `offline` level cargo goes on after a program that
+fails and ends with 101 whatever happened. Now that level reads what
+cargo prints for such an ending (`tests_of_the_workspace`,
+`odd_endings` in `check.sh`), and the diagnosis first asks Windows what
+it recorded about programs that ended badly (`what_windows_recorded`),
+then runs the tests again one at a time; tried on the owner's own log
+with stand-ins for cargo and for PowerShell only. The owner put that
+question to Windows by hand, and its record names both endings: a
+damaged heap (`0xC0000374`, whose last byte is 116), reported from
+`ntdll.dll`, in the test program's first second, on 25 and on 26
+November. So it was never the file share. The cause was then read in
+the code and has not been seen at work: Veil's own patch for paths on
+Windows (`monero/0004`) put its setting, a new locale for the program
+and for Boost's reading of paths, where the library sets itself up on
+its first call, behind the library's check for "already done", which
+has no lock. Threads that make their first call together each pass the
+check, each puts a new locale in place of the one before, and Boost
+1.69 keeps that locale without a lock, so one is destroyed while other
+threads read paths with it. A test program makes its first calls from
+as many threads as the machine has processors; the app has one thread
+that calls the library, so this is not a fault the app can meet as it
+is built. The patch now makes the setting up happen once, whoever asks
+(a local static, which the compiler guards), and
+`the_first_calls_into_the_library_may_come_at_once` in `veil_wallet`
+makes the first call from sixteen threads at once in eight processes.
+On Linux it passes with either library, since nothing of this is
+compiled there. What would have shown the cause: that test as a Windows
+program failing on the library built before the change. The owner ran
+it there, thirty processes of sixteen threads, and it passed. So the
+fault in the patch is real as read and is put right, and that it was
+what damaged the heap is not shown; the cause of the two endings is
+open. The six endings of `veil.exe` in the same
+record, "in a library that was unloaded", are of programs built on 23
+November, before the library was kept loaded for good, and Windows
+writes such a record again whenever it looks at it again. With all of
+that the libraries built in a cloud session, for the owner's to be held
+against, are: for Linux `2815398e3e401946` with Polyseed
+`93c8dd53fb487964`, for Windows `3a33f0d609df79d4`, for Android
+`ffdf870ca1abd41e`. The one for Android was built from nothing; the
+other two were built from nothing with the patch as it was and then had
+the changed patch applied and what it touches compiled again. The
+`offline` level, the lint for Windows and `./check.sh --android offline`
+pass with them. `built-how.txt` names the new way, so the owner has to
+run both setups once more and allow the new DLL and `monerod.exe` in
+the antivirus. The library for Linux is expected to differ there as
+long as the distribution's packages do; nobody has compared those.
+On that commit, `bc6c898`, the owner built both libraries from nothing
+and ran `accept.sh`. All three files are the cloud session's, byte for
+byte: the library for Windows, the library for Linux, which says that
+the two machines had the same packages of Ubuntu 24.04 that day, and
+Polyseed. The run passed at the `offline` and `regtest` levels as Linux
+and as Windows programs, the new test of the first calls among them
+both ways, and the owner reported that on the phone everything works
+with the two apps built from that commit, whose library for Android is
+the rebuilt one. With that, step 6.2 has passed the owner's run on both
+systems and on the phone. What stays open from it: the damaged heap,
+which has happened twice in some fifty runs as Windows programs and
+never in the app; if it comes back, `check.sh` prints what Windows
+recorded, and the next thing to ask of the owner's machine is a dump of
+the program (Windows Error Reporting's `LocalDumps`), which would name
+the place. The test can be run for longer and with more threads
+(`VEIL_FIRST_CALL_ROUNDS`, `VEIL_FIRST_CALL_THREADS`) against a library
+built before the change, which a cloud session can build or has from
+the owner (`c8e9b13b1fdd76e2`); that has not been done. Not compared on
+two machines: the core, the transport program, the apps. Left of step
+6: signed packages (6.3), F-Droid (6.5) and the release itself (6.6).
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
@@ -1339,11 +1523,13 @@ See the build plan in `docs/concept.md`.
   Once, loading the DLL failed there with Windows error 995 (operation
   aborted) in one test and worked in every other; if it comes back, the
   first thing to try is loading it from a Windows disk, not over the WSL
-  file share. Once, a test program run as a Windows program ended with
-  status 116 a second or so after starting and passed when run again;
-  `check.sh` now runs such a program's tests again one at a time to name
-  the test, and what that run prints is the first thing to read if it
-  comes back. Once, the tests of `veil_core` that open a wallet all
+  file share. Twice, a test program of `veil_core` run as a Windows
+  program ended with status 116 within its first second and passed when
+  run again. Windows recorded a damaged heap both times (`0xC0000374`);
+  the end of "Status" says what was tried for it. Its cause is open. `check.sh` asks Windows what it recorded about such an ending and
+  runs the program's tests again one at a time, at the `offline` level
+  too, and what that prints is the first thing to read if it comes
+  back. Once, the tests of `veil_core` that open a wallet all
   stood for over a minute at the start of a freshly built test program
   and then went on; the one with a limit failed. The tests now load the
   wallet library before they time anything and say when that took long.

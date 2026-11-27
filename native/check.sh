@@ -12,6 +12,8 @@
 #   ./check.sh daemons     not a check: starts test daemons in pairs to see why one may not come up
 #   ./check.sh flutter     installs the pinned Flutter and nothing else (what hosted CI runs first)
 #   ./check.sh setup       once per machine: packages, Rust, the wallet library
+#   ./check.sh core        not a check: the core as an app carries it and nothing else (twice.sh builds it so)
+#   ./check.sh app         not a check: the app with its native parts, as `offline` builds it after its checks
 #
 # Several levels can be given at once: ./check.sh offline regtest tor
 #
@@ -94,7 +96,7 @@ elif [ "$windows" = 1 ]; then
   setup_hint="./check.sh --windows setup"
   # WSL hands a Windows program only the variables named here; /p turns a
   # Linux path into the Windows one.
-  export WSLENV="${WSLENV:+$WSLENV:}VEIL_WALLET_LIB/p:VEIL_MONEROD/p:VEIL_REQUIRE_WALLET_LIB:VEIL_DAEMON_ROUNDS:VEIL_TEST_NODES:VEIL_TEST_ONION:VEIL_FUZZ_SEED:VEIL_FUZZ_SECONDS:VEIL_FUZZ_CASES:CI:GITHUB_ACTIONS"
+  export WSLENV="${WSLENV:+$WSLENV:}VEIL_WALLET_LIB/p:VEIL_MONEROD/p:VEIL_REQUIRE_WALLET_LIB:VEIL_DAEMON_ROUNDS:VEIL_FIRST_CALL_ROUNDS:VEIL_FIRST_CALL_THREADS:VEIL_TEST_NODES:VEIL_TEST_ONION:VEIL_FUZZ_SEED:VEIL_FUZZ_SECONDS:VEIL_FUZZ_CASES:CI:GITHUB_ACTIONS"
 else
   out_dir="$lib_dir/out"
   wallet_lib="$out_dir/libmonero_wallet2_api_c.so"
@@ -155,7 +157,7 @@ dart_program() {
 }
 
 usage() {
-  sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 # cargo with the target of this run. An empty array needs this spelling in
@@ -193,8 +195,48 @@ step() {
   "$@"
 }
 
+# A path as the compiler writes it: on Windows itself that is the Windows
+# spelling, not this shell's.
+as_the_compiler_sees() {
+  if on_windows && command -v cygpath >/dev/null 2>&1; then
+    cygpath -w "$1"
+  else
+    printf '%s\n' "$1"
+  fi
+}
+
+# Runs a build of the core as an app carries it, with nothing of this
+# machine's folders in the result. The compiler writes the path of a
+# source file into the code wherever the code can report an error, and
+# most of those files lie in cargo's folder under the home of whoever
+# builds; a few are written during the build, into the target folder. So
+# the same commit built in another place came out different, in some
+# hundreds of places. Here each of those folders is given a name that is
+# the same everywhere. Every optimised build of the core goes through
+# this, so that they also share what is compiled already. `twice.sh` is
+# what shows that it works.
+release_build() {
+  local cargo_home target_dir flags
+  cargo_home="$(as_the_compiler_sees "${CARGO_HOME:-$HOME/.cargo}")"
+  target_dir="$(as_the_compiler_sees "${CARGO_TARGET_DIR:-$here/target}")"
+  # The target folder first: it may lie inside the workspace.
+  flags="--remap-path-prefix=$target_dir=/veil/target"
+  flags+=$'\x1f'"--remap-path-prefix=$(as_the_compiler_sees "$here")=/veil/native"
+  flags+=$'\x1f'"--remap-path-prefix=$cargo_home=/cargo"
+  CARGO_ENCODED_RUSTFLAGS="$flags" "$@"
+}
+
+# The core for an app and nothing else, for `twice.sh`.
+level_core() {
+  if [ "$android" = 1 ]; then
+    android_env || return 1
+  fi
+  step release_build cargo_for_target build -p veil_core --release --locked
+}
+
 # Says whether the built wallet library carries the patches this checkout
-# has: "current", "stale" (built from another patch set), or "missing".
+# has and was built the way this checkout builds it: "current", "stale"
+# (built from another patch set, or another way), or "missing".
 wallet_lib_state() {
   if [ ! -f "$wallet_lib" ]; then
     echo missing
@@ -207,7 +249,8 @@ wallet_lib_state() {
   if [ "$android" = 1 ]; then
     patches+=(wallet_lib/patches/android/bc-ur/*.patch)
   fi
-  wanted="$(cat "${patches[@]}" | sha256sum | cut -d' ' -f1)"
+  # And how the library is built at all, which is in the sum too.
+  wanted="$(cat "${patches[@]}" wallet_lib/built-how.txt | sha256sum | cut -d' ' -f1)"
   if [ "$built" = "$wanted" ]; then echo current; else echo stale; fi
 }
 
@@ -216,8 +259,8 @@ require_wallet_lib() {
   case "$(wallet_lib_state)" in
     current) ;;
     stale)
-      echo "error: the wallet library in $out_dir was built from older patches." >&2
-      echo "Run $setup_hint again; it rebuilds only what changed." >&2
+      echo "error: the wallet library in $out_dir was built from older patches, or in an older way." >&2
+      echo "Run $setup_hint again." >&2
       return 1
       ;;
     *)
@@ -249,12 +292,12 @@ level_offline_android() {
   android_env || return 1
   case "$(wallet_lib_state)" in
     current) echo "wallet library for Android: $wallet_lib" ;;
-    stale) echo "wallet library for Android: built from older patches. Run $setup_hint." ;;
+    stale) echo "wallet library for Android: built from older patches or in an older way. Run $setup_hint." ;;
     *) echo "wallet library for Android: not built. It is not needed to build the core." ;;
   esac
   step cargo fmt --check &&
     step cargo_for_target clippy --workspace --all-targets --all-features --locked -- -D warnings &&
-    step cargo_for_target build -p veil_core --release --locked &&
+    step release_build cargo_for_target build -p veil_core --release --locked &&
     step cargo_for_target test --workspace --locked --no-run &&
     echo &&
     echo "Built for Android and not run: there is nothing here to run it on."
@@ -271,14 +314,14 @@ level_offline() {
   if [ -n "${VEIL_WALLET_LIB:-}" ]; then
     echo "wallet library: $VEIL_WALLET_LIB"
   elif [ "$(wallet_lib_state)" = stale ]; then
-    echo "wallet library: built from older patches and not used; the tests that need"
+    echo "wallet library: built from older patches or in an older way, and not used; the tests that need"
     echo "it are skipped. Run $setup_hint to rebuild it."
   else
     echo "wallet library: not built, the tests that need it are skipped"
   fi
   step cargo fmt --check &&
     step cargo_for_target clippy --workspace --all-targets --all-features --locked -- -D warnings &&
-    step cargo_for_target test --workspace --locked --no-fail-fast &&
+    tests_of_the_workspace &&
     notices_side &&
     dart_side &&
     app_side
@@ -352,7 +395,7 @@ level_fuzz() {
   if [ -n "${VEIL_WALLET_LIB:-}" ]; then
     echo "wallet library: $VEIL_WALLET_LIB"
   else
-    echo "wallet library: not built or built from older patches; what it reads is not tried"
+    echo "wallet library: not built, or built from older patches or in an older way; what it reads is not tried"
   fi
   export VEIL_FUZZ_SEED="${VEIL_FUZZ_SEED:-$(date +%s)}"
   export VEIL_FUZZ_SECONDS="${VEIL_FUZZ_SECONDS:-60}"
@@ -473,10 +516,91 @@ where_it_ended() {
   echo "The test program did not finish: it ended with $status, where a failed"
   echo "test ends with 101. Running the same tests again one at a time, with"
   echo "their output, to see where. The level has failed either way."
+  what_windows_recorded
   step cargo_for_target test "$@" -- --test-threads=1 --nocapture
   local again=$?
   echo
   echo "one at a time it ended with $again"
+}
+
+# What Windows itself wrote down about programs that ended badly in the
+# last half hour: for each, the program, the part of it the fault was in,
+# and the code of the fault. A Windows program started from WSL hands back
+# only the last byte of how it ended, which is all "116" is; this is where
+# the rest of it is kept. Read as the values of each record and not as
+# its text, which is in the language Windows is set to. Nothing here is
+# an error: where it cannot be asked, nothing is printed.
+what_windows_recorded() {
+  if [ "$windows" != 1 ] && ! on_windows; then
+    return 0
+  fi
+  local powershell
+  powershell="$(command -v powershell.exe 2>/dev/null ||
+    ls /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe 2>/dev/null)"
+  if [ -z "$powershell" ]; then
+    return 0
+  fi
+  echo
+  echo "--- what Windows recorded about programs that ended badly (last 30 minutes)"
+  # Handed over encoded, as PowerShell takes it, so that no quote of it is
+  # lost between this shell and that one.
+  local asked
+  asked="$(iconv -f UTF-8 -t UTF-16LE <<'POWERSHELL' | base64 | tr -d '\n'
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
+$ProgressPreference = 'SilentlyContinue'
+$since = (Get-Date).AddMinutes(-30)
+$found = Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1000,1001; StartTime=$since} -ErrorAction SilentlyContinue
+if (-not $found) { 'nothing'; exit }
+foreach ($record in ($found | Sort-Object TimeCreated)) {
+  $record.TimeCreated.ToUniversalTime().ToString('u') + ' event ' + $record.Id + ': ' +
+    (($record.Properties | ForEach-Object { $_.Value }) -join ' | ')
+}
+POWERSHELL
+  )"
+  "$powershell" -NoProfile -NonInteractive -EncodedCommand "$asked" </dev/null 2>&1 |
+    tr -d '\r' || true
+}
+
+# Prints, for each test program in a record of `cargo test` that was
+# ended and did not finish, how it ended and what cargo says to pass to
+# run it again, with a tab between. A program whose tests failed ends
+# with 101 and is none of these.
+odd_endings() {
+  awk '
+    /^error: test failed, to rerun pass `/ {
+      again = $0
+      sub(/^[^`]*`/, "", again)
+      sub(/`.*$/, "", again)
+      next
+    }
+    /process didn.t exit successfully: .*\((exit status|signal): / && again != "" {
+      how = $0
+      sub(/^.*\(exit status: /, "", how)
+      sub(/^.*\(signal: /, "signal ", how)
+      sub(/[,)].*$/, "", how)
+      if (how != "101") printf "%s\t%s\n", how, again
+      again = ""
+    }
+  ' "$1"
+}
+
+# The tests of the whole workspace. cargo is told to go on after a test
+# program that fails, so it ends with 101 whatever happened, and a
+# program that was ended, by a crash or by the system, shows only as one
+# line of cargo's among a thousand. So what cargo prints is read for
+# such an ending, and each program that ended that way goes to
+# where_it_ended. That never turns a failed run into a passed one.
+tests_of_the_workspace() {
+  local seen status how again
+  seen="$(mktemp)"
+  step cargo_for_target test --workspace --locked --no-fail-fast 2>&1 | tee "$seen"
+  status="${PIPESTATUS[0]}"
+  while IFS=$'\t' read -r -u 3 how again; do
+    # shellcheck disable=SC2086  # several words for cargo, as cargo printed them
+    where_it_ended "$how" $again --locked
+  done 3< <(odd_endings "$seen")
+  rm -f "$seen"
+  return "$status"
 }
 
 level_tor() {
@@ -534,10 +658,31 @@ level_daemons() {
 
 # The app for Android, as the one file a phone installs. The core, built
 # here, and the wallet library, built by setup, go inside it.
+# On a desktop: the app built with its native parts and nothing checked,
+# which `offline` does after its checks. For `twice.sh`.
+level_app_desktop() {
+  if [ "$windows" = 1 ] || [ -z "$(dart_program)" ]; then
+    echo "error: the app is built where Flutter is installed, for the system it is built on." >&2
+    return 1
+  fi
+  require_wallet_lib || return 1
+  local flutter="$flutter_dir/flutter/bin/flutter" system=linux
+  if on_windows; then system=windows; fi
+  local offline=()
+  if [ "${CARGO_NET_OFFLINE:-}" = true ]; then offline=(--offline); fi
+  (
+    cd "$here/../app" &&
+      step "$flutter" --no-version-check pub get --enforce-lockfile "${offline[@]}" &&
+      step "$flutter" --no-version-check build "$system" --release --no-pub "$(built_from)" \
+        "--dart-define=VEIL_NETWORK=$app_network"
+  ) || return 1
+  bundle_native_parts
+}
+
 level_app() {
   if [ "$android" != 1 ]; then
-    echo "error: 'app' goes with --android. On a desktop, 'offline' builds the app." >&2
-    return 1
+    level_app_desktop
+    return
   fi
   android_env || return 1
   require_wallet_lib || return 1
@@ -558,7 +703,7 @@ level_app() {
   # The transport program for bridges: built here if it is not yet, which
   # takes half a minute and the network once, and nothing after that.
   step env ANDROID_NDK_ROOT="$android_ndk" "$here/transports/build.sh" "$transport_dir" || return 1
-  step cargo_for_target build -p veil_core --release --locked &&
+  step release_build cargo_for_target build -p veil_core --release --locked &&
     mkdir -p "$libs" &&
     step cp "$here/target/aarch64-linux-android/release/libveil_core.so" "$wallet_lib" \
       "$transport_dir/out/android/arm64-v8a/liblyrebird.so" "$libs/" || return 1
@@ -775,7 +920,7 @@ no_test_features_in_a_release() {
     echo
     echo "--- cargo build -p $1 --release --features $2 --locked (has to be refused)"
     local said
-    if said="$(cargo build -p "$1" --release --features "$2" --locked 2>&1)"; then
+    if said="$(release_build cargo build -p "$1" --release --features "$2" --locked 2>&1)"; then
       echo "error: $1 was built for release with its test-only feature '$2'." >&2
       return 1
     fi
@@ -786,6 +931,17 @@ no_test_features_in_a_release() {
       return 1
     fi
     echo "refused, as it has to be"
+  done
+}
+
+# What the wallet library for Linux needs next to it wherever it goes:
+# Polyseed, which its build puts beside it (wallet_lib/build.sh says why).
+wallet_lib_company() {
+  local file
+  for file in "$(dirname "$VEIL_WALLET_LIB")"/libpolyseed.so.*; do
+    if [ -f "$file" ]; then
+      step cp "$file" "$1/" || return 1
+    fi
   done
 }
 
@@ -803,9 +959,10 @@ bundle_native_parts() {
     return 0
   fi
   local bundle="$here/../app/build/linux/x64/release/bundle"
-  step cargo build -p veil_core --release --locked &&
+  step release_build cargo build -p veil_core --release --locked &&
     no_test_features_in_a_release &&
     step cp "$here/target/release/libveil_core.so" "$VEIL_WALLET_LIB" "$bundle/lib/" &&
+    wallet_lib_company "$bundle/lib" &&
     echo "the app with its native parts: $bundle/veil"
 }
 
@@ -824,7 +981,7 @@ bundle_for_windows() {
   local bundle="$here/../app/build/windows/x64/runner/Release"
   local system32 runtime
   system32="$(cygpath -u "${SYSTEMROOT:-C:\\Windows}")/System32"
-  step cargo build -p veil_core --release --locked &&
+  step release_build cargo build -p veil_core --release --locked &&
     no_test_features_in_a_release &&
     step cp "$here/target/release/veil_core.dll" "$bundle/" || return 1
   for runtime in msvcp140.dll vcruntime140.dll vcruntime140_1.dll; do
@@ -914,9 +1071,9 @@ fi
 for level in "$@"; do
   if [ "$android" = 1 ]; then
     case "$level" in
-      offline | ndk | setup | app | -h | --help | help) ;;
+      offline | ndk | setup | app | core | -h | --help | help) ;;
       *)
-        echo "error: with --android there are 'offline', 'ndk', 'setup' and 'app'. '$level' is a" >&2
+        echo "error: with --android there are 'offline', 'ndk', 'setup', 'app' and 'core'. '$level' is a" >&2
         echo "test or belongs to a desktop, and nothing built for Android can be run here." >&2
         exit 2
         ;;
@@ -926,7 +1083,7 @@ for level in "$@"; do
     offline) ;;
     flutter) ;;
     ndk) ;;
-    regtest | tor | stagenet | bridges | daemons | setup | app | leaks | leaks-chain | fuzz)
+    regtest | tor | stagenet | bridges | daemons | setup | app | core | leaks | leaks-chain | fuzz)
       if in_hosted_ci; then
         echo "refused: '$level' does not run in hosted CI. Only 'offline' does." >&2
         echo "See docs/development.md, \"Hosted CI and the hosting account\"." >&2

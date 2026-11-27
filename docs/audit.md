@@ -93,7 +93,7 @@ keeps one and the test that would fail if it did not. "Private chain" and
 | Nothing is sent without a review, and zero never means everything. | `prepare_send` builds, `commit` sends; `SendAmount::Everything` is the only way to send all. | `sending_is_refused_before_anything_is_built`; private chain: `receives_reviews_sends_and_survives_a_lost_answer`. |
 | A payment is made once. | A send whose outcome is unknown is written to disk at once, blocks other sends, and is looked for after every synchronisation (`veil_core/src/session.rs`). | Private chain: `lost_connections_lose_no_funds_and_hide_no_send`, `receives_reviews_sends_and_survives_a_lost_answer`; `a_send_left_unknown_by_an_earlier_session_is_taken_up_again`. |
 | A killed process or a damaged file does not cost the wallet. | Keys in a file of their own; a data file that cannot be read is set aside and the wallet opens from its keys. | `a_wallet_survives_being_killed_while_it_saves`, `a_wallet_whose_data_file_is_damaged_opens_from_its_keys`. |
-| A wallet is open in one place. | `<wallet>.lock`, held with the system's file lock (`veil_wallet/src/wallet.rs`). | `a_wallet_that_is_open_already_is_not_opened_twice_and_not_touched`. |
+| A wallet is open in one place. | `<wallet>.lock`, held with the system's file lock (`veil_wallet/src/wallet.rs`). A lock that is taken is asked for again for half a second before the wallet is refused, because one this program has just let go can count as taken while it starts another program. | `a_wallet_that_is_open_already_is_not_opened_twice_and_not_touched`, `a_mark_let_go_is_free_while_other_programs_are_being_started`. |
 | Nothing of a wallet lies outside its folder. | Patch `monero/0005`; the address file the library writes is removed. | `a_wallet_leaves_nothing_outside_its_folder`, `the_wallets_address_is_not_left_as_text_next_to_it`. |
 | A recovery phrase and a password are not written to a log or an error. | `SeedPhrase` hides itself in `Debug`; no part of the core writes a log at all. | `made_up_phrases_are_counted_and_never_shown`, `made_up_start_requests_are_read_or_refused`. |
 | A locked wallet is closed. | Locking closes the session: the wallet is saved and closed, Tor stopped (`app/lib/app.dart`, `veil_core::Session::close`). | `app/test/wallet_flow_test.dart`, `settings_test.dart`, on a wallet that only pretends. |
@@ -276,10 +276,19 @@ network. They are refused in hosted CI, for the reason given in
 `docs/development.md`, "Hosted CI and the hosting account", and whoever
 runs them should read that first.
 
-What can be built the same twice: the transport program, which came out
-byte for byte the same from two folders. For the wallet library, the core
-and the app this has not been tried. Nothing is signed with a key that
-means anything.
+What can be built the same twice: `native/twice.sh` builds a part of a
+package in two folders that have nothing in common and compares the two
+byte for byte. On one machine the core, the transport program, the wallet
+library and the app come out the same that way, a package for Android but
+for its signature; `docs/development.md`, "The same build twice", has
+each part, what had to be done for it, and what that does not show.
+On a second machine only the wallet library has been built, and it is
+the same file there as in a cloud session, byte for byte, for Windows
+and for Linux, once the build stopped reading the builder's settings
+for git and stopped compiling for the builder's processor. For Linux
+that holds only where the distribution's libraries are the same, as
+they were on those two machines that day. The app for Windows is not
+compared at all. Nothing is signed with a key that means anything.
 
 ## Known to be weak
 
@@ -315,6 +324,21 @@ Each of these is known to the project and not put right.
   another (`veil_tor/src/state.rs`, with offline tests of the folder; the
   way of the fault itself is walked only at the `bridges` level, on the
   real network).
+- **The wallet library used from several threads at once.** The app has
+  one thread that calls it; the tests have many. One fault of that kind
+  was Veil's own: the patch that makes the library read paths as UTF-8
+  on Windows put its setting where the library sets itself up on its
+  first call, behind a check that several threads can pass together, and
+  made twice the setting destroys a locale other threads are reading
+  paths with. The patch now makes that work happen once
+  (`monero/0004`), and a test makes the first call from sixteen threads
+  at once. Windows recorded a damaged heap (`0xC0000374`) for a test
+  program of `veil_core` twice, in the program's first second. That was
+  put down to this fault and is not shown to come from it: the new test
+  passed on the library as it was before, thirty processes long. So the
+  cause of the damaged heap is open, and whether there are other faults
+  of the kind is not known: nothing runs the library under a tool that
+  would see them.
 - **The listeners take any program on the machine**, as said above.
 - **Dart and Kotlin strings cannot be wiped**, so a password and a phrase
   stay in the app's memory until it is freed and reused.
