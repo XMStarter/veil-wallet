@@ -9,14 +9,48 @@ four things: create a wallet, restore a wallet, receive, and send. All network
 traffic goes through a built-in Tor client, and every incoming payment gets a
 fresh address.
 
-> **Status: pre-release, test network only.** There is an app for Linux,
-> Windows and Android and a command-line tool. They create, restore,
-> synchronise, receive and send through Tor, with bridges where Tor is
-> blocked, on the Monero stagenet, whose coins are worth nothing. They do
-> not know the main network. Tests cover a killed process, a damaged
-> wallet file, and connections lost in the middle of a synchronisation or
-> a send. Nothing is released, nothing here has been audited, and nothing
-> here is for real funds. Read the [disclaimer](DISCLAIMER.md).
+> **Status: first releases, not audited.** Veil for Android is released
+> for the Monero main network, where coins are real money; see
+> [Download](#download). The apps for Windows and Linux are built from
+> source for now. Veil creates, restores, synchronises, receives and
+> sends through Tor, with bridges where Tor is blocked. Tests cover a
+> killed process, a damaged wallet file, and connections lost in the
+> middle of a synchronisation or a send. Nobody outside the project has
+> audited any of it. Do not keep more in it than you can afford to lose,
+> and read the [disclaimer](DISCLAIMER.md).
+
+## Download
+
+Releases are on the
+[releases page](https://github.com/XMStarter/veil-wallet/releases) of this
+repository and nowhere else. A release for Android is one file,
+`veil-<version>.apk`, for phones with a 64-bit ARM processor and Android 7
+or later. It has no Google services in it and asks for none.
+
+Before the first installation, see who signed the file. Every release is
+signed with one key, whose certificate has this SHA-256 checksum:
+
+```
+82ab766ac1dfaf805df1aa5af37d4c869a64260a92474dee5076cc25e0b08fcd
+```
+
+Android's own tool prints it for a file, `apksigner verify --print-certs
+veil-<version>.apk`, and so does `native/release.sh who` from this
+repository. After the first installation the phone checks it by itself:
+Android takes an update only from the key the installed app was signed
+with.
+
+Whoever would rather trust nobody builds the commit a release names and
+compares; [docs/development.md](docs/development.md), "Signed packages",
+says how, and a release's page gives the checksum that build has to
+have.
+
+Write the recovery phrase down before the first coin arrives. It is the
+only way back to the money when the phone is lost, and nobody can
+restore a wallet without it.
+
+To report something that can cost a user money or privacy, see
+[SECURITY.md](SECURITY.md).
 
 ## Priorities
 
@@ -50,6 +84,8 @@ fresh address.
 - [Design](docs/design.md): visual language and screens
 - [Development](docs/development.md): how the code is written, tested, and released
 - [For an audit](docs/audit.md): what is in scope, what Veil defends against and what it does not, and where each promise is kept
+- [Releases](docs/releases.md): what has been released, from which commit, with which checksums
+- [Security](SECURITY.md): where to send a finding
 - [Disclaimer](DISCLAIMER.md)
 
 ## License

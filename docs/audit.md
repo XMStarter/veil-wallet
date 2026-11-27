@@ -399,6 +399,7 @@ Each of these is known to the project and not put right.
 
 ## Findings
 
-To the project's owner, and not in public before the owner has answered.
-How is to be agreed when an audit is commissioned; the repository has no
-address for it yet.
+To the project's owner, and not in public before the owner has answered:
+through GitHub's private report for the repository, as
+[SECURITY.md](../SECURITY.md) says. Whoever is commissioned for an audit
+agrees another way with the owner if they want one.

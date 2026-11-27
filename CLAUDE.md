@@ -177,8 +177,10 @@ that cannot lose the user's funds.
   `app/README.md` and `docs/design.md` before changing it. Colours,
   typefaces and sizes come from `app/lib/theme`; texts from the `.arb`
   files, always in both languages.
-- `docs/`: concept, design, development rules, and what an audit starts
-  from.
+- `docs/`: concept, design, development rules, what an audit starts
+  from, and `releases.md`, what has been released, from which commit and
+  with which checksums; an entry is written after its release.
+  `SECURITY.md` at the top says where a finding goes.
 - `.github/workflows`: hosted CI, builds and offline tests only. Pin
   actions to commit hashes. It installs Flutter with `check.sh flutter`,
   not with an action. The Windows job keeps the app it built as the
@@ -1584,6 +1586,31 @@ was: the package was built by a cloud session and by nobody else, since
 the owner's machine has not built for Android; before a release is
 published, somebody other than that session builds the commit and the
 checksums of the unsigned packages are held against each other.
+Hosted CI passed on both systems, the test of the comparison running on
+Windows itself there for the first time, and step 6.3 was merged on the
+owner's word. Left of step 6: F-Droid (6.5) and the release itself
+(6.6). The owner was told what each takes: the submission to F-Droid is
+a merge request on GitLab that a cloud session cannot make, so it is
+prepared here and made by the owner; and a release for Windows could be
+built by hosted CI for the main network, started by hand, if the owner
+takes that nobody can build it a second time to compare. Which systems
+the first release is for is the owner's to say and has not been said.
+The owner said it: F-Droid is left out, and the release is made for
+Android first and for Windows after it. Step 6.6, the release, is begun
+for Android. Written so far, and nothing published: `SECURITY.md`, which
+sends a finding through GitHub's private report for the repository, a
+setting the owner has to switch on; the README's status and a "Download"
+section with the certificate of the key for releases; `docs/releases.md`
+with an entry for 0.1.0 that says it is not released yet; and the order
+a release is made in (`docs/development.md`, "Making a release"): the
+commit on `main`, the owner's run on it with the `tor` level, the
+package built on two machines, the signature, the comparison, a phone,
+the releases page, the record. The version stays 0.1.0, number 1, which
+is also what the signed package of step 6.3 on the owner's phone calls
+itself, so the release installs over it. Not done: every step of that
+order. Open before publishing, each the owner's: who builds the package
+besides a cloud session, and whether somebody who knows licences is
+asked first, which the owner had decided to do before a release.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

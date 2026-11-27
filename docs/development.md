@@ -534,8 +534,9 @@ asking for Microsoft's own installer, is decided at the release step.
 - A package carries the licence texts of everything it is built from
   (`app/assets/licences`, see "Licence texts" below) and says which
   commit it was built from.
-- Android builds contain no Google services and target F-Droid as well as
-  direct APK downloads.
+- Android builds contain no Google services. A release is a file to
+  download from the repository's releases page; a listing in F-Droid was
+  planned and is left out for now, by the owner's decision.
 
 ### Signed packages
 
@@ -634,6 +635,44 @@ What this does not give: packages for the desktop. Nothing signs the app
 for Windows or for Linux, and neither is built in a way a release could
 be made of (`docs/concept.md`, "Open decisions"). And the key itself is
 only as good as the machine it lies on and the password it has.
+
+### Making a release
+
+A release for Android, in the order it is made. Each step has to hold
+before the next is taken, and what a step showed goes into the release's
+entry in [releases.md](releases.md).
+
+1. **The commit.** A commit on `main`, with hosted CI passed on the pull
+   request that brought it there. The version is the one in
+   `app/pubspec.yaml`; its number after the `+` is what Android compares
+   to tell an update from what is installed, and it never goes down.
+2. **The owner's run on that commit**, as Linux and as Windows programs:
+   `./accept.sh --no-app offline regtest tor`. The `tor` level asks each
+   public node of the main network an app goes to whether it is there
+   and whether it agrees with the rest.
+3. **The package, built twice.** `VEIL_NETWORK=mainnet ./check.sh
+   --android release` on two machines that have nothing to do with each
+   other; the two unsigned packages have one checksum. A package only
+   one machine has built is signed on that machine's word alone, and a
+   release that was made so says so.
+4. **The signature.** `./release.sh sign` on the owner's machine, which
+   looks at its own result before it keeps it.
+5. **The signed package, held against the unsigned one** by somebody who
+   is not the signer: `./release.sh compare`.
+6. **On a phone**, installed over the release before it, which Android
+   allows only for the same key: the wallet that was there opens,
+   synchronises, and a payment goes out.
+7. **Published**: a tag `v<version>` on the commit, and a release on the
+   repository's releases page with the signed package, the commit, the
+   checksum of the signed package, the checksum of the unsigned package,
+   which is the one a build of one's own has to have, and the checksum of
+   the signing certificate. It says that nobody outside the project has
+   audited Veil.
+8. **Recorded** in `releases.md`, in a commit after the release.
+
+A release cannot be taken back. A package that is out is out, and a
+version number that was used is used: a fault found afterwards is put
+right in the next release, with a higher number.
 
 ### The same build twice
 
