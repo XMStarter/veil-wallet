@@ -293,10 +293,12 @@ compared at all.
 A release for Android is signed on the owner's machine with a key that
 no other machine holds (`native/release.sh`; `docs/development.md`,
 "Signed packages"), and what is signed is a package anybody can build
-from the commit and compare, signature apart. The checksum of that
-key's certificate is in `native/release-key.sha256` once the key
-exists; until then nothing is signed with a key that means anything.
-Nothing signs a package for the desktop.
+from the commit and compare, signature apart. The key exists; the
+checksum of its certificate is in `native/release-key.sha256`. It lies
+on the owner's machine and on whatever the owner copied it to, and is
+as safe as those and as its password, which nothing here can check. No
+release has been published with it yet. Nothing signs a package for the
+desktop.
 
 ## Known to be weak
 

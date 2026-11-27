@@ -1563,6 +1563,27 @@ carries the plain identifier with a cloud session's key and stagenet
 coins; Android will not take the release over it, so it has to be
 removed first. Nothing signs a package for the desktop, and what a
 first release has for the desktop is an open decision in the concept.
+On that commit, `10eaa7a`, the owner made the key for releases on the
+owner's own machine, signed the release package a cloud session had
+built from the commit, and sent what `release.sh compare` said of the
+two: the signed package is the unsigned one but for the signature, and
+the unsigned one has the checksum the cloud session's had
+(`4222057fafe56fca`). The certificate of the key is in
+`native/release-key.sha256` (`82ab766ac1dfaf80`), so `sign` now refuses
+any other key. The owner's run passed at the `offline` level as Linux
+and as Windows programs, the test of the comparison among them both
+ways, and the owner reported that on the phone everything works with
+the signed package; what was asked for was that it installs, after the
+earliest app under the same identifier was removed, and opens under the
+name Veil. With that, step 6.3 has passed the owner's run on both
+systems and on the phone. That signed package is of a commit that is no
+release; it is on the owner's machine and phone and was sent to nobody.
+The owner was told to copy the key to something that is not connected
+to anything; whether that was done is the owner's to know. Still as it
+was: the package was built by a cloud session and by nobody else, since
+the owner's machine has not built for Android; before a release is
+published, somebody other than that session builds the commit and the
+checksums of the unsigned packages are held against each other.
 See the build plan in `docs/concept.md`.
 
 ## Environment notes

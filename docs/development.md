@@ -604,8 +604,14 @@ Who signed it:
 
 says what the package calls itself, its checksum, and the checksum of
 its signer's certificate, and whether that is the key for releases this
-repository names (`native/release-key.sha256`). Android's own
-`apksigner verify --print-certs` says the same without this repository.
+repository names (`native/release-key.sha256`):
+
+```
+82ab766ac1dfaf805df1aa5af37d4c869a64260a92474dee5076cc25e0b08fcd
+```
+
+Android's own `apksigner verify --print-certs` says the same without
+this repository.
 A phone that has Veil does this by itself at every update; it is the
 first installation that nobody checks but the person installing.
 
