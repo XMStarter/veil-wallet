@@ -368,9 +368,9 @@ run where is set out in [development.md](development.md).
       what the wallet defends against and what it does not, and how to
       build it and run its checks. It is [audit.md](audit.md). The audit
       itself is the owner's to commission.
-6. **Release.** Open source, reproducible builds, signed APKs, F-Droid.
-   The code has been public from the start. What is left, in six parts;
-   what the owner decided for them is under "Decided for the release":
+6. **Release.** Open source, reproducible builds, signed APKs. The code
+   has been public from the start. What is left, in six parts; what the
+   owner decided for them is under "Decided for the release":
    1. *What a package owes others.* A package with the wallet library,
       the transport program and the core inside hands on other people's
       work under their terms: the licence texts travel with it and are
@@ -395,9 +395,11 @@ run where is set out in [development.md](development.md).
       can never be installed in its place. The command-line tool stays
       on stagenet. The first release is for the main network.
    5. *F-Droid.* Its description of the app and its recipe, which builds
-      everything from source on F-Droid's machines.
+      everything from source on F-Droid's machines. Left out for now, by
+      the owner's decision: a release is a file to download.
    6. *The release.* A version, what it says about itself, where it is
       downloaded from, and where a finding about its security is sent.
+      For Android first, then for Windows.
 
 ## Known limitations
 
@@ -462,6 +464,15 @@ The owner decided these when the release step began.
   the people who run these or has looked at how they do.
   `./check.sh tor` asks each whether it is there and whether it agrees
   with the rest; a node of the user's own replaces them all.
+- **The first release is for Android; Windows follows; F-Droid is left
+  out.** A release is a file on the repository's releases page. A
+  listing in F-Droid means a recipe of our own kept up on F-Droid's
+  terms and a review that takes weeks, and the owner does not want that
+  now. Nothing in how a release is built stands in the way of one later:
+  the package is the same for everybody who builds the commit.
+- **A finding about security goes through GitHub's private report** for
+  the repository ([SECURITY.md](../SECURITY.md)), so that the owner
+  publishes no address.
 - **The key for releases never leaves the owner's machine.** Android
   takes an update only from the key the app was first signed with, so
   that key is the app for as long as it exists, and whoever has it can
