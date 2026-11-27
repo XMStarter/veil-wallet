@@ -1507,8 +1507,10 @@ the place. The test can be run for longer and with more threads
 (`VEIL_FIRST_CALL_ROUNDS`, `VEIL_FIRST_CALL_THREADS`) against a library
 built before the change, which a cloud session can build or has from
 the owner (`c8e9b13b1fdd76e2`); that has not been done. Not compared on
-two machines: the core, the transport program, the apps. Left of step
-6: signed packages (6.3), F-Droid (6.5) and the release itself (6.6).
+two machines: the core, the transport program, the apps. Hosted CI
+passed on both systems, and step 6.2 was merged on the owner's word.
+Left of step 6: signed packages (6.3), F-Droid (6.5) and the release
+itself (6.6).
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
