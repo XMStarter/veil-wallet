@@ -1469,10 +1469,12 @@ is built. The patch now makes the setting up happen once, whoever asks
 `the_first_calls_into_the_library_may_come_at_once` in `veil_wallet`
 makes the first call from sixteen threads at once in eight processes.
 On Linux it passes with either library, since nothing of this is
-compiled there. What would show the cause: that test as a Windows
-program failing on the library built before the change and passing on
-the one built after it. The owner still has the first and was asked to
-run it before building again. The six endings of `veil.exe` in the same
+compiled there. What would have shown the cause: that test as a Windows
+program failing on the library built before the change. The owner ran
+it there, thirty processes of sixteen threads, and it passed. So the
+fault in the patch is real as read and is put right, and that it was
+what damaged the heap is not shown; the cause of the two endings is
+open. The six endings of `veil.exe` in the same
 record, "in a library that was unloaded", are of programs built on 23
 November, before the library was kept loaded for good, and Windows
 writes such a record again whenever it looks at it again. With all of
@@ -1487,6 +1489,26 @@ pass with them. `built-how.txt` names the new way, so the owner has to
 run both setups once more and allow the new DLL and `monerod.exe` in
 the antivirus. The library for Linux is expected to differ there as
 long as the distribution's packages do; nobody has compared those.
+On that commit, `bc6c898`, the owner built both libraries from nothing
+and ran `accept.sh`. All three files are the cloud session's, byte for
+byte: the library for Windows, the library for Linux, which says that
+the two machines had the same packages of Ubuntu 24.04 that day, and
+Polyseed. The run passed at the `offline` and `regtest` levels as Linux
+and as Windows programs, the new test of the first calls among them
+both ways, and the owner reported that on the phone everything works
+with the two apps built from that commit, whose library for Android is
+the rebuilt one. With that, step 6.2 has passed the owner's run on both
+systems and on the phone. What stays open from it: the damaged heap,
+which has happened twice in some fifty runs as Windows programs and
+never in the app; if it comes back, `check.sh` prints what Windows
+recorded, and the next thing to ask of the owner's machine is a dump of
+the program (Windows Error Reporting's `LocalDumps`), which would name
+the place. The test can be run for longer and with more threads
+(`VEIL_FIRST_CALL_ROUNDS`, `VEIL_FIRST_CALL_THREADS`) against a library
+built before the change, which a cloud session can build or has from
+the owner (`c8e9b13b1fdd76e2`); that has not been done. Not compared on
+two machines: the core, the transport program, the apps. Left of step
+6: signed packages (6.3), F-Droid (6.5) and the release itself (6.6).
 See the build plan in `docs/concept.md`.
 
 ## Environment notes
@@ -1504,8 +1526,7 @@ See the build plan in `docs/concept.md`.
   file share. Twice, a test program of `veil_core` run as a Windows
   program ended with status 116 within its first second and passed when
   run again. Windows recorded a damaged heap both times (`0xC0000374`);
-  the end of "Status" says what it is put down to and what would show
-  it. `check.sh` asks Windows what it recorded about such an ending and
+  the end of "Status" says what was tried for it. Its cause is open. `check.sh` asks Windows what it recorded about such an ending and
   runs the program's tests again one at a time, at the `offline` level
   too, and what that prints is the first thing to read if it comes
   back. Once, the tests of `veil_core` that open a wallet all

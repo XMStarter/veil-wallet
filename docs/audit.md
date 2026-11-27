@@ -282,13 +282,13 @@ byte for byte. On one machine the core, the transport program, the wallet
 library and the app come out the same that way, a package for Android but
 for its signature; `docs/development.md`, "The same build twice", has
 each part, what had to be done for it, and what that does not show.
-On a second machine only the wallet library has been built. For Windows
-it is the same file there, byte for byte, once the build stopped reading
-the builder's settings for git. For Linux it was compiled for the
-processor of whichever machine built it, which is put right and not
-built there again yet; it is in any case the same only where the
-distribution's libraries are. The app for Windows is not compared at
-all. Nothing is signed with a key that means anything.
+On a second machine only the wallet library has been built, and it is
+the same file there as in a cloud session, byte for byte, for Windows
+and for Linux, once the build stopped reading the builder's settings
+for git and stopped compiling for the builder's processor. For Linux
+that holds only where the distribution's libraries are the same, as
+they were on those two machines that day. The app for Windows is not
+compared at all. Nothing is signed with a key that means anything.
 
 ## Known to be weak
 
@@ -330,11 +330,15 @@ Each of these is known to the project and not put right.
   on Windows put its setting where the library sets itself up on its
   first call, behind a check that several threads can pass together, and
   made twice the setting destroys a locale other threads are reading
-  paths with. Windows recorded a damaged heap (`0xC0000374`) for a test
-  program twice. The patch now makes that work happen once
+  paths with. The patch now makes that work happen once
   (`monero/0004`), and a test makes the first call from sixteen threads
-  at once. Whether there are other faults of the kind is not known:
-  nothing runs the library under a tool that would see them.
+  at once. Windows recorded a damaged heap (`0xC0000374`) for a test
+  program of `veil_core` twice, in the program's first second. That was
+  put down to this fault and is not shown to come from it: the new test
+  passed on the library as it was before, thirty processes long. So the
+  cause of the damaged heap is open, and whether there are other faults
+  of the kind is not known: nothing runs the library under a tool that
+  would see them.
 - **The listeners take any program on the machine**, as said above.
 - **Dart and Kotlin strings cannot be wiped**, so a password and a phrase
   stay in the app's memory until it is freed and reused.

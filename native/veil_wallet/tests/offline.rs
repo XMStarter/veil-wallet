@@ -601,7 +601,17 @@ fn a_note_is_kept_with_the_wallet_and_can_be_cleared() {
 /// folder to look for wallets.
 const FIRST_AT_ONCE: &str = "VEIL_TEST_FIRST_AT_ONCE";
 /// How many threads of such a process ask the library at the same moment.
+/// `VEIL_FIRST_CALL_THREADS` asks for another number.
 const FIRST_AT_ONCE_THREADS: usize = 16;
+
+/// A number a longer look asks for in the environment, or the usual one.
+fn asked_for(name: &str, usual: usize) -> usize {
+    std::env::var(name)
+        .ok()
+        .and_then(|number| number.trim().parse().ok())
+        .filter(|number| *number > 0)
+        .unwrap_or(usual)
+}
 /// How many such processes are started, one after the other. A process
 /// has one first moment, so this is how often the moment is tried.
 /// `VEIL_FIRST_CALL_ROUNDS` asks for another number, for a longer look.
@@ -621,8 +631,9 @@ fn many_threads_ask_the_library_first_in_a_process_of_their_own() {
     };
     let folder = std::path::PathBuf::from(folder);
     let library = std::env::var_os("VEIL_WALLET_LIB").expect("the process is given the library");
-    let together = std::sync::Arc::new(std::sync::Barrier::new(FIRST_AT_ONCE_THREADS));
-    let threads: Vec<_> = (0..FIRST_AT_ONCE_THREADS)
+    let count = asked_for("VEIL_FIRST_CALL_THREADS", FIRST_AT_ONCE_THREADS);
+    let together = std::sync::Arc::new(std::sync::Barrier::new(count));
+    let threads: Vec<_> = (0..count)
         .map(|number| {
             let lib = WalletLibrary::load(&library).expect("wallet library loads");
             let together = std::sync::Arc::clone(&together);
@@ -651,22 +662,25 @@ fn many_threads_ask_the_library_first_in_a_process_of_their_own() {
 /// includes the locale that paths are read with, which Veil's build adds
 /// so that a folder with any name works; done twice, the locale put there
 /// the first time is destroyed while other threads read paths with it.
-/// A test program of `veil_core` ended that way twice as a Windows
-/// program, in its first second, with Windows' code for a damaged heap.
 /// Veil's build of the library now sets itself up once.
 ///
+/// A test program of `veil_core` ended twice as a Windows program, in
+/// its first second, with Windows' code for a damaged heap, and this is
+/// what that was put down to. It is not shown: this test passed as a
+/// Windows program on the library as it was before, thirty processes of
+/// sixteen threads. So it holds that many first calls at once do no
+/// harm, and says nothing about what damaged the heap.
+///
 /// One process has one first moment, so the moment is tried in several
-/// processes, with more threads than a test program has. On Linux this
-/// passes with either library: the locale is not touched there.
+/// processes, with more threads than a test program has. On Linux the
+/// locale is not touched at all.
 #[test]
 fn the_first_calls_into_the_library_may_come_at_once() {
     let Some(_lib) = wallet_library() else { return };
     let library = std::env::var_os("VEIL_WALLET_LIB").expect("checked by wallet_library");
     let library = std::path::absolute(library).expect("the library's path");
-    let processes = std::env::var("VEIL_FIRST_CALL_ROUNDS")
-        .ok()
-        .and_then(|rounds| rounds.trim().parse().ok())
-        .unwrap_or(FIRST_AT_ONCE_PROCESSES);
+    let processes = asked_for("VEIL_FIRST_CALL_ROUNDS", FIRST_AT_ONCE_PROCESSES);
+    let threads = asked_for("VEIL_FIRST_CALL_THREADS", FIRST_AT_ONCE_THREADS);
     for process in 1..=processes {
         let dir = TempDir::new("first");
         let asked = Command::new(std::env::current_exe().expect("the test program has a path"))
@@ -683,7 +697,7 @@ fn the_first_calls_into_the_library_may_come_at_once() {
             .expect("the process that asks the library starts");
         assert!(
             asked.status.success(),
-            "process {process} of {processes}, in which {FIRST_AT_ONCE_THREADS} \
+            "process {process} of {processes}, in which {threads} \
              threads asked the library first at once, ended badly: {}\n{}\n{}",
             asked.status,
             String::from_utf8_lossy(&asked.stdout),

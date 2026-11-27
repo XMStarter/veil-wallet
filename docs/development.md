@@ -584,7 +584,7 @@ that ends with an illegal instruction on a processor older than its
 builder's. The build now names no processor (`ARCH=default` in
 `wallet_lib/build.sh`), which is what the builds for Windows and Android
 always had from Monero's dependency build; the library built that way has
-none of those instructions, and the second machine has not built it yet.
+none of those instructions.
 The wallet library for Windows came out of the same size on both machines
 and with another sum. The two files, laid side by side, differed in
 sixteen bytes of thirty-two million: the name of Monero's commit, which
@@ -596,6 +596,13 @@ git but those it needs for the network. Built again from nothing in a
 cloud session, the library for Windows is the owner's file byte for byte
 (`c8e9b13b1fdd76e2…`): with Polyseed, the first parts of a package seen
 to be the same on two machines.
+
+On commit `bc6c898`, which has all of that and a changed patch, the
+owner built both libraries from nothing once more, and all three files
+are the cloud session's: the library for Windows (`3a33f0d609df79d4…`),
+the library for Linux (`2815398e3e401946…`) and Polyseed
+(`93c8dd53fb487964…`). For Linux that says that the two machines had the
+same packages of Ubuntu 24.04 that day, and no more than that.
 
 What it does not show, and what is known to stand in the way of the same
 files on another machine:
