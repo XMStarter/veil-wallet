@@ -21,16 +21,31 @@ val dartDefines: Map<String, String> =
 // (lib/core/network.dart): stagenet where nothing was said.
 val veilNetwork: String = dartDefines["VEIL_NETWORK"] ?: "stagenet"
 
-// A build made here is for trying, signed with the key of the machine
-// that made it. It is an app of its own, by a name of its own, so that it
-// can be on a phone beside the released Veil and can never be taken for
-// it or installed in its place: Android knows an app by its identifier,
-// and removing an app removes its wallet. The app that carries the plain
-// identifier and the plain name is the one the release step builds and
-// signs with the key for releases.
-val (veilIdSuffix, veilLabel) = when (veilNetwork) {
-    "stagenet" -> ".stagenet" to "Veil stagenet"
-    "mainnet" -> ".preview" to "Veil preview"
+// Whether this is the build of a release, which is said the same way
+// (`--dart-define=VEIL_RELEASE=yes`) and by one command only:
+// `VEIL_NETWORK=mainnet ./check.sh --android release`.
+val veilRelease: Boolean = when (val said = dartDefines["VEIL_RELEASE"] ?: "") {
+    "yes" -> true
+    "" -> false
+    else -> throw GradleException("VEIL_RELEASE is '$said'; it is 'yes' or not there")
+}
+
+// A build is for trying unless it was said to be a release. One for
+// trying is signed with the key of the machine that made it and is an
+// app of its own, by a name of its own, so that it can be on a phone
+// beside the released Veil and can never be taken for it or installed in
+// its place: Android knows an app by its identifier, and removing an app
+// removes its wallet. A release carries the plain identifier and the
+// plain name, is for the main network, and leaves the command that
+// builds it without a signature; the key for releases signs it on the
+// owner's machine (native/release.sh).
+val (veilIdSuffix, veilLabel) = when {
+    veilRelease && veilNetwork == "mainnet" -> "" to "Veil"
+    veilRelease -> throw GradleException(
+        "a release is for the main network, and this build is for '$veilNetwork'"
+    )
+    veilNetwork == "stagenet" -> ".stagenet" to "Veil stagenet"
+    veilNetwork == "mainnet" -> ".preview" to "Veil preview"
     else -> throw GradleException(
         "VEIL_NETWORK is '$veilNetwork'; the app is built for mainnet or for stagenet"
     )
@@ -52,7 +67,7 @@ android {
         // this one (docs/concept.md, "Decided for the release"); a build
         // for trying adds to it, as said above.
         applicationId = "io.github.xmstarter.veil"
-        applicationIdSuffix = veilIdSuffix
+        applicationIdSuffix = veilIdSuffix.takeIf { it.isNotEmpty() }
         // The name under the icon, which the manifest takes from here.
         manifestPlaceholders["appName"] = veilLabel
         minSdk = flutter.minSdkVersion
@@ -92,8 +107,10 @@ android {
             // builds, which is enough to install the app on one's own
             // phone and for nothing else: every machine has another key,
             // and Android takes an update only from the key the installed
-            // app was signed with. A release key belongs to the release
-            // step.
+            // app was signed with. The build of a release is signed the
+            // same way here, and that signature is taken off again by the
+            // command that builds it (native/check.sh, `release`): the
+            // key for releases is nowhere near a build.
             signingConfig = signingConfigs.getByName("debug")
         }
     }

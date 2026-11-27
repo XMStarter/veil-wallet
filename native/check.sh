@@ -30,6 +30,7 @@
 #   ./check.sh --android setup     once per machine: the NDK, the Android SDK, the wallet library and the
 #                                  transport program for Android
 #   ./check.sh --android app       the app as one file to install on a phone (an APK)
+#   ./check.sh --android release   the app as a release carries it, without a signature; release.sh signs it
 # The other levels are tests, and tests run on a desktop.
 #
 # Where a level builds the app, it is an app for stagenet, whose coins are
@@ -37,6 +38,12 @@
 # network instead: VEIL_NETWORK=mainnet ./check.sh --android app. On
 # Android such a build is an app of its own beside the one for stagenet
 # (app/android/app/build.gradle.kts says how they are told apart).
+#
+# A release is the one build under the app's plain name. It is for the
+# main network, and that is said as for any other build:
+# VEIL_NETWORK=mainnet ./check.sh --android release. It is built from a
+# commit with nothing changed, and what it leaves is a package without a
+# signature, which no phone installs; release.sh signs it.
 #
 # `offline` runs anywhere, hosted CI included. Every other level refuses to
 # start in hosted CI: see docs/development.md, "Hosted CI and the hosting
@@ -157,7 +164,7 @@ dart_program() {
 }
 
 usage() {
-  sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 # cargo with the target of this run. An empty array needs this spelling in
@@ -322,6 +329,7 @@ level_offline() {
   step cargo fmt --check &&
     step cargo_for_target clippy --workspace --all-targets --all-features --locked -- -D warnings &&
     tests_of_the_workspace &&
+    step "$here/signature-test.sh" &&
     notices_side &&
     dart_side &&
     app_side
@@ -712,11 +720,61 @@ level_app() {
       export ANDROID_HOME="$android_sdk" ANDROID_SDK_ROOT="$android_sdk" &&
       step "$flutter" --no-version-check pub get --enforce-lockfile "${offline[@]}" &&
       step "$flutter" --no-version-check build apk --release --no-pub --target-platform android-arm64 \
-        "$(built_from)" "--dart-define=VEIL_NETWORK=$app_network"
+        "$(built_from)" "--dart-define=VEIL_NETWORK=$app_network" ${as_release:+"--dart-define=VEIL_RELEASE=yes"}
   ) || return 1
   echo
+  if [ -n "${as_release:-}" ]; then
+    # Left to level_release, which takes the build's signature off.
+    return 0
+  fi
   echo "the app for Android: $apk"
   hand_over_apk "$apk"
+}
+
+# The app for Android as a release carries it: under its plain identifier
+# and name, for the main network, from a commit with nothing changed. The
+# app's build signs what it makes with this machine's own key, as it does
+# every build; that signature is taken off here, and what is left is the
+# package everybody gets who builds the same commit, whatever their
+# machine's key. Its checksum is what a release is held against, and
+# release.sh puts the release's signature on it. Nothing installs it as
+# it is, which is as well: under the app's own name and with a key of
+# this machine, it would sit in the place of the released app on a phone.
+level_release() {
+  if [ "$android" != 1 ]; then
+    echo "error: a release is built for Android: VEIL_NETWORK=mainnet ./check.sh --android release" >&2
+    return 1
+  fi
+  if [ "$app_network" != mainnet ]; then
+    echo "error: a release is for the main network, and that has to be said:" >&2
+    echo "VEIL_NETWORK=mainnet ./check.sh --android release" >&2
+    return 1
+  fi
+  local commit
+  commit="$(git -C "$here" rev-parse --short=12 HEAD 2>/dev/null)" || commit=""
+  if [ -z "$commit" ] || [ -n "$(git -C "$here" status --porcelain 2>/dev/null)" ]; then
+    echo "error: a release is built from a commit and nothing else. This checkout has changes that are in" >&2
+    echo "no commit, or is no checkout:" >&2
+    git -C "$here" status --short 2>/dev/null | head -n 10 >&2
+    return 1
+  fi
+  # shellcheck source=native/signature.sh
+  . "$here/signature.sh"
+  local built="$here/../app/build/app/outputs/flutter-apk/app-release.apk"
+  # No package of an earlier build may be taken for this one's.
+  rm -f "$built"
+  as_release=yes level_app || return 1
+  local version
+  version="$(sed -n 's/^version: *\([^+ ]*\).*/\1/p' "$here/../app/pubspec.yaml")"
+  local package="$here/target/packages/veil-$version-$commit-unsigned.apk"
+  mkdir -p "$here/target/packages" &&
+    without_signature "$built" "$package" || return 1
+  # The one under the app's name with this machine's key is not kept.
+  rm -f "$built"
+  echo "the release, without a signature: $package"
+  echo "sha256: $(sha256sum "$package" | cut -d' ' -f1)"
+  echo
+  echo "The key for releases signs it: ./release.sh sign $package"
 }
 
 # Under WSL, puts the app into the Windows Downloads folder as veil.apk,
@@ -1071,9 +1129,9 @@ fi
 for level in "$@"; do
   if [ "$android" = 1 ]; then
     case "$level" in
-      offline | ndk | setup | app | core | -h | --help | help) ;;
+      offline | ndk | setup | app | core | release | -h | --help | help) ;;
       *)
-        echo "error: with --android there are 'offline', 'ndk', 'setup', 'app' and 'core'. '$level' is a" >&2
+        echo "error: with --android there are 'offline', 'ndk', 'setup', 'app', 'core' and 'release'. '$level' is a" >&2
         echo "test or belongs to a desktop, and nothing built for Android can be run here." >&2
         exit 2
         ;;
@@ -1083,7 +1141,7 @@ for level in "$@"; do
     offline) ;;
     flutter) ;;
     ndk) ;;
-    regtest | tor | stagenet | bridges | daemons | setup | app | core | leaks | leaks-chain | fuzz)
+    regtest | tor | stagenet | bridges | daemons | setup | app | core | release | leaks | leaks-chain | fuzz)
       if in_hosted_ci; then
         echo "refused: '$level' does not run in hosted CI. Only 'offline' does." >&2
         echo "See docs/development.md, \"Hosted CI and the hosting account\"." >&2

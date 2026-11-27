@@ -498,6 +498,14 @@ The owner decided these when the release step began.
   Linux needs an answer: a package for one distribution, built on it; a
   build of Monero's dependencies kept up by ourselves; or no package for
   Linux at first. See `docs/development.md`, "The same build twice".
+- **Packages for the desktop.** A release for Android can be built by
+  anybody and is signed by the owner (`docs/development.md`, "Signed
+  packages"). For the desktop there is nothing of the kind. The app for
+  Windows is built by hosted CI only, which builds for trying; nothing
+  on the owner's machine can build it, and a package in an archive
+  carries no signature, so its checksum would have to be signed with a
+  key of its own. The app for Linux is not complete in itself, as said
+  above. A first release for Android alone needs none of this decided.
 - **Antivirus on Windows.** An antivirus on the test machine reported the
   wallet library as a potentially unwanted application, a "coin miner", the
   first time a program opened it, and it has to be allowed by hand. The
